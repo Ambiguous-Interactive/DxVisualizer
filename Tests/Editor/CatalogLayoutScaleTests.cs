@@ -22,22 +22,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
 
     public sealed class CatalogLayoutScaleTests
     {
-        private static ProfilerRecorder CreateFrameAllocationRecorderOrDefault()
-        {
-            List<ProfilerRecorderHandle> handles = new();
-            ProfilerRecorderHandle.GetAvailable(handles);
-            foreach (ProfilerRecorderHandle handle in handles)
-            {
-                ProfilerRecorderDescription description = ProfilerRecorderHandle.GetDescription(handle);
-                if (string.Equals(description.Name, "GC Allocated In Frame", StringComparison.Ordinal))
-                {
-                    return ProfilerRecorder.StartNew(description.Category, description.Name, 1);
-                }
-            }
-            return default;
-        }
-
-        private static Type[][] CreateTypes()
+        internal static Type[][] CreateTypes()
         {
             AssemblyBuilder assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("CatalogLayoutScale" + Guid.NewGuid().ToString("N")), AssemblyBuilderAccess.Run);
             ModuleBuilder module = assembly.DefineDynamicModule("CatalogLayoutScale");
@@ -53,6 +38,21 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 }
             }
             return types;
+        }
+
+        private static ProfilerRecorder CreateFrameAllocationRecorderOrDefault()
+        {
+            List<ProfilerRecorderHandle> handles = new();
+            ProfilerRecorderHandle.GetAvailable(handles);
+            foreach (ProfilerRecorderHandle handle in handles)
+            {
+                ProfilerRecorderDescription description = ProfilerRecorderHandle.GetDescription(handle);
+                if (string.Equals(description.Name, "GC Allocated In Frame", StringComparison.Ordinal))
+                {
+                    return ProfilerRecorder.StartNew(description.Category, description.Name, 1);
+                }
+            }
+            return default;
         }
 
         [UnityTest, Explicit("Synthetic type-catalog layout; creates no Unity assets")]

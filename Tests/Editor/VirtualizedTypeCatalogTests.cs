@@ -1,0 +1,191 @@
+namespace WallstopStudios.DataVisualizer.Tests.Editor
+{
+    using System;
+    using System.Collections;
+    using System.Collections.Generic;
+    using System.IO;
+    using System.Reflection;
+    using NUnit.Framework;
+    using UnityEditor;
+    using UnityEngine;
+    using UnityEngine.TestTools;
+    using UnityEngine.UIElements;
+    using WallstopStudios.DataVisualizer.Editor;
+    using WallstopStudios.DataVisualizer.Editor.Data;
+    using WallstopStudios.DataVisualizer.Editor.Styles;
+    using WallstopStudios.DataVisualizer.Editor.UI;
+    using DataVisualizerWindow = WallstopStudios.DataVisualizer.Editor.DataVisualizer;
+    using Object = UnityEngine.Object;
+
+    public sealed class VirtualizedTypeCatalogTests
+    {
+        private static DataVisualizerUserState SavedState(PerfWindowStateScope state)
+        {
+            if (!state.Settings.persistStateInSettingsAsset)
+            {
+                return DataVisualizerUserState.FromJson(File.ReadAllText(state.FilePath));
+            }
+            DataVisualizerUserState saved = new();
+            saved.HydrateFrom(state.Settings);
+            return saved;
+        }
+
+        [UnityTest]
+        public IEnumerator ShouldBoundRealizedCatalogRowsAcrossFilteringCollapseAndRecycling()
+        {
+            using TestCleanupScope cleanup = new();
+            const BindingFlags members = BindingFlags.Instance | BindingFlags.NonPublic;
+            FieldInfo instance = typeof(DataVisualizerWindow).GetField("Instance", BindingFlags.Static | BindingFlags.NonPublic);
+            object previous = instance.GetValue(null);
+            cleanup.Defer(() => instance.SetValue(null, previous));
+            DataVisualizerWindow owner = null;
+            PerfWindowStateScope state = null;
+            cleanup.Defer(() =>
+            {
+                if (owner != null)
+                {
+                    Object.DestroyImmediate(owner);
+                }
+                state?.Dispose();
+            });
+            owner = ScriptableObject.CreateInstance<DataVisualizerWindow>();
+            DataVisualizerSettings settings = (DataVisualizerSettings)typeof(DataVisualizerWindow).GetProperty("Settings", members).GetValue(owner);
+            DataVisualizerUserState user = (DataVisualizerUserState)typeof(DataVisualizerWindow).GetProperty("UserState", members).GetValue(owner);
+            state = new PerfWindowStateScope(settings, user, "Temp/VirtualizedCatalog");
+            typeof(DataVisualizerWindow).GetField("_settings", members).SetValue(owner, state.Settings);
+            typeof(DataVisualizerWindow).GetField("_userState", members).SetValue(owner, state.UserState);
+            typeof(DataVisualizerWindow).GetField("_userStateFilePath", members).SetValue(owner, state.FilePath);
+            state.Settings.persistStateInSettingsAsset = false;
+            state.UserState.namespaceCollapseStates.Clear();
+            LayoutTestWindow host = ScriptableObject.CreateInstance<LayoutTestWindow>();
+            cleanup.Defer(() => EditorSurfaceCapture.CloseWindow(host));
+            host.position = new Rect(100, 100, 300, 500);
+            host.rootVisualElement.AddToClassList("dataviz-root");
+            host.rootVisualElement.styleSheets.Add(
+                AssetDatabase.LoadAssetAtPath<StyleSheet>("Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/Styles/DataVisualizerStyles.uss")
+            );
+            host.ShowUtility();
+            host.position = new Rect(100, 100, 300, 500);
+            host.rootVisualElement.style.width = 300;
+            host.rootVisualElement.style.height = 500;
+            Type[][] datasets = CatalogLayoutScaleTests.CreateTypes();
+            foreach (Type[] dataset in datasets)
+            {
+                bool persistInSettings = ReferenceEquals(dataset, datasets[1]);
+                state.Settings.persistStateInSettingsAsset = persistInSettings;
+                Dictionary<string, List<Type>> managed = (Dictionary<string, List<Type>>)typeof(DataVisualizerWindow).GetField("_scriptableObjectTypes", members).GetValue(owner);
+                Dictionary<string, int> order = (Dictionary<string, int>)typeof(DataVisualizerWindow).GetField("_namespaceOrder", members).GetValue(owner);
+                managed.Clear();
+                order.Clear();
+                foreach (Type type in dataset)
+                {
+                    string key = NamespaceController.GetNamespaceKey(type);
+                    if (!managed.TryGetValue(key, out List<Type> types))
+                    {
+                        types = new List<Type>();
+                        managed.Add(key, types);
+                        order.Add(key, order.Count);
+                    }
+                    types.Add(type);
+                }
+                NamespaceController controller = new(managed, order);
+                VirtualizedTypeCatalogView view = new(owner, controller, managed, order);
+                VisualElement catalogRoot = view;
+                catalogRoot.style.height = Length.Percent(100);
+                Assert.That(view != null);
+                VisualElement focusedControl = null;
+                Func<VisualElement> makeRow = view.List.makeItem;
+                view.List.makeItem = () =>
+                {
+                    VisualElement row = makeRow();
+                    row.RegisterCallback<FocusInEvent>(evt => focusedControl = evt.target as VisualElement);
+                    return row;
+                };
+                ScrollView outer = new(ScrollViewMode.Vertical);
+                outer.style.flexGrow = 1;
+                outer.contentContainer.style.flexGrow = 1;
+                outer.Add(catalogRoot);
+                host.rootVisualElement.Add(outer);
+                yield return null;
+                EditorSurfaceCapture.SettleLayout(host);
+                Assert.That(view.List.itemsSource.Count, Is.EqualTo(2000 + managed.Count));
+                List<VisualElement> rowsBefore = view.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass).ToList();
+                Assert.That(view.Reconcile(), Is.False);
+                CollectionAssert.AreEqual(
+                    rowsBefore,
+                    view.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass).ToList(),
+                    "Unchanged catalog refresh preserves rows"
+                );
+                string firstKey = NamespaceController.GetNamespaceKey(dataset[0]);
+                List<Type> firstGroup = managed[firstKey];
+                Type groupLast = firstGroup[firstGroup.Count - 1];
+                view.Drop(new KeyValuePair<string, Type>(firstKey, dataset[0]), new KeyValuePair<string, Type>(firstKey, groupLast), true);
+                Assert.That(firstGroup[firstGroup.Count - 1], Is.EqualTo(dataset[0]));
+                List<NamespaceTypeOrder> savedOrders = SavedState(state).typeOrders;
+                Assert.That(savedOrders.Find(entry => entry.namespaceKey == firstKey).typeNames[firstGroup.Count - 1], Is.EqualTo(dataset[0].FullName));
+
+                Assert.That(view.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass).ToList().Count, Is.InRange(1, 40));
+                view.List.ScrollToItem(view.List.itemsSource.Count - 1);
+                yield return null;
+                EditorSurfaceCapture.SettleLayout(host);
+                Assert.That(view.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass).ToList().Count, Is.InRange(1, 40));
+                Assert.That(view.List.Q<ScrollView>().scrollOffset.y, Is.Positive);
+                Type last = dataset[dataset.Length - 1];
+                view.Select(last);
+                yield return null;
+                Assert.That(view.ContainsType(last));
+                Assert.That(view.Query<VisualElement>(className: StyleConstants.SelectedClass).ToList().Count, Is.Positive);
+                view.Filter("MeasuredType1999Data");
+                yield return null;
+                Assert.That(view.List.itemsSource.Count, Is.EqualTo(2));
+                Assert.That(view.Adjacent(dataset[dataset.Length - 2], true), Is.EqualTo(last), "Navigation starts from hidden identity");
+                view.Filter("missing type");
+                yield return null;
+                Assert.That(view.List.itemsSource.Count, Is.Zero);
+                view.Filter(null);
+                view.List.ScrollToItem(0);
+                yield return null;
+                Button collapse = view.Query<Button>("catalog-collapse").ToList().Find(button => button.style.display.value == DisplayStyle.Flex);
+
+                Assert.That(collapse != null);
+                Assert.That(collapse.focusable, Is.True, "Collapse is focusable");
+                Assert.That(collapse.enabledInHierarchy, Is.True, "Collapse is enabled");
+                Assert.That(collapse.worldBound.Overlaps(view.List.Q<ScrollView>().contentViewport.worldBound), Is.True, "Collapse is in the viewport");
+                collapse.Focus();
+                yield return null;
+                Assert.That(focusedControl, Is.SameAs(collapse));
+                using (KeyDownEvent left = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.LeftArrow }))
+                {
+                    left.target = collapse;
+                    collapse.SendEvent(left);
+                }
+                yield return null;
+                Assert.That(view.List.itemsSource.Count, Is.LessThan(2000 + managed.Count));
+                for (int frame = 0; frame < 20 && (focusedControl is not Button || focusedControl.panel == null); frame++)
+                {
+                    yield return null;
+                }
+                Assert.That(focusedControl, Is.TypeOf<Button>(), "Rebuild restores the collapse control's focus");
+                Assert.That(focusedControl.panel != null, "Focus belongs to a newly realized control");
+                List<NamespaceCollapseState> collapsed = SavedState(state).namespaceCollapseStates;
+                Assert.That(collapsed.Find(entry => entry.namespaceKey == firstKey).isCollapsed, Is.True);
+                Assert.That(view.Adjacent(dataset[0], true) == null, "Collapsed groups do not navigate");
+                VirtualizedTypeCatalogView reopened = new(owner, controller, managed, order);
+                Assert.That(reopened.List.itemsSource.Count, Is.EqualTo(view.List.itemsSource.Count), "Reopen restores collapse in both stores");
+                string lastKey = NamespaceController.GetNamespaceKey(dataset[dataset.Length - 1]);
+                if (firstKey != lastKey)
+                {
+                    Type firstBefore = firstGroup[0];
+                    view.Drop(new KeyValuePair<string, Type>(firstKey, firstBefore), new KeyValuePair<string, Type>(lastKey, dataset[dataset.Length - 1]), false);
+                    Assert.That(firstGroup[0], Is.EqualTo(firstBefore), "Cross-namespace type drops do not move a type");
+                    view.Drop(new KeyValuePair<string, Type>(firstKey, null), new KeyValuePair<string, Type>(lastKey, null), true);
+                    Assert.That(order[firstKey], Is.EqualTo(order.Count - 1));
+                    Assert.That(SavedState(state).namespaceOrder[order.Count - 1], Is.EqualTo(firstKey));
+                }
+                outer.RemoveFromHierarchy();
+                state.UserState.namespaceCollapseStates.Clear();
+                EditorJsonUtility.FromJsonOverwrite("{\"namespaceCollapseStates\":[]}", state.Settings);
+            }
+        }
+    }
+}

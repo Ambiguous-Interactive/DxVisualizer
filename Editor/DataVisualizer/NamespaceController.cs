@@ -208,6 +208,8 @@ namespace WallstopStudios.DataVisualizer.Editor
             return type.Name;
         }
 
+        internal static bool IsNamespaceCollapsed(DataVisualizer owner, string key) => GetIsNamespaceCollapsed(owner, key);
+
         private static void ProtectCatalogAction(Button button)
         {
             button.RegisterCallback<PointerDownEvent>(static evt => evt.StopPropagation());
@@ -824,6 +826,26 @@ namespace WallstopStudios.DataVisualizer.Editor
                 }
             }
             return typeNames;
+        }
+
+        internal void RemoveCatalogType(DataVisualizer owner, Type type)
+        {
+            HandleRemoveTypeConfirmed(owner, type);
+            if (_selectedType == type)
+            {
+                SelectType(owner, null);
+                owner.SelectObject(null);
+            }
+        }
+
+        internal void RemoveCatalogNamespaceTypes(DataVisualizer owner, string key, List<Type> types)
+        {
+            HandleRemoveNamespaceTypesConfirmed(owner, key, types);
+            if (types.Contains(_selectedType))
+            {
+                SelectType(owner, null);
+                owner.SelectObject(null);
+            }
         }
 
         private void NavigateTypeSelection(DataVisualizer dataVisualizer, bool forward)
