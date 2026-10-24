@@ -7826,10 +7826,7 @@ namespace WallstopStudios.DataVisualizer.Editor
         private void BuildNamespaceView()
         {
             _namespaceController.Build(this, ref _namespaceListContainer);
-            if (_namespaceController.VirtualizedView != null)
-            {
-                PerformTypeSearch(_typeSearchField?.value);
-            }
+            PerformTypeSearch(_typeSearchField?.value);
         }
 
         private void ProtectObjectRowAction(VisualElement element)

@@ -289,10 +289,27 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 }
                 typeof(DataVisualizerWindow).GetField("_namespaceController", members).SetValue(owner, controller);
                 controller.Build(owner, ref catalogRoot);
+                typeof(VirtualizedTypeCatalogView).GetMethod("SetCollapsed", members).Invoke(view, new object[] { firstKey, false });
                 view.Input.NextTypeKey = KeyCode.N;
                 controller.SelectType(owner, firstCollision);
                 yield return null;
                 Assert.That(controller.SelectedType, Is.EqualTo(firstCollision));
+                yield return null;
+                ScrollView browsingScroll = view.List.Q<ScrollView>();
+                Assert.That(browsingScroll.verticalScroller.highValue, Is.GreaterThan(100), "Refresh regression needs scrollable content");
+                float selectedOffset = browsingScroll.scrollOffset.y;
+                browsingScroll.scrollOffset = new Vector2(0, selectedOffset < 100 ? browsingScroll.verticalScroller.highValue : 0);
+                yield return null;
+                yield return null;
+                EditorSurfaceCapture.SettleLayout(host);
+                float browsingOffset = browsingScroll.scrollOffset.y;
+                Assert.That(Math.Abs(browsingOffset - selectedOffset), Is.GreaterThan(40), "Browse away from the selection before refresh");
+                controller.SelectType(owner, firstCollision);
+                yield return null;
+                yield return null;
+                Assert.That(view.List.Q<ScrollView>().scrollOffset.y, Is.EqualTo(browsingOffset).Within(1), "Refreshing selection preserves browsing position");
+                view.Select(firstCollision);
+                yield return null;
                 VisualElement collisionRow = view.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass)
                     .ToList()
                     .Find(row => row.userData is CatalogEntry entry && entry.Type == firstCollision);
@@ -320,6 +337,19 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 controller.Build(owner, ref catalogRoot);
                 Assert.That(controller.VirtualizedView == null, "Small catalogs keep the existing compact view");
                 Assert.That(catalogRoot.Query<VisualElement>(className: StyleConstants.TypeItemClass).ToList().Count, Is.EqualTo(1));
+                typeof(DataVisualizerWindow).GetField("_namespaceListContainer", members).SetValue(owner, catalogRoot);
+                TextField filter = new() { value = "missing type" };
+                typeof(DataVisualizerWindow).GetField("_typeSearchField", members).SetValue(owner, filter);
+                MethodInfo buildCatalog = typeof(DataVisualizerWindow).GetMethod("BuildNamespaceView", members);
+                buildCatalog.Invoke(owner, null);
+                VisualElement compactRow = catalogRoot.Q<VisualElement>(className: StyleConstants.TypeItemClass);
+                Assert.That(compactRow.style.display.value, Is.EqualTo(DisplayStyle.None), "Compact fallback reapplies the active filter");
+                PropertyInfo hidden = typeof(DataVisualizerWindow).GetProperty("HiddenNamespaces", members);
+                Assert.That(hidden.GetValue(owner), Is.EqualTo(1));
+                filter.value = string.Empty;
+                buildCatalog.Invoke(owner, null);
+                Assert.That(compactRow.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+                Assert.That(hidden.GetValue(owner), Is.Zero);
                 outer.RemoveFromHierarchy();
                 state.UserState.namespaceCollapseStates.Clear();
                 EditorJsonUtility.FromJsonOverwrite("{\"namespaceCollapseStates\":[]}", state.Settings);
