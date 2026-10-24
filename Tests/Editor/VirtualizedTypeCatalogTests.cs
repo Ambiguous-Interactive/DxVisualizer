@@ -140,11 +140,11 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 List<Type> firstGroup = managed[firstKey];
                 Type groupLast = firstGroup[firstGroup.Count - 1];
                 Assert.That(
-                    view.Drop(new KeyValuePair<string, Type>(firstKey, firstGroup[1]), new KeyValuePair<string, Type>(firstKey, firstGroup[0]), true),
+                    view.Drop(new CatalogEntry(firstKey, firstGroup[1]), new CatalogEntry(firstKey, firstGroup[0]), true),
                     Is.False,
                     "An unchanged adjacent drop is a no-op"
                 );
-                view.Drop(new KeyValuePair<string, Type>(firstKey, dataset[0]), new KeyValuePair<string, Type>(firstKey, groupLast), true);
+                view.Drop(new CatalogEntry(firstKey, dataset[0]), new CatalogEntry(firstKey, groupLast), true);
                 Assert.That(firstGroup[firstGroup.Count - 1], Is.EqualTo(dataset[0]));
                 List<NamespaceTypeOrder> savedOrders = SavedState(state).typeOrders;
                 Assert.That(savedOrders.Find(entry => entry.namespaceKey == firstKey).typeNames[firstGroup.Count - 1], Is.EqualTo(dataset[0].FullName));
@@ -152,8 +152,8 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 yield return null;
                 List<VisualElement> gestureRows = view.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass).ToList();
                 Type dragged = firstGroup[0];
-                VisualElement sourceRow = gestureRows.Find(row => row.userData is KeyValuePair<string, Type> entry && entry.Value == dragged);
-                VisualElement targetRow = gestureRows.Find(row => row.userData is KeyValuePair<string, Type> entry && entry.Value == firstGroup[1]);
+                VisualElement sourceRow = gestureRows.Find(row => row.userData is CatalogEntry entry && entry.Type == dragged);
+                VisualElement targetRow = gestureRows.Find(row => row.userData is CatalogEntry entry && entry.Type == firstGroup[1]);
                 Assert.That(sourceRow != null && targetRow != null);
                 Vector2 destination = new(targetRow.worldBound.center.x, targetRow.worldBound.yMax - 2);
                 using (
@@ -211,9 +211,13 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 Assert.That(view.List.Q<ScrollView>().scrollOffset.y, Is.Positive);
                 VisualElement localizedRow = view.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass)
                     .ToList()
-                    .Find(row => row.userData is KeyValuePair<string, Type> entry && entry.Value == dataset[1997]);
+                    .Find(row => row.userData is CatalogEntry entry && entry.Type == dataset[1997]);
                 Assert.That(localizedRow != null);
                 Assert.That(localizedRow.Q<Label>("catalog-label").text, Does.Contain("très long"));
+                view.Filter("  OBJET très   LONG  ");
+                yield return null;
+                Assert.That(view.List.itemsSource.Count, Is.EqualTo(2), "Span terms preserve localized ordinal matching");
+                view.Filter(null);
                 Assert.That(localizedRow.Q<Label>("catalog-label").worldBound.xMax, Is.LessThanOrEqualTo(localizedRow.worldBound.xMax));
 
                 Type last = dataset[dataset.Length - 1];
@@ -222,6 +226,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 Assert.That(view.ContainsType(last));
                 Assert.That(view.Query<VisualElement>(className: StyleConstants.SelectedClass).ToList().Count, Is.Positive);
                 view.Filter("MeasuredType1999Data");
+                Assert.That(view.Filter("  MEASUREDTYPE1999DATA  "), Is.False, "Equivalent trimmed input keeps rows intact");
                 yield return null;
                 Assert.That(view.List.itemsSource.Count, Is.EqualTo(2));
                 Assert.That(view.Adjacent(dataset[dataset.Length - 2], true), Is.EqualTo(last), "Navigation starts from hidden identity");
@@ -262,15 +267,11 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 if (firstKey != lastKey)
                 {
                     Type firstBefore = firstGroup[0];
-                    view.Drop(new KeyValuePair<string, Type>(firstKey, firstBefore), new KeyValuePair<string, Type>(lastKey, dataset[dataset.Length - 1]), false);
+                    view.Drop(new CatalogEntry(firstKey, firstBefore), new CatalogEntry(lastKey, dataset[dataset.Length - 1]), false);
                     Assert.That(firstGroup[0], Is.EqualTo(firstBefore), "Cross-namespace type drops do not move a type");
-                    view.Drop(new KeyValuePair<string, Type>(firstKey, null), new KeyValuePair<string, Type>(lastKey, null), true);
+                    view.Drop(new CatalogEntry(firstKey, null), new CatalogEntry(lastKey, null), true);
                     Assert.That(order[firstKey], Is.EqualTo(order.Count - 1));
-                    Assert.That(
-                        view.Drop(new KeyValuePair<string, Type>(firstKey, null), new KeyValuePair<string, Type>(lastKey, null), true),
-                        Is.False,
-                        "Repeating a namespace drop is a no-op"
-                    );
+                    Assert.That(view.Drop(new CatalogEntry(firstKey, null), new CatalogEntry(lastKey, null), true), Is.False, "Repeating a namespace drop is a no-op");
                     Assert.That(SavedState(state).namespaceOrder[order.Count - 1], Is.EqualTo(firstKey));
                 }
                 Type firstCollision = typeof(CollisionA.OrderCollisionData);
@@ -288,14 +289,15 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 }
                 typeof(DataVisualizerWindow).GetField("_namespaceController", members).SetValue(owner, controller);
                 controller.Build(owner, ref catalogRoot);
+                view.Input.NextTypeKey = KeyCode.N;
                 controller.SelectType(owner, firstCollision);
                 yield return null;
                 Assert.That(controller.SelectedType, Is.EqualTo(firstCollision));
                 VisualElement collisionRow = view.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass)
                     .ToList()
-                    .Find(row => row.userData is KeyValuePair<string, Type> entry && entry.Value == firstCollision);
+                    .Find(row => row.userData is CatalogEntry entry && entry.Type == firstCollision);
                 Assert.That(collisionRow != null);
-                using (KeyDownEvent down = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.DownArrow }))
+                using (KeyDownEvent down = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.N }))
                 {
                     down.target = collisionRow;
                     collisionRow.SendEvent(down);
