@@ -273,13 +273,23 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                 {
                     keys.Add(group.Key);
                 }
-                keys.Remove(source.Key);
-                int index = keys.IndexOf(target.Key);
-                if (index < 0)
+                int from = keys.IndexOf(source.Key);
+                int targetIndex = keys.IndexOf(target.Key);
+                if (from < 0 || targetIndex < 0)
                 {
                     return false;
                 }
-                keys.Insert(index + (after ? 1 : 0), source.Key);
+                int destinationIndex = targetIndex + (after ? 1 : 0);
+                if (from < destinationIndex)
+                {
+                    destinationIndex--;
+                }
+                if (from == destinationIndex)
+                {
+                    return false;
+                }
+                keys.RemoveAt(from);
+                keys.Insert(destinationIndex, source.Key);
                 for (int i = 0; i < keys.Count; i++)
                 {
                     _order[keys[i]] = i;
@@ -299,9 +309,17 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                 {
                     return false;
                 }
+                int destinationIndex = to + (after ? 1 : 0);
+                if (from < destinationIndex)
+                {
+                    destinationIndex--;
+                }
+                if (from == destinationIndex)
+                {
+                    return false;
+                }
                 types.RemoveAt(from);
-                to = types.IndexOf(target.Value) + (after ? 1 : 0);
-                types.Insert(to, source.Value);
+                types.Insert(destinationIndex, source.Value);
                 _owner.PersistVirtualCatalogOrder(source.Key, null);
             }
             else

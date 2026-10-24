@@ -121,6 +121,11 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 string firstKey = NamespaceController.GetNamespaceKey(dataset[0]);
                 List<Type> firstGroup = managed[firstKey];
                 Type groupLast = firstGroup[firstGroup.Count - 1];
+                Assert.That(
+                    view.Drop(new KeyValuePair<string, Type>(firstKey, firstGroup[1]), new KeyValuePair<string, Type>(firstKey, firstGroup[0]), true),
+                    Is.False,
+                    "An unchanged adjacent drop is a no-op"
+                );
                 view.Drop(new KeyValuePair<string, Type>(firstKey, dataset[0]), new KeyValuePair<string, Type>(firstKey, groupLast), true);
                 Assert.That(firstGroup[firstGroup.Count - 1], Is.EqualTo(dataset[0]));
                 List<NamespaceTypeOrder> savedOrders = SavedState(state).typeOrders;
@@ -236,6 +241,11 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                     Assert.That(firstGroup[0], Is.EqualTo(firstBefore), "Cross-namespace type drops do not move a type");
                     view.Drop(new KeyValuePair<string, Type>(firstKey, null), new KeyValuePair<string, Type>(lastKey, null), true);
                     Assert.That(order[firstKey], Is.EqualTo(order.Count - 1));
+                    Assert.That(
+                        view.Drop(new KeyValuePair<string, Type>(firstKey, null), new KeyValuePair<string, Type>(lastKey, null), true),
+                        Is.False,
+                        "Repeating a namespace drop is a no-op"
+                    );
                     Assert.That(SavedState(state).namespaceOrder[order.Count - 1], Is.EqualTo(firstKey));
                 }
                 Type firstCollision = typeof(CollisionA.OrderCollisionData);
