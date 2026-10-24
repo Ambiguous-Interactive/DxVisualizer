@@ -23,7 +23,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
 
     public sealed class CatalogLayoutScaleTests
     {
-        internal static Type[][] CreateTypes()
+        internal static Type[][] CreateTypes(bool localized = false)
         {
             AssemblyBuilder assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("CatalogLayoutScale" + Guid.NewGuid().ToString("N")), AssemblyBuilderAccess.Run);
             ModuleBuilder module = assembly.DefineDynamicModule("CatalogLayoutScale");
@@ -33,8 +33,23 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 for (int i = 0; i < types[distribution].Length; i++)
                 {
                     string group = distribution == 0 ? "SingleGroup" : "Group" + (i / 10).ToString("D4");
-                    string name = "CatalogLayoutScale." + group + ".MeasuredType" + i.ToString("D4") + "Data";
+                    if (localized && (distribution == 0 || 1990 <= i))
+                    {
+                        group = "Un très long espace de noms pour vérifier la lisibilité";
+                    }
+                    string name = "CatalogLayoutScale." + (localized ? "Distribution" + distribution + "." : string.Empty) + group + ".MeasuredType" + i.ToString("D4") + "Data";
                     TypeBuilder builder = module.DefineType(name, TypeAttributes.Public, typeof(object));
+                    if (localized && i == 1997)
+                    {
+                        builder.SetCustomAttribute(
+                            new CustomAttributeBuilder(
+                                typeof(CustomDataVisualizationAttribute).GetConstructor(Type.EmptyTypes),
+                                Array.Empty<object>(),
+                                new[] { typeof(CustomDataVisualizationAttribute).GetProperty(nameof(CustomDataVisualizationAttribute.TypeName)) },
+                                new object[] { "Un objet avec un nom très long pour vérifier les contrôles du catalogue" }
+                            )
+                        );
+                    }
                     types[distribution][i] = builder.CreateType();
                 }
             }
@@ -135,10 +150,8 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             scroll.style.flexGrow = 1;
             scroll.contentContainer.style.flexGrow = 1;
             root.Add(scroll);
-            host.ShowUtility();
+            EditorSurfaceCapture.ShowPopup(host);
             host.position = new Rect(40, 40, 360, 720);
-            root.style.width = 360;
-            root.style.height = 720;
             using ProfilerRecorder frameAllocations = CreateFrameAllocationRecorderOrDefault();
             Type[][] types = CreateTypes();
             long initialHeap = GC.GetTotalMemory(true);
@@ -184,6 +197,8 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                         yield return null;
                         long editorFrameAllocatedBytes = frameAllocations.Valid && 0 < frameAllocations.Count ? frameAllocations.LastValue : -1;
                         EditorSurfaceCapture.SettleLayout(host);
+                        Assert.That(root.worldBound.width, Is.EqualTo(360).Within(1), "Measure the actual popup width");
+                        Assert.That(root.worldBound.height, Is.EqualTo(720).Within(1), "Measure the actual popup height");
                         int elements = catalogRoot.Query<VisualElement>().ToList().Count;
                         List<VisualElement> rows = catalogRoot.Query<VisualElement>(className: StyleConstants.TypeItemClass).ToList();
                         bool virtualized = controller.VirtualizedView != null;
