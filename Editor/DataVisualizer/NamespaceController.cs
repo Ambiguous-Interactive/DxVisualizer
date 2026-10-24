@@ -6,6 +6,7 @@ namespace WallstopStudios.DataVisualizer.Editor
     using Data;
     using Extensions;
     using Styles;
+    using UI;
     using UnityEngine;
     using UnityEngine.UIElements;
     using Utilities;
@@ -16,11 +17,14 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         public Type SelectedType => _selectedType;
 
+        public VirtualizedTypeCatalogView VirtualizedView => _virtualizedCatalog;
+
         internal readonly Dictionary<Type, VisualElement> _namespaceCache = new();
 
         private readonly Dictionary<string, List<Type>> _managedTypes;
         private readonly Dictionary<string, int> _namespaceOrder;
         private Type _selectedType;
+        private VirtualizedTypeCatalogView _virtualizedCatalog;
 
         public NamespaceController(Dictionary<string, List<Type>> managedTypes, Dictionary<string, int> namespaceOrder)
         {
@@ -210,6 +214,27 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         internal static bool IsNamespaceCollapsed(DataVisualizer owner, string key) => GetIsNamespaceCollapsed(owner, key);
 
+        private static bool GetIsNamespaceCollapsed(DataVisualizer dataVisualizer, string namespaceKey)
+        {
+            if (string.IsNullOrWhiteSpace(namespaceKey))
+            {
+                return false;
+            }
+
+            DataVisualizerSettings settings = dataVisualizer.Settings;
+            if (settings.persistStateInSettingsAsset)
+            {
+                NamespaceCollapseState entry = settings.namespaceCollapseStates?.Find(state => string.Equals(state.namespaceKey, namespaceKey, StringComparison.Ordinal));
+                return entry?.isCollapsed ?? false;
+            }
+            else
+            {
+                DataVisualizerUserState userState = dataVisualizer.UserState;
+                NamespaceCollapseState entry = userState.namespaceCollapseStates?.Find(state => string.Equals(state.namespaceKey, namespaceKey, StringComparison.Ordinal));
+                return entry?.isCollapsed ?? false;
+            }
+        }
+
         private static void ProtectCatalogAction(Button button)
         {
             button.RegisterCallback<PointerDownEvent>(static evt => evt.StopPropagation());
@@ -337,27 +362,6 @@ namespace WallstopStudios.DataVisualizer.Editor
             );
         }
 
-        private static bool GetIsNamespaceCollapsed(DataVisualizer dataVisualizer, string namespaceKey)
-        {
-            if (string.IsNullOrWhiteSpace(namespaceKey))
-            {
-                return false;
-            }
-
-            DataVisualizerSettings settings = dataVisualizer.Settings;
-            if (settings.persistStateInSettingsAsset)
-            {
-                NamespaceCollapseState entry = settings.namespaceCollapseStates?.Find(state => string.Equals(state.namespaceKey, namespaceKey, StringComparison.Ordinal));
-                return entry?.isCollapsed ?? false;
-            }
-            else
-            {
-                DataVisualizerUserState userState = dataVisualizer.UserState;
-                NamespaceCollapseState entry = userState.namespaceCollapseStates?.Find(state => string.Equals(state.namespaceKey, namespaceKey, StringComparison.Ordinal));
-                return entry?.isCollapsed ?? false;
-            }
-        }
-
         private static void PersistManagedTypesList(DataVisualizer dataVisualizer, List<string> managedList)
         {
             dataVisualizer.PersistSettings(
@@ -421,6 +425,8 @@ namespace WallstopStudios.DataVisualizer.Editor
         public void Clear()
         {
             _selectedType = null;
+            _virtualizedCatalog?.RemoveFromHierarchy();
+            _virtualizedCatalog = null;
         }
 
         public void DecrementTypeSelection(DataVisualizer dataVisualizer)
@@ -447,31 +453,48 @@ namespace WallstopStudios.DataVisualizer.Editor
 
             if (_selectedType == type)
             {
+                _virtualizedCatalog?.Select(type);
                 return;
             }
 
-            if (TryGet(_selectedType, out VisualElement currentSelection))
+            if (_virtualizedCatalog != null)
             {
-                currentSelection.RemoveFromClassList(StyleConstants.SelectedClass);
-                currentSelection.Q<Label>(TypeItemLabelName)?.AddToClassList(StyleConstants.ClickableClass);
-                if (TryGetNamespace(currentSelection, out VisualElement currentNamespaceElement))
+                if (type != null && !_virtualizedCatalog.ContainsType(type))
                 {
-                    currentNamespaceElement.RemoveFromClassList(StyleConstants.SelectedClass);
+                    return;
+                }
+                _selectedType = type;
+                _virtualizedCatalog.Select(type);
+                if (type == null)
+                {
+                    return;
                 }
             }
-
-            _selectedType = null;
-            if (!TryGet(type, out VisualElement element))
+            else
             {
-                return;
-            }
+                if (TryGet(_selectedType, out VisualElement currentSelection))
+                {
+                    currentSelection.RemoveFromClassList(StyleConstants.SelectedClass);
+                    currentSelection.Q<Label>(TypeItemLabelName)?.AddToClassList(StyleConstants.ClickableClass);
+                    if (TryGetNamespace(currentSelection, out VisualElement currentNamespaceElement))
+                    {
+                        currentNamespaceElement.RemoveFromClassList(StyleConstants.SelectedClass);
+                    }
+                }
 
-            _selectedType = type;
-            element.AddToClassList(StyleConstants.SelectedClass);
-            element.Q<Label>(TypeItemLabelName)?.RemoveFromClassList(StyleConstants.ClickableClass);
-            if (TryGetNamespace(element, out VisualElement newlySelectedNamespace))
-            {
-                newlySelectedNamespace.AddToClassList(StyleConstants.SelectedClass);
+                _selectedType = null;
+                if (!TryGet(type, out VisualElement element))
+                {
+                    return;
+                }
+
+                _selectedType = type;
+                element.AddToClassList(StyleConstants.SelectedClass);
+                element.Q<Label>(TypeItemLabelName)?.RemoveFromClassList(StyleConstants.ClickableClass);
+                if (TryGetNamespace(element, out VisualElement newlySelectedNamespace))
+                {
+                    newlySelectedNamespace.AddToClassList(StyleConstants.SelectedClass);
+                }
             }
 
             string namespaceKey = GetNamespaceKey(_selectedType);
@@ -489,6 +512,49 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         public void Build(DataVisualizer dataVisualizer, ref VisualElement namespaceListContainer)
         {
+            int count = 0;
+            foreach (List<Type> types in _managedTypes.Values)
+            {
+                count += types.Count;
+            }
+            if (128 < count)
+            {
+                namespaceListContainer ??= new VisualElement { name = "namespace-list" };
+                namespaceListContainer.style.flexGrow = 1;
+                namespaceListContainer.style.height = Length.Percent(100);
+                if (_virtualizedCatalog == null)
+                {
+                    _namespaceCache.Clear();
+                    namespaceListContainer.Clear();
+                    _virtualizedCatalog = new VirtualizedTypeCatalogView(dataVisualizer, this, _managedTypes, _namespaceOrder);
+                    namespaceListContainer.Add(_virtualizedCatalog);
+                    _virtualizedCatalog.Select(_selectedType, false);
+                }
+                else
+                {
+                    bool selectionRemoved = _selectedType != null && !_virtualizedCatalog.ContainsType(_selectedType);
+                    if (selectionRemoved)
+                    {
+                        _selectedType = null;
+                    }
+                    _virtualizedCatalog.Reconcile();
+                    if (selectionRemoved)
+                    {
+                        _virtualizedCatalog.Select(null, false);
+                    }
+                }
+                return;
+            }
+            if (_virtualizedCatalog != null)
+            {
+                _virtualizedCatalog.RemoveFromHierarchy();
+                _virtualizedCatalog = null;
+            }
+            if (namespaceListContainer != null)
+            {
+                namespaceListContainer.style.height = StyleKeyword.Auto;
+            }
+
             HashSet<Type> currentTypes = CollectManagedTypes(_managedTypes);
             if (currentTypes.SetEquals(_namespaceCache.Keys))
             {
@@ -848,36 +914,6 @@ namespace WallstopStudios.DataVisualizer.Editor
             }
         }
 
-        private void NavigateTypeSelection(DataVisualizer dataVisualizer, bool forward)
-        {
-            if (dataVisualizer.IsAssetEditingSuspended || !TryGet(_selectedType, out VisualElement current))
-            {
-                return;
-            }
-            Type next = GetAdjacentVisibleType(current, forward);
-            if (next != null)
-            {
-                SelectType(dataVisualizer, next);
-                ScrollView scroll = current.GetFirstAncestorOfType<ScrollView>();
-                if (scroll?.panel != null)
-                {
-                    scroll.ScrollTo(_namespaceCache[next]);
-                }
-            }
-        }
-
-        private bool TryGet(Type type, out VisualElement element)
-        {
-            if (type != null && _namespaceCache.TryGetValue(type, out VisualElement cachedElement))
-            {
-                element = cachedElement;
-                return true;
-            }
-
-            element = default;
-            return false;
-        }
-
         private void HandleRemoveNamespaceTypesConfirmed(DataVisualizer dataVisualizer, string namespaceKey, List<Type> typesToRemove)
         {
             if (typesToRemove == null || typesToRemove.Count == 0)
@@ -946,6 +982,48 @@ namespace WallstopStudios.DataVisualizer.Editor
                 A confirm for a type that already left the managed list (stale popover after a
                 refresh) is an idempotent no-op: drop silently instead of warning.
             */
+        }
+
+        private void NavigateTypeSelection(DataVisualizer dataVisualizer, bool forward)
+        {
+            if (_virtualizedCatalog != null)
+            {
+                if (!dataVisualizer.IsAssetEditingSuspended)
+                {
+                    Type nextType = _virtualizedCatalog.Adjacent(_selectedType, forward);
+                    if (nextType != null)
+                    {
+                        SelectType(dataVisualizer, nextType);
+                    }
+                }
+                return;
+            }
+            if (dataVisualizer.IsAssetEditingSuspended || !TryGet(_selectedType, out VisualElement current))
+            {
+                return;
+            }
+            Type next = GetAdjacentVisibleType(current, forward);
+            if (next != null)
+            {
+                SelectType(dataVisualizer, next);
+                ScrollView scroll = current.GetFirstAncestorOfType<ScrollView>();
+                if (scroll?.panel != null)
+                {
+                    scroll.ScrollTo(_namespaceCache[next]);
+                }
+            }
+        }
+
+        private bool TryGet(Type type, out VisualElement element)
+        {
+            if (type != null && _namespaceCache.TryGetValue(type, out VisualElement cachedElement))
+            {
+                element = cachedElement;
+                return true;
+            }
+
+            element = default;
+            return false;
         }
     }
 }

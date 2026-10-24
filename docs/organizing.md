@@ -11,11 +11,11 @@ Three lists can be reordered, and all three persist.
 Each namespace header has **↑** and **↓**. **↑** moves the namespace to the top of the list, **↓** to the bottom. The buttons disable at the ends, so the control tells you when
 there is nowhere to go.
 
-You can also drag a namespace header to any position. The dragged row follows the pointer and shows a ghost of its label.
+Drag a namespace header to another header to place it before or after that group. Use **↑** and **↓** for long moves.
 
 ### Types
 
-Each type row has **↑** and **↓** with the same top-and-bottom behavior, scoped to its own namespace. Types can also be dragged, within and across namespaces.
+Each type row has **↑** and **↓** with the same top-and-bottom behavior, scoped to its own namespace. Drag a type within its namespace to change its order.
 
 ### Objects
 
@@ -30,6 +30,13 @@ The **X** on a namespace header or a type row removes it from DxVisualizer. This
 
 The arrow button on a namespace header collapses and expands its types. Focus it with Tab, then press Enter or Space to toggle. Left collapses the namespace; Right expands it.
 These controls keep the selected type. Collapse state persists per namespace; reopening expands the selected type’s namespace so the selection stays visible.
+
+## Browsing large catalogs
+
+Large catalogs keep their order and selection while scrolling and filtering. **Filter types** matches type display names; clearing the filter restores the full catalog.
+
+Focus a type row and press Enter or Space to select it. Up and Down select the next visible type in the same namespace. The collapse and reorder buttons also accept keyboard focus,
+and keep focus when the catalog changes.
 
 ## Pane widths
 

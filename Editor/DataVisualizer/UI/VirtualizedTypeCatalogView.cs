@@ -21,17 +21,22 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         private readonly List<KeyValuePair<string, Type>> _catalogRows = new();
         private readonly HashSet<string> _collapsed = new(StringComparer.Ordinal);
         private string[] _terms = Array.Empty<string>();
+        private string _filterText = string.Empty;
         private Type _selected;
         private KeyValuePair<string, Type>? _focusedEntry;
         private string _focusedControl;
+        private KeyValuePair<string, Type>? _pressed;
+        private Vector2 _pressPosition;
+        private int _pressedPointerId;
+        private bool _dragging;
         private int _generation;
 
         public VirtualizedTypeCatalogView(DataVisualizer owner, NamespaceController controller, Dictionary<string, List<Type>> managed, Dictionary<string, int> order)
         {
-            _owner = owner;
-            _controller = controller;
-            _managed = managed;
-            _order = order;
+            _owner = owner ?? throw new ArgumentNullException(nameof(owner));
+            _controller = controller ?? throw new ArgumentNullException(nameof(controller));
+            _managed = managed ?? throw new ArgumentNullException(nameof(managed));
+            _order = order ?? throw new ArgumentNullException(nameof(order));
             name = "virtualized-type-catalog";
             focusable = true;
             AddToClassList(StyleConstants.VirtualCatalogClass);
@@ -63,6 +68,8 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             RegisterCallback<DetachFromPanelEvent>(_ =>
             {
                 ++_generation;
+                _pressed = null;
+                _dragging = false;
             });
             Reconcile();
         }
@@ -72,14 +79,26 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             return type != null && _managed.TryGetValue(NamespaceController.GetNamespaceKey(type), out List<Type> types) && types.Contains(type);
         }
 
-        public void Filter(string text)
+        public bool Filter(string text)
         {
-            _terms = string.IsNullOrWhiteSpace(text) ? Array.Empty<string>() : text.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            string normalized = text?.Trim() ?? string.Empty;
+            if (string.Equals(_filterText, normalized, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+            _filterText = normalized;
+            _terms = normalized.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
             Refresh();
+            return true;
         }
 
         public void Select(Type type, bool reveal = true)
         {
+            if (_selected != type && _focusedEntry.HasValue && type != null)
+            {
+                _focusedEntry = new KeyValuePair<string, Type>(NamespaceController.GetNamespaceKey(type), type);
+                _focusedControl = null;
+            }
             _selected = type;
             if (reveal && type != null)
             {
@@ -151,6 +170,8 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                     _catalogRows.Add(new KeyValuePair<string, Type>(group.Key, type));
                 }
             }
+            _pressed = null;
+            _dragging = false;
             Refresh();
             return true;
         }
@@ -214,7 +235,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                             if (generation == _generation && panel != null)
                             {
                                 VisualElement row = FindRealized(identity);
-                                VisualElement target = row?.Q<VisualElement>(control) ?? row;
+                                VisualElement target = string.IsNullOrEmpty(control) ? row : row?.Q<VisualElement>(control) ?? row;
                                 if (target != null)
                                 {
                                     target.Focus();
@@ -232,11 +253,18 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             }
         }
 
-        public void Drop(KeyValuePair<string, Type> source, KeyValuePair<string, Type> target, bool after)
+        public bool Drop(KeyValuePair<string, Type> source, KeyValuePair<string, Type> target, bool after)
         {
-            if (_owner.IsAssetEditingSuspended || source.Equals(target) || !_managed.ContainsKey(source.Key) || !_managed.ContainsKey(target.Key))
+            if (
+                _owner.IsAssetEditingSuspended
+                || source.Equals(target)
+                || source.Key == null
+                || target.Key == null
+                || !_managed.ContainsKey(source.Key)
+                || !_managed.ContainsKey(target.Key)
+            )
             {
-                return;
+                return false;
             }
             if (source.Value == null && target.Value == null)
             {
@@ -249,7 +277,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                 int index = keys.IndexOf(target.Key);
                 if (index < 0)
                 {
-                    return;
+                    return false;
                 }
                 keys.Insert(index + (after ? 1 : 0), source.Key);
                 for (int i = 0; i < keys.Count; i++)
@@ -269,19 +297,47 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                 int to = types.IndexOf(target.Value);
                 if (from < 0 || to < 0)
                 {
-                    return;
+                    return false;
                 }
                 types.RemoveAt(from);
                 to = types.IndexOf(target.Value) + (after ? 1 : 0);
                 types.Insert(to, source.Value);
                 _owner.PersistVirtualCatalogOrder(source.Key, null);
             }
+            else
+            {
+                return false;
+            }
             Reconcile();
+            return true;
         }
 
         private bool CheckEntry(string key, Type type, int index)
         {
             return _catalogRows.Count <= index || _catalogRows[index].Value != type || !string.Equals(_catalogRows[index].Key, key, StringComparison.Ordinal);
+        }
+
+        private bool IsSelected(KeyValuePair<string, Type> entry)
+        {
+            return _selected != null
+                && (entry.Value == null ? string.Equals(entry.Key, NamespaceController.GetNamespaceKey(_selected), StringComparison.Ordinal) : entry.Value == _selected);
+        }
+
+        private int NamespacePosition(string key)
+        {
+            int position = 0;
+            foreach (KeyValuePair<string, Type> entry in _catalogRows)
+            {
+                if (entry.Value == null)
+                {
+                    if (string.Equals(entry.Key, key, StringComparison.Ordinal))
+                    {
+                        return position;
+                    }
+                    position++;
+                }
+            }
+            return -1;
         }
 
         private int Find(Type type)
@@ -338,7 +394,19 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                     return;
                 }
                 KeyValuePair<string, Type> entry = (KeyValuePair<string, Type>)row.userData;
-                if (entry.Value == null && (evt.keyCode == KeyCode.LeftArrow || evt.keyCode == KeyCode.RightArrow))
+                if (evt.keyCode == KeyCode.Escape && _pressed.HasValue)
+                {
+                    row.ReleasePointer(_pressedPointerId);
+                }
+                else if (entry.Value != null && (evt.keyCode == KeyCode.UpArrow || evt.keyCode == KeyCode.DownArrow))
+                {
+                    Type next = Adjacent(entry.Value, evt.keyCode == KeyCode.DownArrow);
+                    if (next != null)
+                    {
+                        _controller.SelectType(_owner, next);
+                    }
+                }
+                else if (entry.Value == null && (evt.keyCode == KeyCode.LeftArrow || evt.keyCode == KeyCode.RightArrow))
                 {
                     SetCollapsed(entry.Key, evt.keyCode == KeyCode.LeftArrow);
                 }
@@ -357,13 +425,64 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                 evt.StopPropagation();
                 evt.PreventDefaultCompat();
             });
-            row.RegisterCallback<PointerUpEvent>(evt =>
+            row.RegisterCallback<PointerDownEvent>(evt =>
             {
                 if (evt.button == 0 && !_owner.IsAssetEditingSuspended)
                 {
-                    Activate((KeyValuePair<string, Type>)row.userData);
+                    row.Focus();
+                    _pressed = (KeyValuePair<string, Type>)row.userData;
+                    _pressPosition = evt.position;
+                    _pressedPointerId = evt.pointerId;
+                    _dragging = false;
+                    row.CapturePointer(evt.pointerId);
                     evt.StopPropagation();
                 }
+            });
+            row.RegisterCallback<PointerMoveEvent>(evt =>
+            {
+                if (_pressed.HasValue && row.HasPointerCapture(evt.pointerId))
+                {
+                    _dragging = _dragging || 6 < Vector2.Distance(_pressPosition, evt.position);
+                    row.EnableInClassList(StyleConstants.SelectedClass, _dragging || IsSelected((KeyValuePair<string, Type>)row.userData));
+                }
+            });
+            row.RegisterCallback<PointerUpEvent>(evt =>
+            {
+                if (!_pressed.HasValue || !row.HasPointerCapture(evt.pointerId))
+                {
+                    return;
+                }
+                KeyValuePair<string, Type> source = _pressed.Value;
+                bool dragging = _dragging;
+                _pressed = null;
+                _dragging = false;
+                row.ReleasePointer(evt.pointerId);
+                if (!_owner.IsAssetEditingSuspended)
+                {
+                    if (dragging)
+                    {
+                        VisualElement target = panel.Pick(evt.position);
+                        while (target != null && target.userData is not KeyValuePair<string, Type>)
+                        {
+                            target = target.parent;
+                        }
+                        if (target?.userData is KeyValuePair<string, Type> destination)
+                        {
+                            Drop(source, destination, target.worldBound.center.y < evt.position.y);
+                        }
+                    }
+                    else
+                    {
+                        Activate(source);
+                    }
+                }
+                evt.StopPropagation();
+            });
+            row.RegisterCallback<PointerCaptureOutEvent>(_ =>
+            {
+                _pressed = null;
+                _dragging = false;
+                row.EnableInClassList(StyleConstants.SelectedClass, IsSelected((KeyValuePair<string, Type>)row.userData));
             });
             VisualElement slot = new();
             slot.style.height = 40;
@@ -375,16 +494,19 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         {
             VisualElement row = slot[0];
             KeyValuePair<string, Type> entry = _rows[index];
+            if (!_managed.TryGetValue(entry.Key, out List<Type> types))
+            {
+                row.style.display = DisplayStyle.None;
+                return;
+            }
+            row.style.display = DisplayStyle.Flex;
             row.userData = entry;
             bool header = entry.Value == null;
             string title = header ? entry.Key : NamespaceController.GetTypeDisplayName(entry.Value);
             row.name = header ? "namespace-header-" + entry.Key : "type-item-" + entry.Value.Name;
             row.EnableInClassList(StyleConstants.TypeItemClass, !header);
             row.EnableInClassList(StyleConstants.NamespaceHeaderClass, header);
-            row.EnableInClassList(
-                StyleConstants.SelectedClass,
-                header ? entry.Key == NamespaceController.GetNamespaceKey(_selected) && _selected != null : entry.Value == _selected
-            );
+            row.EnableInClassList(StyleConstants.SelectedClass, IsSelected(entry));
             Label label = row.Q<Label>("catalog-label");
             label.text = title;
             label.tooltip = header ? entry.Key : entry.Value.FullName;
@@ -397,15 +519,15 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             Button down = row.Q<Button>("go-down-button");
             up.tooltip = "Move " + title + " to top";
             down.tooltip = "Move " + title + " to bottom";
-            int position = header ? _order.GetValueOrDefault(entry.Key) : _managed[entry.Key].IndexOf(entry.Value);
-            int count = header ? _managed.Count : _managed[entry.Key].Count;
+            int position = header ? NamespacePosition(entry.Key) : types.IndexOf(entry.Value);
+            int count = header ? _managed.Count : types.Count;
             up.SetEnabled(!_owner.IsAssetEditingSuspended && position != 0);
             down.SetEnabled(!_owner.IsAssetEditingSuspended && position != count - 1);
             Button remove = row.Q<Button>("catalog-remove");
             int removable = 0;
             if (header)
             {
-                foreach (Type type in _managed[entry.Key])
+                foreach (Type type in types)
                 {
                     if (NamespaceController.IsTypeRemovable(type))
                     {
