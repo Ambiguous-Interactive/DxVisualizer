@@ -174,6 +174,16 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 yield return null;
                 Assert.That(focusedControl, Is.SameAs(selectedAction), "Refresh preserves focused actions");
                 Assert.That(selectionBindings, Is.Zero);
+                cleanup.Defer(() => owner.HandlePlayModeStateChanged(PlayModeStateChange.EnteredEditMode));
+                owner.HandlePlayModeStateChanged(PlayModeStateChange.ExitingEditMode);
+                view.List.RefreshItems();
+                Assert.That(selectedAction.enabledSelf, Is.False, "Rows recycled while paused disable ordering");
+                owner.HandlePlayModeStateChanged(PlayModeStateChange.EnteredEditMode);
+                selectionBindings = 0;
+                view.Select(dataset[1], false);
+                Assert.That(selectedAction.enabledSelf, Is.True, "Selection refresh restores ordering after resume");
+                Assert.That(firstSelectedRow.Q<Button>("go-up-button").enabledSelf, Is.False, "The first type still cannot move up");
+                Assert.That(selectionBindings, Is.Zero, "Action availability does not require content rebinding");
                 view.List.bindItem = bindRow;
                 host.rootVisualElement.focusable = true;
                 host.rootVisualElement.Focus();
