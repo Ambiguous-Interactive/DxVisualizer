@@ -172,9 +172,10 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                 return null;
             }
             int step = forward ? 1 : -1;
-            for (int offset = 1; offset <= types.Count; offset++)
+            int count = types.Count;
+            for (int offset = 1; offset <= count; offset++)
             {
-                Type candidate = types[(index + step * offset + types.Count) % types.Count];
+                Type candidate = types[(index + step * offset + count) % count];
                 if (0 <= Find(candidate))
                 {
                     return candidate;
@@ -220,77 +221,10 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         {
             CatalogEntry? focused = _focusedEntry;
             string control = _focusedControl;
-            _rows.Clear();
-            VisibleNamespaceCount = 0;
-            foreach (KeyValuePair<string, List<Type>> group in NamespaceController.GetOrderedNamespaceEntries(_managed, _order))
-            {
-                int header = _rows.Count;
-                _rows.Add(new CatalogEntry(group.Key, null));
-                bool matches = false;
-                foreach (Type type in group.Value)
-                {
-                    bool match = true;
-                    string title = NamespaceController.GetTypeDisplayName(type);
-                    foreach ((int Start, int Length) term in _terms)
-                    {
-                        if (title.AsSpan().IndexOf(_filterText.AsSpan(term.Start, term.Length), StringComparison.OrdinalIgnoreCase) < 0)
-                        {
-                            match = false;
-                            break;
-                        }
-                    }
-                    if (match)
-                    {
-                        matches = true;
-                        if (!_collapsed.Contains(group.Key))
-                        {
-                            _rows.Add(new CatalogEntry(group.Key, type));
-                        }
-                    }
-                }
-                if (!matches && _terms.Count != 0)
-                {
-                    _rows.RemoveAt(header);
-                }
-                else
-                {
-                    VisibleNamespaceCount++;
-                }
-            }
+            RebuildVisibleRows();
             int generation = ++_generation;
             List.Rebuild();
-            if (focused.HasValue)
-            {
-                CatalogEntry identity = focused.Value;
-                int index = _rows.IndexOf(identity);
-                if (0 <= index)
-                {
-                    List.ScrollToItem(index);
-                    int attempts = 0;
-                    bool restored = false;
-                    schedule
-                        .Execute(() =>
-                        {
-                            attempts++;
-                            if (generation == _generation && panel != null)
-                            {
-                                VisualElement row = FindRealized(identity);
-                                VisualElement target = string.IsNullOrEmpty(control) ? row : row?.Q<VisualElement>(control) ?? row;
-                                if (target != null)
-                                {
-                                    target.Focus();
-                                    restored = true;
-                                }
-                            }
-                        })
-                        .Every(16)
-                        .Until(() => restored || generation != _generation || panel == null || 8 <= attempts);
-                }
-                else
-                {
-                    Focus();
-                }
-            }
+            RestoreCatalogFocus(focused, control, generation);
         }
 
         public bool Drop(CatalogEntry source, CatalogEntry target, bool after)
@@ -367,6 +301,86 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                 return false;
             }
             Reconcile();
+            return true;
+        }
+
+        private void RebuildVisibleRows()
+        {
+            _rows.Clear();
+            VisibleNamespaceCount = 0;
+            foreach (KeyValuePair<string, List<Type>> group in NamespaceController.GetOrderedNamespaceEntries(_managed, _order))
+            {
+                int header = _rows.Count;
+                _rows.Add(new CatalogEntry(group.Key, null));
+                bool matches = false;
+                foreach (Type type in group.Value)
+                {
+                    if (MatchesFilter(type))
+                    {
+                        matches = true;
+                        if (!_collapsed.Contains(group.Key))
+                        {
+                            _rows.Add(new CatalogEntry(group.Key, type));
+                        }
+                    }
+                }
+                if (!matches && _terms.Count != 0)
+                {
+                    _rows.RemoveAt(header);
+                }
+                else
+                {
+                    VisibleNamespaceCount++;
+                }
+            }
+        }
+
+        private void RestoreCatalogFocus(CatalogEntry? focused, string control, int generation)
+        {
+            if (focused.HasValue)
+            {
+                CatalogEntry identity = focused.Value;
+                int index = _rows.IndexOf(identity);
+                if (0 <= index)
+                {
+                    List.ScrollToItem(index);
+                    int attempts = 0;
+                    bool restored = false;
+                    schedule
+                        .Execute(() =>
+                        {
+                            attempts++;
+                            if (generation == _generation && panel != null)
+                            {
+                                VisualElement row = FindRealized(identity);
+                                VisualElement target = string.IsNullOrEmpty(control) ? row : row?.Q<VisualElement>(control) ?? row;
+                                if (target != null)
+                                {
+                                    target.Focus();
+                                    restored = true;
+                                }
+                            }
+                        })
+                        .Every(16)
+                        .Until(() => restored || generation != _generation || panel == null || 8 <= attempts);
+                }
+                else
+                {
+                    Focus();
+                }
+            }
+        }
+
+        private bool MatchesFilter(Type type)
+        {
+            string title = NamespaceController.GetTypeDisplayName(type);
+            foreach ((int Start, int Length) term in _terms)
+            {
+                if (title.AsSpan().IndexOf(_filterText.AsSpan(term.Start, term.Length), StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    return false;
+                }
+            }
             return true;
         }
 
