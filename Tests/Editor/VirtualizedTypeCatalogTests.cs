@@ -14,6 +14,8 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
     using WallstopStudios.DataVisualizer.Editor.Data;
     using WallstopStudios.DataVisualizer.Editor.Styles;
     using WallstopStudios.DataVisualizer.Editor.UI;
+    using CollisionA = WallstopStudios.DataVisualizer.Tests.Editor.TypeIdentityCollision.First.Data;
+    using CollisionB = WallstopStudios.DataVisualizer.Tests.Editor.TypeIdentityCollision.Second.Data;
     using DataVisualizerWindow = WallstopStudios.DataVisualizer.Editor.DataVisualizer;
     using Object = UnityEngine.Object;
 
@@ -89,9 +91,9 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                     types.Add(type);
                 }
                 NamespaceController controller = new(managed, order);
-                VirtualizedTypeCatalogView view = new(owner, controller, managed, order);
-                VisualElement catalogRoot = view;
-                catalogRoot.style.height = Length.Percent(100);
+                VisualElement catalogRoot = null;
+                controller.Build(owner, ref catalogRoot);
+                VirtualizedTypeCatalogView view = controller.VirtualizedView;
                 Assert.That(view != null);
                 VisualElement focusedControl = null;
                 Func<VisualElement> makeRow = view.List.makeItem;
@@ -110,7 +112,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 EditorSurfaceCapture.SettleLayout(host);
                 Assert.That(view.List.itemsSource.Count, Is.EqualTo(2000 + managed.Count));
                 List<VisualElement> rowsBefore = view.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass).ToList();
-                Assert.That(view.Reconcile(), Is.False);
+                controller.Build(owner, ref catalogRoot);
                 CollectionAssert.AreEqual(
                     rowsBefore,
                     view.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass).ToList(),
@@ -119,10 +121,69 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 string firstKey = NamespaceController.GetNamespaceKey(dataset[0]);
                 List<Type> firstGroup = managed[firstKey];
                 Type groupLast = firstGroup[firstGroup.Count - 1];
+                Assert.That(
+                    view.Drop(new KeyValuePair<string, Type>(firstKey, firstGroup[1]), new KeyValuePair<string, Type>(firstKey, firstGroup[0]), true),
+                    Is.False,
+                    "An unchanged adjacent drop is a no-op"
+                );
                 view.Drop(new KeyValuePair<string, Type>(firstKey, dataset[0]), new KeyValuePair<string, Type>(firstKey, groupLast), true);
                 Assert.That(firstGroup[firstGroup.Count - 1], Is.EqualTo(dataset[0]));
                 List<NamespaceTypeOrder> savedOrders = SavedState(state).typeOrders;
                 Assert.That(savedOrders.Find(entry => entry.namespaceKey == firstKey).typeNames[firstGroup.Count - 1], Is.EqualTo(dataset[0].FullName));
+
+                yield return null;
+                List<VisualElement> gestureRows = view.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass).ToList();
+                Type dragged = firstGroup[0];
+                VisualElement sourceRow = gestureRows.Find(row => row.userData is KeyValuePair<string, Type> entry && entry.Value == dragged);
+                VisualElement targetRow = gestureRows.Find(row => row.userData is KeyValuePair<string, Type> entry && entry.Value == firstGroup[1]);
+                Assert.That(sourceRow != null && targetRow != null);
+                Vector2 destination = new(targetRow.worldBound.center.x, targetRow.worldBound.yMax - 2);
+                using (
+                    PointerDownEvent down = PointerDownEvent.GetPooled(
+                        new Event
+                        {
+                            type = EventType.MouseDown,
+                            button = 0,
+                            mousePosition = sourceRow.worldBound.center,
+                        }
+                    )
+                )
+                {
+                    down.target = sourceRow;
+                    sourceRow.SendEvent(down);
+                }
+                Assert.That(sourceRow.HasPointerCapture(PointerId.mousePointerId), Is.True);
+                using (
+                    PointerMoveEvent move = PointerMoveEvent.GetPooled(
+                        new Event
+                        {
+                            type = EventType.MouseDrag,
+                            button = 0,
+                            mousePosition = destination,
+                        }
+                    )
+                )
+                {
+                    move.target = sourceRow;
+                    sourceRow.SendEvent(move);
+                }
+                using (
+                    PointerUpEvent up = PointerUpEvent.GetPooled(
+                        new Event
+                        {
+                            type = EventType.MouseUp,
+                            button = 0,
+                            mousePosition = destination,
+                        }
+                    )
+                )
+                {
+                    up.target = sourceRow;
+                    sourceRow.SendEvent(up);
+                }
+                yield return null;
+                Assert.That(firstGroup[1], Is.EqualTo(dragged), "Pointer drag commits the same canonical type order");
+                Assert.That(controller.SelectedType == null, "Dragging does not select a type");
 
                 Assert.That(view.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass).ToList().Count, Is.InRange(1, 40));
                 view.List.ScrollToItem(view.List.itemsSource.Count - 1);
@@ -180,8 +241,58 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                     Assert.That(firstGroup[0], Is.EqualTo(firstBefore), "Cross-namespace type drops do not move a type");
                     view.Drop(new KeyValuePair<string, Type>(firstKey, null), new KeyValuePair<string, Type>(lastKey, null), true);
                     Assert.That(order[firstKey], Is.EqualTo(order.Count - 1));
+                    Assert.That(
+                        view.Drop(new KeyValuePair<string, Type>(firstKey, null), new KeyValuePair<string, Type>(lastKey, null), true),
+                        Is.False,
+                        "Repeating a namespace drop is a no-op"
+                    );
                     Assert.That(SavedState(state).namespaceOrder[order.Count - 1], Is.EqualTo(firstKey));
                 }
+                Type firstCollision = typeof(CollisionA.OrderCollisionData);
+                Type secondCollision = typeof(CollisionB.OrderCollisionData);
+                foreach (Type type in new[] { firstCollision, secondCollision })
+                {
+                    string key = NamespaceController.GetNamespaceKey(type);
+                    if (!managed.TryGetValue(key, out List<Type> collisions))
+                    {
+                        collisions = new List<Type>();
+                        managed.Add(key, collisions);
+                        order.Add(key, order.Count);
+                    }
+                    collisions.Add(type);
+                }
+                typeof(DataVisualizerWindow).GetField("_namespaceController", members).SetValue(owner, controller);
+                controller.Build(owner, ref catalogRoot);
+                controller.SelectType(owner, firstCollision);
+                yield return null;
+                Assert.That(controller.SelectedType, Is.EqualTo(firstCollision));
+                VisualElement collisionRow = view.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass)
+                    .ToList()
+                    .Find(row => row.userData is KeyValuePair<string, Type> entry && entry.Value == firstCollision);
+                Assert.That(collisionRow != null);
+                using (KeyDownEvent down = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.DownArrow }))
+                {
+                    down.target = collisionRow;
+                    collisionRow.SendEvent(down);
+                }
+                yield return null;
+                Assert.That(controller.SelectedType, Is.EqualTo(secondCollision), "Equal short names preserve exact selection");
+                view.Filter("OrderCollisionData");
+                yield return null;
+                Assert.That(view.List.itemsSource.Count, Is.EqualTo(3));
+                Assert.That(controller.SelectedType, Is.EqualTo(secondCollision), "Filtering preserves type selection");
+                Assert.That(view.Drop(default, default, false), Is.False);
+                managed[NamespaceController.GetNamespaceKey(secondCollision)].Remove(secondCollision);
+                controller.Build(owner, ref catalogRoot);
+                Assert.That(controller.SelectedType == null, "Removed types cannot remain selected");
+                managed.Clear();
+                order.Clear();
+                string smallKey = NamespaceController.GetNamespaceKey(firstCollision);
+                managed[smallKey] = new List<Type> { firstCollision };
+                order[smallKey] = 0;
+                controller.Build(owner, ref catalogRoot);
+                Assert.That(controller.VirtualizedView == null, "Small catalogs keep the existing compact view");
+                Assert.That(catalogRoot.Query<VisualElement>(className: StyleConstants.TypeItemClass).ToList().Count, Is.EqualTo(1));
                 outer.RemoveFromHierarchy();
                 state.UserState.namespaceCollapseStates.Clear();
                 EditorJsonUtility.FromJsonOverwrite("{\"namespaceCollapseStates\":[]}", state.Settings);

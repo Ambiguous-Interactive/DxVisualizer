@@ -2951,17 +2951,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                 return null;
             }
 
-            List<VisualElement> typeItems = _namespaceListContainer.Query<VisualElement>(className: "type-item").ToList();
-
-            foreach (VisualElement item in typeItems)
-            {
-                if (item.userData is Type itemType && itemType == targetType)
-                {
-                    return item;
-                }
-            }
-
-            return null;
+            return _namespaceController._namespaceCache.GetValueOrDefault(targetType);
         }
 
         private void CreateProcessorColumn()
@@ -3271,6 +3261,13 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         private void PerformTypeSearch(string searchText)
         {
+            if (_namespaceController.VirtualizedView != null)
+            {
+                _namespaceController.VirtualizedView.Filter(string.Equals(searchText, TypeFilterPlaceholder, StringComparison.Ordinal) ? null : searchText);
+                HiddenNamespaces = _scriptableObjectTypes.Count - _namespaceController.VirtualizedView.VisibleNamespaceCount;
+                return;
+            }
+
             HashSet<VisualElement> typeElements = new();
             using (ReusableDisposalLease<(DataVisualizer window, HashSet<VisualElement> typeElements)> cleanup = TypeSearchCleanupScopes.Acquire((this, typeElements)))
             {
@@ -5261,6 +5258,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
             ScrollView namespaceScrollView = new(ScrollViewMode.Vertical) { name = "namespace-scrollview" };
             namespaceScrollView.AddToClassList("namespace-scrollview");
+            namespaceScrollView.contentContainer.style.flexGrow = 1;
             _namespaceListContainer ??= new VisualElement { name = "namespace-list" };
             namespaceScrollView.Add(_namespaceListContainer);
             namespaceColumn.Add(namespaceScrollView);
@@ -7828,6 +7826,10 @@ namespace WallstopStudios.DataVisualizer.Editor
         private void BuildNamespaceView()
         {
             _namespaceController.Build(this, ref _namespaceListContainer);
+            if (_namespaceController.VirtualizedView != null)
+            {
+                PerformTypeSearch(_typeSearchField?.value);
+            }
         }
 
         private void ProtectObjectRowAction(VisualElement element)
