@@ -1,14 +1,42 @@
 namespace WallstopStudios.DataVisualizer.Tests.Editor
 {
     using System;
+    using System.Collections.Generic;
+    using System.Reflection;
     using NUnit.Framework;
     using UnityEngine;
+    using WallstopStudios.DataVisualizer.Editor;
     using WallstopStudios.DataVisualizer.Editor.UI;
     using CollisionA = WallstopStudios.DataVisualizer.Tests.Editor.TypeIdentityCollision.First.Data;
     using CollisionB = WallstopStudios.DataVisualizer.Tests.Editor.TypeIdentityCollision.Second.Data;
+    using DataVisualizerWindow = WallstopStudios.DataVisualizer.Editor.DataVisualizer;
 
     public sealed class CatalogInputSettingsTests
     {
+        [Test]
+        public void ShouldRejectDestroyedCatalogOwners()
+        {
+            using TestCleanupScope cleanup = new();
+            FieldInfo instance = typeof(DataVisualizerWindow).GetField("Instance", BindingFlags.Static | BindingFlags.NonPublic);
+            object previous = instance.GetValue(null);
+            DataVisualizerWindow owner = null;
+            cleanup.Defer(() =>
+            {
+                if (owner != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(owner);
+                }
+                instance.SetValue(null, previous);
+            });
+            owner = ScriptableObject.CreateInstance<DataVisualizerWindow>();
+            UnityEngine.Object.DestroyImmediate(owner);
+            Assert.That(owner == null);
+            Dictionary<string, List<Type>> managed = new();
+            Dictionary<string, int> order = new();
+            NamespaceController controller = new(managed, order);
+            Assert.Throws<ArgumentNullException>(() => new VirtualizedTypeCatalogView(owner, controller, managed, order));
+        }
+
         [Test]
         public void ShouldKeepCatalogEntryEqualityOrdinalAndExact()
         {

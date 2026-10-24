@@ -43,7 +43,11 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         )
         {
             Input = input ?? new CatalogInputSettings();
-            _owner = owner ?? throw new ArgumentNullException(nameof(owner));
+            if (owner == null)
+            {
+                throw new ArgumentNullException(nameof(owner));
+            }
+            _owner = owner;
             _controller = controller ?? throw new ArgumentNullException(nameof(controller));
             _managed = managed ?? throw new ArgumentNullException(nameof(managed));
             _order = order ?? throw new ArgumentNullException(nameof(order));
