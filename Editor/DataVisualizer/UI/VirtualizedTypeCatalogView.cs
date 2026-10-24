@@ -134,25 +134,44 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         public void Select(Type type, bool reveal = true)
         {
-            if (_selected != type && _focusedEntry.HasValue && type != null)
+            bool changed = _selected != type;
+            bool moveFocus = changed && _focusedEntry.HasValue && type != null;
+            if (moveFocus)
             {
                 _focusedEntry = new CatalogEntry(NamespaceController.GetNamespaceKey(type), type);
                 _focusedControl = null;
             }
             _selected = type;
+            bool expanded = reveal && type != null && _collapsed.Remove(NamespaceController.GetNamespaceKey(type));
+            if (expanded)
+            {
+                Refresh();
+            }
+            else
+            {
+                if (changed)
+                {
+                    ++_generation;
+                }
+                foreach (VisualElement row in List.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass).Build())
+                {
+                    if (row.userData is CatalogEntry entry)
+                    {
+                        row.EnableInClassList(StyleConstants.SelectedClass, IsSelected(entry));
+                    }
+                }
+                if (reveal && moveFocus)
+                {
+                    RestoreCatalogFocus(_focusedEntry, _focusedControl, _generation);
+                }
+            }
             if (reveal && type != null)
             {
-                _collapsed.Remove(NamespaceController.GetNamespaceKey(type));
-                Refresh();
                 int index = Find(type);
                 if (0 <= index)
                 {
                     List.ScrollToItem(index);
                 }
-            }
-            else
-            {
-                List.RefreshItems();
             }
         }
 

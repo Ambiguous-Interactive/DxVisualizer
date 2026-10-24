@@ -8,7 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Add viewport-bounded catalog rows for large type collections. Keep filtering, collapse, keyboard navigation and saved ordering while scrolling (#324).
+- Add viewport-bounded catalog rows for large type collections. Keep filtering, collapse, keyboard navigation and saved ordering while scrolling. Change selection without
+  recreating visible rows or losing action focus (#324, #312).
 
 - Add atomic GUID selection import and copied export for headless editor tools, sharing browser selection intent and exact type identities (#315).
 
