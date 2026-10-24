@@ -214,19 +214,24 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                         ScrollView activeScroll = virtualized ? controller.VirtualizedView.List.Q<ScrollView>() : scroll;
                         Stopwatch scrolling = Stopwatch.StartNew();
                         activeScroll.scrollOffset = new Vector2(0, activeScroll.verticalScroller.highValue);
-                        yield return null;
-                        EditorSurfaceCapture.SettleLayout(host);
+                        int visible = 0;
+                        double realizationDeadline = EditorApplication.timeSinceStartup + 5;
+                        do
+                        {
+                            yield return null;
+                            EditorSurfaceCapture.SettleLayout(host);
+                            rows = catalogRoot.Query<VisualElement>(className: StyleConstants.TypeItemClass).ToList();
+                            visible = 0;
+                            foreach (VisualElement row in rows)
+                            {
+                                if (row.worldBound.Overlaps(activeScroll.contentViewport.worldBound))
+                                {
+                                    visible++;
+                                }
+                            }
+                        } while (visible == 0 && EditorApplication.timeSinceStartup < realizationDeadline);
                         double scrollMilliseconds = scrolling.Elapsed.TotalMilliseconds;
                         Assert.That(activeScroll.scrollOffset.y, Is.Positive, "Every scroll observation must move the viewport");
-                        rows = catalogRoot.Query<VisualElement>(className: StyleConstants.TypeItemClass).ToList();
-                        int visible = 0;
-                        foreach (VisualElement row in rows)
-                        {
-                            if (row.worldBound.Overlaps(activeScroll.contentViewport.worldBound))
-                            {
-                                visible++;
-                            }
-                        }
                         Assert.That(visible, Is.Positive);
                         if (0 <= repetition)
                         {
