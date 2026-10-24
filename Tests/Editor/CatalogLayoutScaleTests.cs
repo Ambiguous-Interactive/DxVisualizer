@@ -17,12 +17,13 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
     using WallstopStudios.DataVisualizer.Editor;
     using WallstopStudios.DataVisualizer.Editor.Data;
     using WallstopStudios.DataVisualizer.Editor.Styles;
+    using WallstopStudios.DataVisualizer.Editor.UI;
     using DataVisualizerWindow = WallstopStudios.DataVisualizer.Editor.DataVisualizer;
     using Object = UnityEngine.Object;
 
     public sealed class CatalogLayoutScaleTests
     {
-        internal static Type[][] CreateTypes()
+        internal static Type[][] CreateTypes(bool localized = false)
         {
             AssemblyBuilder assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("CatalogLayoutScale" + Guid.NewGuid().ToString("N")), AssemblyBuilderAccess.Run);
             ModuleBuilder module = assembly.DefineDynamicModule("CatalogLayoutScale");
@@ -32,8 +33,23 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 for (int i = 0; i < types[distribution].Length; i++)
                 {
                     string group = distribution == 0 ? "SingleGroup" : "Group" + (i / 10).ToString("D4");
-                    string name = "CatalogLayoutScale." + group + ".MeasuredType" + i.ToString("D4") + "Data";
+                    if (localized && (distribution == 0 || 1990 <= i))
+                    {
+                        group = "Un très long espace de noms pour vérifier la lisibilité";
+                    }
+                    string name = "CatalogLayoutScale." + (localized ? "Distribution" + distribution + "." : string.Empty) + group + ".MeasuredType" + i.ToString("D4") + "Data";
                     TypeBuilder builder = module.DefineType(name, TypeAttributes.Public, typeof(object));
+                    if (localized && i == 1997)
+                    {
+                        builder.SetCustomAttribute(
+                            new CustomAttributeBuilder(
+                                typeof(CustomDataVisualizationAttribute).GetConstructor(Type.EmptyTypes),
+                                Array.Empty<object>(),
+                                new[] { typeof(CustomDataVisualizationAttribute).GetProperty(nameof(CustomDataVisualizationAttribute.TypeName)) },
+                                new object[] { "Un objet avec un nom très long pour vérifier les contrôles du catalogue" }
+                            )
+                        );
+                    }
                     types[distribution][i] = builder.CreateType();
                 }
             }
@@ -64,8 +80,13 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 "Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/NamespaceController.cs"
             );
             BenchmarkCodeIdentity driver = new(typeof(CatalogLayoutScaleTests).Assembly, "Packages/com.wallstop-studios.data-visualizer/Tests/Editor/CatalogLayoutScaleTests.cs");
+            BenchmarkCodeIdentity renderer = new(
+                typeof(VirtualizedTypeCatalogView).Assembly,
+                "Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/UI/VirtualizedTypeCatalogView.cs"
+            );
             production.Verify();
             driver.Verify();
+            renderer.Verify();
             CatalogReport report = new()
             {
                 unityVersion = Application.unityVersion,
@@ -75,6 +96,11 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 productionModule = production.LoadedModuleId,
                 driverSource = driver.SourceSha256,
                 driverModule = driver.LoadedModuleId,
+                rendererSource = renderer.SourceSha256,
+                rendererModule = renderer.LoadedModuleId,
+                rendererAssembly = renderer.AssemblySha256,
+                editorIsProSkin = EditorGUIUtility.isProSkin,
+                pixelsPerPoint = EditorGUIUtility.pixelsPerPoint,
             };
             Stopwatch budget = Stopwatch.StartNew();
             Directory.CreateDirectory("Temp");
@@ -122,8 +148,10 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             theme.Apply(root, DataVisualizerThemeSelection.ResolveDefault());
             ScrollView scroll = new(ScrollViewMode.Vertical);
             scroll.style.flexGrow = 1;
+            scroll.contentContainer.style.flexGrow = 1;
             root.Add(scroll);
-            host.ShowUtility();
+            EditorSurfaceCapture.ShowPopup(host);
+            host.position = new Rect(40, 40, 360, 720);
             using ProfilerRecorder frameAllocations = CreateFrameAllocationRecorderOrDefault();
             Type[][] types = CreateTypes();
             long initialHeap = GC.GetTotalMemory(true);
@@ -169,19 +197,32 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                         yield return null;
                         long editorFrameAllocatedBytes = frameAllocations.Valid && 0 < frameAllocations.Count ? frameAllocations.LastValue : -1;
                         EditorSurfaceCapture.SettleLayout(host);
+                        Assert.That(root.worldBound.width, Is.EqualTo(360).Within(1), "Measure the actual popup width");
+                        Assert.That(root.worldBound.height, Is.EqualTo(720).Within(1), "Measure the actual popup height");
                         int elements = catalogRoot.Query<VisualElement>().ToList().Count;
                         List<VisualElement> rows = catalogRoot.Query<VisualElement>(className: StyleConstants.TypeItemClass).ToList();
-                        Assert.That(rows.Count, Is.EqualTo(count));
+                        bool virtualized = controller.VirtualizedView != null;
+                        if (virtualized)
+                        {
+                            Assert.That(controller.VirtualizedView.List.itemsSource.Count, Is.EqualTo(count + managed.Count));
+                            Assert.That(rows.Count, Is.InRange(1, 40));
+                        }
+                        else
+                        {
+                            Assert.That(rows.Count, Is.EqualTo(count));
+                        }
+                        ScrollView activeScroll = virtualized ? controller.VirtualizedView.List.Q<ScrollView>() : scroll;
                         Stopwatch scrolling = Stopwatch.StartNew();
-                        scroll.scrollOffset = new Vector2(0, scroll.verticalScroller.highValue);
+                        activeScroll.scrollOffset = new Vector2(0, activeScroll.verticalScroller.highValue);
                         yield return null;
                         EditorSurfaceCapture.SettleLayout(host);
                         double scrollMilliseconds = scrolling.Elapsed.TotalMilliseconds;
-                        Assert.That(scroll.scrollOffset.y, Is.Positive, "Every scroll observation must move the viewport");
+                        Assert.That(activeScroll.scrollOffset.y, Is.Positive, "Every scroll observation must move the viewport");
+                        rows = catalogRoot.Query<VisualElement>(className: StyleConstants.TypeItemClass).ToList();
                         int visible = 0;
                         foreach (VisualElement row in rows)
                         {
-                            if (row.worldBound.Overlaps(scroll.contentViewport.worldBound))
+                            if (row.worldBound.Overlaps(activeScroll.contentViewport.worldBound))
                             {
                                 visible++;
                             }
@@ -200,7 +241,12 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                                     constructionAllocatedBytes = allocated,
                                     editorFrameAllocatedBytesAfterConstruction = editorFrameAllocatedBytes,
                                     observedScrollMilliseconds = scrollMilliseconds,
-                                    scrollOffset = scroll.scrollOffset.y,
+                                    scrollOffset = activeScroll.scrollOffset.y,
+                                    virtualized = virtualized,
+                                    viewportWidth = activeScroll.contentViewport.worldBound.width,
+                                    viewportHeight = activeScroll.contentViewport.worldBound.height,
+                                    realizedCatalogRows = catalogRoot.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass).ToList().Count,
+                                    realizedElementsAfterScroll = catalogRoot.Query<VisualElement>().ToList().Count,
                                     realizedElements = elements,
                                     realizedTypeRows = rows.Count,
                                     viewportTypeRows = visible,
@@ -208,6 +254,19 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                                     unityAllocatedBytes = UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong(),
                                 }
                             );
+                        }
+                    }
+                    if (count == 2000 && distribution == 1)
+                    {
+                        foreach (string themeName in new[] { "Dx", "Classic", "Nord", "Dracula", "Compact", "Minimal" })
+                        {
+                            DataVisualizerThemeSettings selection = AssetDatabase.LoadAssetAtPath<DataVisualizerThemeSettings>(
+                                "Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/Styles/" + themeName + ".asset"
+                            );
+                            Assert.That(selection != null);
+                            theme.Apply(root, selection);
+                            yield return null;
+                            EditorSurfaceCapture.Capture(host, "Temp/catalog-virtualized-" + themeName + ".png");
                         }
                     }
                     scroll.Clear();
@@ -223,6 +282,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(Resources.FindObjectsOfTypeAll<EditorWindow>().Length, Is.EqualTo(windowsBefore));
             production.Verify();
             driver.Verify();
+            renderer.Verify();
             report.nativeCleanupVerified = true;
             report.complete = true;
             report.failure = string.Empty;
@@ -250,6 +310,11 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             public string productionModule;
             public string driverSource;
             public string driverModule;
+            public string rendererSource;
+            public string rendererModule;
+            public string rendererAssembly;
+            public bool editorIsProSkin;
+            public float pixelsPerPoint;
             public double elapsedMilliseconds;
             public List<CatalogSample> samples = new();
         }
@@ -267,6 +332,11 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             public double observedScrollMilliseconds;
             public float scrollOffset;
             public int realizedElements;
+            public bool virtualized;
+            public float viewportWidth;
+            public float viewportHeight;
+            public int realizedCatalogRows;
+            public int realizedElementsAfterScroll;
             public int realizedTypeRows;
             public int viewportTypeRows;
             public long managedBytes;

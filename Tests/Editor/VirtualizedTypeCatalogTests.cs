@@ -66,11 +66,11 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             host.rootVisualElement.styleSheets.Add(
                 AssetDatabase.LoadAssetAtPath<StyleSheet>("Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/Styles/DataVisualizerStyles.uss")
             );
-            host.ShowUtility();
+            EditorSurfaceCapture.ShowPopup(host);
             host.position = new Rect(100, 100, 300, 500);
-            host.rootVisualElement.style.width = 300;
-            host.rootVisualElement.style.height = 500;
-            Type[][] datasets = CatalogLayoutScaleTests.CreateTypes();
+            DataVisualizerThemeSelection themeSelection = new();
+            cleanup.Defer(() => themeSelection.Apply(null, null));
+            Type[][] datasets = CatalogLayoutScaleTests.CreateTypes(localized: true);
             foreach (Type[] dataset in datasets)
             {
                 bool persistInSettings = ReferenceEquals(dataset, datasets[1]);
@@ -111,6 +111,24 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 yield return null;
                 EditorSurfaceCapture.SettleLayout(host);
                 Assert.That(view.List.itemsSource.Count, Is.EqualTo(2000 + managed.Count));
+                foreach (string themeName in new[] { "Dx", "Classic", "Nord", "Dracula", "Compact", "Minimal" })
+                {
+                    themeSelection.Apply(
+                        host.rootVisualElement,
+                        AssetDatabase.LoadAssetAtPath<DataVisualizerThemeSettings>(
+                            "Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/Styles/" + themeName + ".asset"
+                        )
+                    );
+                    yield return null;
+                    EditorSurfaceCapture.SettleLayout(host);
+                    foreach (VisualElement row in view.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass).ToList())
+                    {
+                        Label title = row.Q<Label>("catalog-label");
+                        Assert.That(title.worldBound.xMax, Is.LessThanOrEqualTo(row.worldBound.xMax), themeName);
+                        Assert.That(title.resolvedStyle.fontSize, Is.Positive, themeName);
+                    }
+                }
+
                 List<VisualElement> rowsBefore = view.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass).ToList();
                 controller.Build(owner, ref catalogRoot);
                 CollectionAssert.AreEqual(
@@ -191,6 +209,13 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 EditorSurfaceCapture.SettleLayout(host);
                 Assert.That(view.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass).ToList().Count, Is.InRange(1, 40));
                 Assert.That(view.List.Q<ScrollView>().scrollOffset.y, Is.Positive);
+                VisualElement localizedRow = view.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass)
+                    .ToList()
+                    .Find(row => row.userData is KeyValuePair<string, Type> entry && entry.Value == dataset[1997]);
+                Assert.That(localizedRow != null);
+                Assert.That(localizedRow.Q<Label>("catalog-label").text, Does.Contain("très long"));
+                Assert.That(localizedRow.Q<Label>("catalog-label").worldBound.xMax, Is.LessThanOrEqualTo(localizedRow.worldBound.xMax));
+
                 Type last = dataset[dataset.Length - 1];
                 view.Select(last);
                 yield return null;
