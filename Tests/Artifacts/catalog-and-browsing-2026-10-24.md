@@ -1,7 +1,8 @@
 # Catalog and browsing observations, 24 October 2026
 
 These are warm-process observations on Unity 6000.5.2f1 Windows. They do not establish Unity 2021.3 execution, other-platform performance, fresh-process behavior or a large-project
-support guarantee. Source/module checks and raw emitted reports distinguish component work from actual assets.
+support guarantee. Source/module checks and raw emitted reports distinguish component work from actual assets. The [provenance record](catalog-browsing-provenance-2026-10-24.json)
+binds the loaded assemblies to compiler source checksums and retains cleanup/test outcomes. The measured C# tree is f908dc7; later stack commits change only prose and artifacts.
 
 ## Catalog construction and scrolling
 
@@ -78,5 +79,36 @@ The existing `PerfBaseline` driver can omit query samples while retaining indexi
 `searchMeasurementsEnabled=false`; omitted query arrays are empty and configured query repetitions are zero. A one-type distribution omits type-switch measurements. These omissions
 do not report zero latency.
 
-Real one-large-type observations and their source/cleanup evidence remain pending. #306 retains the full fixture/distribution, change-operation, matched Play/compile, fresh-process
-and platform matrices. No issue is closed by this bounded report.
+The [initial ordinary-SO run](browsing-ordinary-staging-attempt-2026-10-24.json) completes all 40 readiness and 70 interaction observations at 1,000 fixtures, with zero query
+observations. Its 10k fixture stage is intentionally cancelled at 1,237/10,000, not counted as a completed dataset. That cancelled stage records 223.60 seconds total, 5.29 seconds
+in creation calls and 150.61 seconds flushing import batches. The next experiment declares 64 ms/100-item staging limits instead of 4 ms/10 items; import calls remain indivisible,
+and neither budget guarantees an editor-frame limit.
+
+| Fixture type | Fixtures | Warm usable rows p95 (ms) | Warm inspector p95 (ms) | Warm settled index p95 (ms) | Loaded rows | Realized rows | Strong global-search rows |
+| ------------ | -------- | ------------------------- | ----------------------- | --------------------------- | ----------- | ------------- | ------------------------- |
+| Ordinary SO  | 1,000    | 500.7327                  | 500.7327                | 2,005.4500                  | 1,000       | 18            | 0                         |
+
+This table uses 30 warm observations after five warm-ups; the five cold windows still share the warm editor process. Physical input-to-display latency and GPU presentation are not
+measured. Selected rows still retain the full type population; zero strong global-search references does not establish bounded selected-object retention. The initial run returns to
+zero owned fixture roots/browser windows, seven editor windows/one native host and the same 231 pre-existing SO assets, with matching pre/post source/module checks.
+
+The [larger-batch ordinary 10k attempt](browsing-ordinary-10k-2026-10-24.json) creates all 10,000 fixtures and completes all 70 interactions, but hits its declared twelve-minute
+watchdog while waiting for warm readiness. It retains 34 readiness records: 33 complete, one active/incomplete, with only 23 complete warm observations instead of the required 30.
+This is an incomplete run, not a completed 10k readiness matrix. No readiness percentile is computed from that partial population.
+
+Both completed interaction conditions retain five warm-ups and 30 samples. Label-filter observed-ready p95 is 53.1874 ms; scrolling observed-ready p95 is 38.5264 ms. These include
+scheduling/observation and do not establish GPU presentation or a general latency bound. Completed readiness observations load all 10,000 selected-type objects with at most 18
+realized rows and zero strong global-search references. The in-progress final readiness record loads fewer rows and remains incomplete. Matching post-run code checks and the same
+zero-root/window/asset-count cleanup pass.
+
+The [BaseDataObject run](browsing-base-2026-10-24.json) completes all 40 readiness and 70 interaction observations at 1k. At 10k it creates all fixtures and completes all 70
+interactions, then stops at its twelve-minute watchdog with 31 readiness records: 30 complete and one active/incomplete, including only 20 complete warm observations. It is not a
+completed 10k readiness matrix. The completed 10k label-filter and scroll conditions each contain five warm-ups and 30 samples, with observed-ready p95 of 57.8036 and 42.6779 ms.
+Completed readiness observations load all 10,000 selected rows, with at most 18 realized rows and zero strong global-search references.
+
+Both larger-batch runs use a declared twelve-minute cap and 64 ms/100-item staging settings. No queries run. Base cleanup returns to the same zero owned roots/browser windows,
+seven windows/one host and 231 pre-existing SO assets. Pre/post compiler/source/module checks match. No C# source changed during these runs or the final suites; all 877 EditMode
+and 15 actual PlayMode cases pass. The exact npm audit contains 261 byte-identical allowed files and excludes test evidence. Focus was observed active during ordinary
+staging/interaction, not controlled for every sample. These are warm-process observations with synthetic CLR metadata still resident, not isolated memory or controlled cross-host
+comparisons. #306 retains the full fixture/distribution, change-operation, matched Play/compile, fresh-process and platform matrices. #309 retains bounded selected rows and
+native/cache costs. No issue is closed by this bounded report.
