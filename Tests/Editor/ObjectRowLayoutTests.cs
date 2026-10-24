@@ -17,6 +17,63 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
     public sealed class ObjectRowLayoutTests
     {
         [UnityTest]
+        public IEnumerator ShouldKeepCatalogActionPointersOutOfSelectionAndDragHandlers()
+        {
+            using TestCleanupScope cleanup = new();
+            FieldInfo instance = typeof(DataVisualizerWindow).GetField("Instance", BindingFlags.Static | BindingFlags.NonPublic);
+            object previous = instance.GetValue(null);
+            cleanup.Defer(() => instance.SetValue(null, previous));
+            DataVisualizerWindow owner = ScriptableObject.CreateInstance<DataVisualizerWindow>();
+            cleanup.Defer(() => Object.DestroyImmediate(owner));
+            NamespaceController controller = new(
+                new Dictionary<string, List<Type>>
+                {
+                    {
+                        "Actions",
+                        new List<Type> { typeof(OtherEditorOnlyCreationData), typeof(EditorOnlyCreationData) }
+                    },
+                },
+                new Dictionary<string, int>()
+            );
+            VisualElement catalog = null;
+            controller.Build(owner, ref catalog);
+            LayoutTestWindow host = ScriptableObject.CreateInstance<LayoutTestWindow>();
+            cleanup.Defer(() => EditorSurfaceCapture.CloseWindow(host));
+            host.rootVisualElement.Add(catalog);
+            host.ShowUtility();
+            yield return null;
+            int downEvents = 0;
+            int upEvents = 0;
+            catalog.RegisterCallback<PointerDownEvent>(_ => downEvents++);
+            catalog.RegisterCallback<PointerUpEvent>(_ => upEvents++);
+            List<Button> buttons = catalog.Query<Button>().ToList();
+            Assert.That(buttons.Count, Is.EqualTo(10), "Collapse, namespace arrows/removal, and both type arrows/removal");
+            foreach (Button button in buttons)
+            {
+                // Send pointer events without executing destructive commands.
+                button.clickable = null;
+                using (PointerDownEvent down = PointerDownEvent.GetPooled())
+                {
+                    down.target = button;
+                    button.SendEvent(down);
+                }
+                Assert.That(
+                    typeof(DataVisualizerWindow).GetField("_draggedData", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(owner) == null,
+                    Is.True,
+                    button.tooltip + " must not start a catalog drag"
+                );
+                using (PointerUpEvent up = PointerUpEvent.GetPooled())
+                {
+                    up.target = button;
+                    button.SendEvent(up);
+                }
+                Assert.That(controller.SelectedType == null, button.tooltip + " must not select a type");
+                Assert.That(downEvents, Is.Zero, button.tooltip);
+                Assert.That(upEvents, Is.Zero, button.tooltip);
+            }
+        }
+
+        [UnityTest]
         public IEnumerator ShouldKeepCompactRowsAndControlsInsideEveryShippedTheme()
         {
             using TestCleanupScope cleanup = new();

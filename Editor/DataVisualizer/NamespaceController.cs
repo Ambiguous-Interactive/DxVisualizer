@@ -208,6 +208,12 @@ namespace WallstopStudios.DataVisualizer.Editor
             return type.Name;
         }
 
+        private static void ProtectCatalogAction(Button button)
+        {
+            button.RegisterCallback<PointerDownEvent>(static evt => evt.StopPropagation());
+            button.RegisterCallback<PointerUpEvent>(static evt => evt.StopPropagation());
+        }
+
         private static void SaveNamespaceAndTypeSelectionState(DataVisualizer dataVisualizer, string namespaceKey, Type type)
         {
             try
@@ -535,6 +541,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                 };
                 indicator.AddToClassList(StyleConstants.NamespaceIndicatorClass);
                 indicator.AddToClassList(StyleConstants.ClickableClass);
+                ProtectCatalogAction(indicator);
                 header.Add(indicator);
 
                 Button namespaceGoUpButton = new(() =>
@@ -562,6 +569,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                     namespaceGoUpButton.AddToClassList("go-button");
                 }
 
+                ProtectCatalogAction(namespaceGoUpButton);
                 header.Add(namespaceGoUpButton);
 
                 Button namespaceGoDownButton = new(() =>
@@ -589,6 +597,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                     namespaceGoDownButton.AddToClassList("go-button");
                 }
 
+                ProtectCatalogAction(namespaceGoDownButton);
                 header.Add(namespaceGoDownButton);
 
                 Label namespaceLabel = new(key) { name = $"namespace-name-{key}" };
@@ -628,6 +637,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                     namespaceRemoveButton.AddToClassList(StyleConstants.ActionButtonClass);
                     namespaceRemoveButton.AddToClassList(StyleConstants.DeleteButtonClass);
                     namespaceRemoveButton.AddToClassList(StyleConstants.NamespaceDeleteButton);
+                    ProtectCatalogAction(namespaceRemoveButton);
                     headerRight.Add(namespaceRemoveButton);
                 }
 
@@ -639,7 +649,6 @@ namespace WallstopStudios.DataVisualizer.Editor
                 ApplyNamespaceCollapsedState(dataVisualizer, indicator, typesContainer, isCollapsed, false);
 
                 indicator.clicked += ToggleNamespace;
-                indicator.RegisterCallback<PointerDownEvent>(evt => evt.StopPropagation());
                 indicator.RegisterCallback<KeyDownEvent>(evt =>
                 {
                     if (dataVisualizer.IsAssetEditingSuspended || (evt.keyCode != KeyCode.LeftArrow && evt.keyCode != KeyCode.RightArrow))
@@ -692,6 +701,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                         goUpButton.AddToClassList("go-button");
                     }
 
+                    ProtectCatalogAction(goUpButton);
                     typeItem.Add(goUpButton);
 
                     Button goDownButton = new(() =>
@@ -719,6 +729,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                         goDownButton.AddToClassList("go-button");
                     }
 
+                    ProtectCatalogAction(goDownButton);
                     typeItem.Add(goDownButton);
 
                     Label typeLabel = new(GetTypeDisplayName(type)) { name = TypeItemLabelName };
@@ -766,6 +777,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                         };
                         typeRemoveButton.AddToClassList(StyleConstants.ActionButtonClass);
                         typeRemoveButton.AddToClassList(StyleConstants.DeleteButtonClass);
+                        ProtectCatalogAction(typeRemoveButton);
                         typeItem.Add(typeRemoveButton);
                     }
 
