@@ -214,7 +214,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                     .Find(row => row.userData is CatalogEntry entry && entry.Type == dataset[1997]);
                 Assert.That(localizedRow != null);
                 Assert.That(localizedRow.Q<Label>("catalog-label").text, Does.Contain("très long"));
-                view.Filter("  OBJET très   LONG  ");
+                view.Filter("  OBJET TRÈS   LONG  ");
                 yield return null;
                 Assert.That(view.List.itemsSource.Count, Is.EqualTo(2), "Span terms preserve localized ordinal matching");
                 view.Filter(null);
