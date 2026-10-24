@@ -453,7 +453,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
             if (_selectedType == type)
             {
-                _virtualizedCatalog?.Select(type);
+                _virtualizedCatalog?.Select(type, false);
                 return;
             }
 

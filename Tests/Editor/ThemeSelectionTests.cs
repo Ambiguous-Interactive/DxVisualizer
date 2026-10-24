@@ -578,8 +578,20 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 Assert.AreSame(theme, DataVisualizerThemeSelection.Resolve(guid));
                 selection.Apply(root, theme);
                 ColorUtility.TryParseHtmlString(accents[index], out Color accent);
-                yield return new WaitForSecondsRealtime(0.5f);
-                Assert.AreEqual(ColorUtility.ToHtmlStringRGBA(accent), ColorUtility.ToHtmlStringRGBA(reset.resolvedStyle.color), names[index]);
+                string expectedAccent = ColorUtility.ToHtmlStringRGBA(accent);
+                double themeColorDeadline = EditorApplication.timeSinceStartup + 5;
+                while (
+                    EditorApplication.timeSinceStartup < themeColorDeadline
+                    && (
+                        ColorUtility.ToHtmlStringRGBA(reset.resolvedStyle.color) != expectedAccent
+                        || ColorUtility.ToHtmlStringRGBA(namespaceRow.resolvedStyle.backgroundColor) != surfaces[index]
+                    )
+                )
+                {
+                    window.Repaint();
+                    yield return null;
+                }
+                Assert.AreEqual(expectedAccent, ColorUtility.ToHtmlStringRGBA(reset.resolvedStyle.color), names[index]);
                 Assert.AreEqual(surfaces[index], ColorUtility.ToHtmlStringRGBA(namespaceRow.resolvedStyle.backgroundColor), names[index]);
                 Assert.AreEqual(select.resolvedStyle.fontSize, reset.resolvedStyle.fontSize);
                 Assert.AreEqual(select.resolvedStyle.color, themeField.resolvedStyle.color);
