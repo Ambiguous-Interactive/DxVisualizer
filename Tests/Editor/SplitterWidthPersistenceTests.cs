@@ -206,7 +206,8 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             }
             else
             {
-                EditorWindow.GetWindow<LayoutTestWindow>("DxVisualizer Test Anchor");
+                LayoutTestWindow anchor = EditorWindow.GetWindow<LayoutTestWindow>("DxVisualizer Test Anchor");
+                anchor.position = FloatingWindowRect;
                 _window = EditorWindow.GetWindow<DataVisualizerWindow>("DxVisualizer", false, typeof(LayoutTestWindow));
             }
 
