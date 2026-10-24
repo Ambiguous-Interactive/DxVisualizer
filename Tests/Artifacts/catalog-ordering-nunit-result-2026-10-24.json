@@ -1,0 +1,8 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\n  \"status\": \"completed\",\n  \"duration\": 327.81,\n  \"summary\": {\n    \"total\": 1,\n    \"passed\": 0,\n    \"failed\": 1,\n    \"skipped\": 0,\n    \"inconclusive\": 0\n  },\n  \"results\": [\n    {\n      \"FullName\": \"WallstopStudios.DataVisualizer.Tests.Editor.NamespaceOrderingTests.ShouldMeasureNamespaceOrderingAtScale\",\n      \"Status\": \"Failed\",\n      \"Duration\": 327.7921915,\n      \"Message\": \"Timeout value of 180000 ms was exceeded. If this is intended, increase the timeout value using a TimeoutAttribute.\",\n      \"StackTrace\": \"\"\n    }\n  ]\n}"
+    }
+  ]
+}
