@@ -1725,3 +1725,39 @@
     padding: 0;
     flex-shrink: 0;
 }
+
+.virtual-catalog {
+    flex-grow: 1;
+    min-height: 0;
+}
+
+.dataviz-root .virtual-catalog-row {
+    flex-direction: row;
+    align-items: center;
+    height: 36px;
+    margin: 2px 6px;
+    padding: 2px 4px;
+    flex-shrink: 0;
+    border-radius: 6px;
+    background-color: var(--dataviz-row);
+    color: var(--dataviz-text);
+}
+
+.dataviz-root .virtual-catalog-row.namespace-header {
+    background-color: var(--dataviz-namespace);
+}
+
+.dataviz-root .virtual-catalog-row.type-item {
+    margin-left: 16px;
+}
+
+.dataviz-root .virtual-catalog-row:focus {
+    border-width: 2px;
+    border-color: var(--dataviz-selection);
+}
+
+.dataviz-root .virtual-catalog-row.selected {
+    background-color: var(--dataviz-selected-row);
+    border-color: var(--dataviz-selection);
+    border-width: 2px;
+}

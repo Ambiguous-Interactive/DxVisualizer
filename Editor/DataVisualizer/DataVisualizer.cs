@@ -6413,6 +6413,18 @@ namespace WallstopStudios.DataVisualizer.Editor
             }
         }
 
+        internal void PersistVirtualCatalogOrder(string namespaceKey, List<string> namespaces)
+        {
+            if (namespaceKey == null)
+            {
+                SetNamespaceOrder(namespaces);
+            }
+            else if (_scriptableObjectTypes.TryGetValue(namespaceKey, out List<Type> types))
+            {
+                UpdateAndSaveTypeOrder(namespaceKey, types);
+            }
+        }
+
         internal void UpdateLabelAreaAndFilter()
         {
             _selectedLabelUsage.RemoveDestroyedRows(_selectedObjects, _selectedObjectOrderIndex);
