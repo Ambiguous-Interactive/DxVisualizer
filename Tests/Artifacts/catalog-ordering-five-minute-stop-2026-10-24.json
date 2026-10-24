@@ -1,0 +1,8 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\n  \"status\": \"completed\",\n  \"duration\": 303.88,\n  \"summary\": {\n    \"total\": 1,\n    \"passed\": 0,\n    \"failed\": 1,\n    \"skipped\": 0,\n    \"inconclusive\": 0\n  },\n  \"results\": [\n    {\n      \"FullName\": \"WallstopStudios.DataVisualizer.Tests.Editor.NamespaceOrderingTests.ShouldMeasureNamespaceOrderingAtScale\",\n      \"Status\": \"Failed\",\n      \"Duration\": 303.8604212,\n      \"Message\": \"  Stop between calls after the declared five-minute component budget\\r\\n  Expected: less than 5\\r\\n  But was:  5.038882421666667d\\r\\n\",\n      \"StackTrace\": \"at WallstopStudios.DataVisualizer.Tests.Editor.NamespaceOrderingTests.ShouldMeasureNamespaceOrderingAtScale () [0x0025d] in .\\\\Packages\\\\com.wallstop-studios.data-visualizer\\\\Tests\\\\Editor\\\\NamespaceOrderingTests.cs:132\\r\\n\"\n    }\n  ]\n}"
+    }
+  ]
+}
