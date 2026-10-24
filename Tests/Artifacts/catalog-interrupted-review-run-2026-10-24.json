@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "runGuid": "18619081-6b02-4427-a0e1-0273cce437cc",
+  "sourceCommit": "1d47fd5",
+  "complete": false,
+  "reason": "Cancel for destroyed Unity window owner guard before final validation",
+  "cancelRequestAccepted": true,
+  "nativeJobsAfterCleanup": 0,
+  "fixtureDriverAfterCleanup": "Idle",
+  "nativeCleanupObservedUtc": "2026-10-24T21:03:03Z",
+  "cachedMcpStatus": "running",
+  "partialNunitResultAvailable": false,
+  "countsAsPassingValidation": false
+}

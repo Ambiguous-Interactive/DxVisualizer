@@ -1,0 +1,104 @@
+{
+  "schema": 1,
+  "measuredCsharpCommit": "1d05aae06c206392ae060be672b7968e0bd20ecd",
+  "unity": "6000.5.2f1 WindowsEditor",
+  "codeIdentityBeforeAndAfterEqual": true,
+  "codeIdentities": [
+    {
+      "path": "Editor/DataVisualizer/DataVisualizer.cs",
+      "sourceSha256": "f18b064f7d7e75b9aa6f1e4567a24cb2b0b105c784cb84ca6d299c4787a20ff5",
+      "module": "c737e9b2-be0d-4700-af1c-ddcc8106b5c2",
+      "assemblySha256": "3b04059994df1f84c82792fd1c585ff2d56456545781648ae356902a28e47e95",
+      "compilerSourceHash": "f18b064f7d7e75b9aa6f1e4567a24cb2b0b105c784cb84ca6d299c4787a20ff5",
+      "compilerHashAlgorithm": "SHA256",
+      "verified": true
+    },
+    {
+      "path": "Editor/DataVisualizer/NamespaceController.cs",
+      "sourceSha256": "ff344179474220af264e1bda975bff0cd8c106002b1d95ae8b7008120881b732",
+      "module": "c737e9b2-be0d-4700-af1c-ddcc8106b5c2",
+      "assemblySha256": "3b04059994df1f84c82792fd1c585ff2d56456545781648ae356902a28e47e95",
+      "compilerSourceHash": "ff344179474220af264e1bda975bff0cd8c106002b1d95ae8b7008120881b732",
+      "compilerHashAlgorithm": "SHA256",
+      "verified": true
+    },
+    {
+      "path": "Editor/DataVisualizer/UI/VirtualizedTypeCatalogView.cs",
+      "sourceSha256": "a9c804a5419db24cf711ec27c466a2f8059add9454dec4fae07709edafd2da6d",
+      "module": "c737e9b2-be0d-4700-af1c-ddcc8106b5c2",
+      "assemblySha256": "3b04059994df1f84c82792fd1c585ff2d56456545781648ae356902a28e47e95",
+      "compilerSourceHash": "a9c804a5419db24cf711ec27c466a2f8059add9454dec4fae07709edafd2da6d",
+      "compilerHashAlgorithm": "SHA256",
+      "verified": true
+    },
+    {
+      "path": "Editor/DataVisualizer/UI/CatalogEntry.cs",
+      "sourceSha256": "f3afa7d63475dbbf408a40d2a37d98ae64553d4e905535c3a043a07843fe2dc2",
+      "module": "c737e9b2-be0d-4700-af1c-ddcc8106b5c2",
+      "assemblySha256": "3b04059994df1f84c82792fd1c585ff2d56456545781648ae356902a28e47e95",
+      "compilerSourceHash": "f3afa7d63475dbbf408a40d2a37d98ae64553d4e905535c3a043a07843fe2dc2",
+      "compilerHashAlgorithm": "SHA256",
+      "verified": true
+    },
+    {
+      "path": "Editor/DataVisualizer/UI/CatalogInputSettings.cs",
+      "sourceSha256": "9b324e33f008e7b3036e71218f27064f688a92d7c7aab464d802e91868a73fbc",
+      "module": "c737e9b2-be0d-4700-af1c-ddcc8106b5c2",
+      "assemblySha256": "3b04059994df1f84c82792fd1c585ff2d56456545781648ae356902a28e47e95",
+      "compilerSourceHash": "9b324e33f008e7b3036e71218f27064f688a92d7c7aab464d802e91868a73fbc",
+      "compilerHashAlgorithm": "SHA256",
+      "verified": true
+    },
+    {
+      "path": "Tests/Editor/CatalogLayoutScaleTests.cs",
+      "sourceSha256": "24418a4e5b9349493fb6ac2828e2e2eb06efc0a20e49a93fe57c8bf3c0399aa0",
+      "module": "4a765213-bd71-47f1-ae84-98010df0b90b",
+      "assemblySha256": "86eec943a332ee1dc6df14f0fcc8df12385b86ffd02edf6dd3ec7fc242180414",
+      "compilerSourceHash": "24418a4e5b9349493fb6ac2828e2e2eb06efc0a20e49a93fe57c8bf3c0399aa0",
+      "compilerHashAlgorithm": "SHA256",
+      "verified": true
+    }
+  ],
+  "files": {
+    "catalog-drop-idempotency-red-2026-10-24.json": "c0efab6485c65e98fe4d18baa11e188c246a959c4685e51dbe506087a85e4545",
+    "catalog-forced-root-attempt-2026-10-24.json": "4faf9c245a3217cfbbd15f5070f127921fbcab4976c42a015c481f13ab2c5299",
+    "catalog-interrupted-review-run-2026-10-24.json": "5e7ec0aef2eeeeb4b912c24e1ba36c0e83402b90b2f83ac41caa716c3e41e9c3",
+    "catalog-virtualization-2026-10-24.md": "b7c64f7945ab27b9c94125188763ca70b067608c3f74898da19132a9964acf18",
+    "catalog-virtualized-2026-10-24.json": "e36521e1059d38a30064385edb5a55753dea31570227af794a9c1dcb1b0bebdf",
+    "catalog-virtualized-Classic.png": "6b44882e438479a2ce9bd2aa958eb3867a6949293cb630eed666ac90c4b8b2f6",
+    "catalog-virtualized-Compact.png": "5d4dd450eb281415e06113c22acd49c2c373a53d04de195ed0e5b6c59acc43ed",
+    "catalog-virtualized-Dracula.png": "2110cc6bdd2a9c74f9a1b0700f1abefbcf947272672862bd7411eb98ac7cc166",
+    "catalog-virtualized-Dx.png": "667206257d782a9b272a60a79f17fc76511edf36ed4dc6128bcf08f88638184e",
+    "catalog-virtualized-Minimal.png": "8a28a288b13367e5967d8d66a205bad0b0ec7d60c4e27fd2732b55971e549ea3",
+    "catalog-virtualized-Nord.png": "323d730e736ca092faf59b0958c7b4c01c94b18e64674c9090c6701adfca67a5",
+    "catalog-virtualized-nunit-2026-10-24.json": "4032c0c6bce02af91dd612b5a773de71bdc113869c6d0b12e9d34554d69a8cc5",
+    "catalog-validation-runs-2026-10-24.json": "ecf1a38743e30dea7be3233493e18781f76b08f2e5f89e2d0220dd4563e4d043"
+  },
+  "measurementNunit": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "durationSeconds": 27.86
+  },
+  "editMode": {
+    "total": 885,
+    "passed": 885,
+    "failed": 0,
+    "durationSeconds": 947
+  },
+  "playMode": {
+    "total": 15,
+    "passed": 15,
+    "failed": 0,
+    "durationSeconds": 0.4
+  },
+  "scope": "Synthetic CLR catalogs; not real asset or whole-window readiness support.",
+  "packageAudit": {
+    "fileCount": 267,
+    "byteIdentical": true,
+    "exactAllowedTrackedPayload": true,
+    "archiveSha256": "707b5b8f09e1785317c6704cab2390c20d9eb37c94b0675ab1922227aba808ea",
+    "archiveBytes": 238927
+  },
+  "codeIdentityAfterSuitesEqual": true
+}

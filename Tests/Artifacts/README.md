@@ -3,6 +3,7 @@
 This directory preserves recorded test evidence. It is excluded from the documentation site and the UPM/npm package. Raw JSON reports and their Unity metadata moved here from
 `docs/` without changing their bytes or GUIDs. Historical commit links still locate the original reports.
 
+- [Virtualized catalog observations](catalog-virtualization-2026-10-24.md): bounded realization, active scrolling, source proof, six themes and excluded host-layout attempt.
 - [Catalog and browsing observations](catalog-and-browsing-2026-10-24.md): namespace ordering, catalog realization/scrolling and separate browsing distributions.
 - [First available search snapshots](first-search-snapshot-2026-10-24.md): live/complete 1k/10k publications, paint generations and focus limits.
 - [Quick-preview object costs](preview-object-cost-2026-10-24.md): partial/full 1k/10k result loads, direct row references and publication clocks.
