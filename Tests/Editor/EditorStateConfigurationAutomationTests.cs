@@ -7,6 +7,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
     using UnityEngine;
     using WallstopStudios.DataVisualizer.Editor.Data;
     using WallstopStudios.DataVisualizer.Editor.Styles;
+    using WallstopStudios.DataVisualizer.Editor.UI;
     using WallstopStudios.DataVisualizer.Editor.Utilities;
 
     public sealed class EditorStateConfigurationAutomationTests
@@ -68,6 +69,69 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             DataVisualizerUserState state = new();
             state.HydrateFrom(settings);
             return JsonUtility.ToJson(state);
+        }
+
+        [TestCase(false, "keep")]
+        [TestCase(true, "keep")]
+        [TestCase(false, "omitted")]
+        [TestCase(true, "omitted")]
+        [TestCase(false, "replace")]
+        [TestCase(true, "replace")]
+        [TestCase(false, "clear")]
+        [TestCase(true, "clear")]
+        public void ShouldApplyFullConfigurationWithInputProfileChanges(bool projectMode, string profileChange)
+        {
+            using TestCleanupScope cleanup = new();
+            var context = CreateContext(cleanup, projectMode);
+            string folder = Path.GetDirectoryName(context.assetPath).Replace('\\', '/');
+            DataVisualizerInputProfile original = ScriptableObject.CreateInstance<DataVisualizerInputProfile>();
+            DataVisualizerInputProfile replacement = ScriptableObject.CreateInstance<DataVisualizerInputProfile>();
+            AssetDatabase.CreateAsset(original, folder + "/Original.asset");
+            AssetDatabase.CreateAsset(replacement, folder + "/Replacement.asset");
+            context.settings.inputProfile = original;
+            EditorUtility.SetDirty(context.settings);
+            AssetDatabase.SaveAssetIfDirty(context.settings);
+            string originalGuid = AssetDatabase.AssetPathToGUID(folder + "/Original.asset");
+            string replacementGuid = AssetDatabase.AssetPathToGUID(folder + "/Replacement.asset");
+            EditorAutomationRequest request = Request(context.assetPath, context.statePath, !projectMode);
+            request.inputProfileGuid =
+                profileChange == "replace" ? replacementGuid
+                : profileChange == "clear" ? string.Empty
+                : "keep";
+            DataVisualizerInputProfile expected =
+                profileChange == "replace" ? replacement
+                : profileChange == "clear" ? null
+                : original;
+            string expectedGuid =
+                profileChange == "replace" ? replacementGuid
+                : profileChange == "clear" ? string.Empty
+                : originalGuid;
+            string previewPayload = JsonUtility.ToJson(request);
+            if (profileChange == "omitted")
+            {
+                previewPayload = previewPayload.Replace(",\"inputProfileGuid\":\"keep\"", string.Empty);
+            }
+            using EditorAutomationSession previewSession = EditorAutomationSession.Start(previewPayload);
+            EditorAutomationResponse preview = JsonUtility.FromJson<EditorAutomationResponse>(previewSession.GetResponseJson());
+            Assert.That(preview.code, Is.EqualTo("preview"));
+            Assert.That(preview.items[0].inputProfileGuid, Is.EqualTo(expectedGuid));
+            Assert.That(context.settings.inputProfile, Is.SameAs(original));
+            request.operation = "applyConfiguration";
+            request.confirmPaths = new[] { preview.items[0].path, preview.items[0].userStatePath };
+            string payload = JsonUtility.ToJson(request);
+            if (profileChange == "omitted")
+            {
+                payload = payload.Replace(",\"inputProfileGuid\":\"keep\"", string.Empty);
+            }
+            using EditorAutomationSession session = EditorAutomationSession.Start(payload);
+            EditorAutomationResponse applied = JsonUtility.FromJson<EditorAutomationResponse>(session.GetResponseJson());
+            Assert.That(applied.code, Is.EqualTo("applied"));
+            Assert.That(applied.items[0].inputProfileGuid, Is.EqualTo(expectedGuid));
+            Assert.That(context.settings.inputProfile == expected);
+            Assert.That(context.settings.persistStateInSettingsAsset, Is.EqualTo(!projectMode));
+            Assert.That(EditorUtility.IsDirty(context.settings), Is.False);
+            using EditorAutomationSession repeated = EditorAutomationSession.Start(payload);
+            Assert.That(JsonUtility.FromJson<EditorAutomationResponse>(repeated.GetResponseJson()).code, Is.EqualTo("unchanged"));
         }
 
         [TestCase(false)]
@@ -188,13 +252,17 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(EditorUtility.IsDirty(context.settings), Is.False);
         }
 
-        [TestCase("query")]
-        [TestCase("catalog")]
-        [TestCase("previewAssets")]
-        public void ShouldRejectStateFieldsInOtherOperations(string operation)
+        [TestCase("query", "persistenceMode", "settings")]
+        [TestCase("catalog", "persistenceMode", "settings")]
+        [TestCase("previewAssets", "persistenceMode", "settings")]
+        [TestCase("catalog", "inputProfileGuid", "")]
+        [TestCase("catalog", "inputProfileGuid", "00000000000000000000000000000000")]
+        public void ShouldRejectStateFieldsInOtherOperations(string operation, string field, string value)
         {
-            using EditorAutomationSession session = EditorAutomationSession.Start("{\"schemaVersion\":1,\"operation\":\"" + operation + "\",\"persistenceMode\":\"settings\"}");
-            Assert.That(JsonUtility.FromJson<EditorAutomationResponse>(session.GetResponseJson()).code, Is.EqualTo("invalid_scope"));
+            using EditorAutomationSession session = EditorAutomationSession.Start("{\"schemaVersion\":1,\"operation\":\"" + operation + "\",\"" + field + "\":\"" + value + "\"}");
+            EditorAutomationResponse response = JsonUtility.FromJson<EditorAutomationResponse>(session.GetResponseJson());
+            Assert.That(response.code, Is.EqualTo("invalid_scope"));
+            Assert.That(response.detail, Does.Contain("Configuration fields are accepted only by configuration operations."));
         }
 
         [Test]
