@@ -8941,13 +8941,12 @@ namespace WallstopStudios.DataVisualizer.Editor
                 return;
             }
 
-            bool hadLoadedObjects = 0 < _selectedObjects.Count;
             LoadObjectBatch(type, true);
             if (!CanContinueObjectLoad((this, type, loadGeneration)))
             {
                 return;
             }
-            if (!hadLoadedObjects && (_selectedObject == null || _selectedObject.GetType() != type) && !processorSelection.HasSelectionIntent)
+            if ((_selectedObject == null || _selectedObject.GetType() != type) && !processorSelection.HasSelectionIntent)
             {
                 ScriptableObject firstObject = DetermineObjectToAutoSelect(type);
                 if (firstObject != null)
