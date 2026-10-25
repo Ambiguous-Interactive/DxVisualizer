@@ -125,6 +125,114 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         }
 
         [UnityTest]
+        public IEnumerator ShouldRefreshOnlyChangedRealizedAssetRows()
+        {
+            using TestCleanupScope cleanup = new();
+            string folder = CreateFixtureFolder();
+            cleanup.Defer(() => AssetDatabase.DeleteAsset(folder));
+            object previousInstance = ReadSharedInstance();
+            cleanup.Defer(() => RestoreSharedInstance(previousInstance));
+            cleanup.Defer(() => AssetGuidTypeIndex.Shared.Cancel());
+            DataVisualizerSettings settings = ScriptableObject.CreateInstance<DataVisualizerSettings>();
+            cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(settings));
+            string output = "Temp/TargetedRowRefresh-" + Guid.NewGuid().ToString("N");
+            cleanup.Defer(() => System.IO.Directory.Delete(output, recursive: true));
+            using PerfWindowStateScope state = new(settings, new DataVisualizerUserState(), output);
+            Type type = typeof(TestDataObject);
+            state.UserState.managedTypeNames.Add(type.FullName);
+            state.UserState.GetOrCreateTypeOrderList(NamespaceController.GetNamespaceKey(type)).Add(type.FullName);
+            ScriptableObject changed = CreateFixtureAsset(folder, "Changed.asset");
+            CreateFixtureAsset(folder, "Other.asset");
+            DataVisualizerWindow window = ScriptableObject.CreateInstance<DataVisualizerWindow>();
+            using TestCleanupScope windowCleanup = new();
+            windowCleanup.Defer(() => EditorSurfaceCapture.CloseWindow(window));
+            SetPrivateField(window, "_settings", state.Settings);
+            SetPrivateField(window, "_userState", state.UserState);
+            SetPrivateField(window, "_userStateFilePath", state.FilePath);
+            EditorSurfaceCapture.ShowPopup(window);
+            SetPrivateField(window, "_settings", state.Settings);
+            SetPrivateField(window, "_userState", state.UserState);
+            SetPrivateField(window, "_userStateFilePath", state.FilePath);
+            window.position = new Rect(40, 40, 1180, 780);
+            window.CreateGUI();
+            InvokePrivate(window, "LoadInitialContent");
+            ReadPrivateField<NamespaceController>(window, "_namespaceController").SelectType(window, type);
+            yield return WaitForRefresh(window);
+            EditorSurfaceCapture.SettleLayout(window);
+            ListView list = ReadPrivateField<ListView>(window, "_objectListView");
+            List<ScriptableObject> filtered = ReadPrivateField<List<ScriptableObject>>(window, "_filteredObjects");
+            int changedIndex = filtered.IndexOf(changed);
+            Assert.That(changedIndex, Is.Not.Negative);
+            list.ScrollToItem(changedIndex);
+            VisualElement changedRow = null;
+            for (int tick = 0; tick < 60; tick++)
+            {
+                yield return null;
+                EditorSurfaceCapture.SettleLayout(window);
+                changedRow = list.Query<VisualElement>().Where(element => ReferenceEquals(element.userData, changed)).First();
+                if (changedRow != null)
+                {
+                    break;
+                }
+            }
+            Assert.That(changedRow != null, "The uniquely owned fixture must be realized before editing.");
+            Assert.That(AssetDatabase.GetAssetPath(changed).StartsWith(folder + "/", StringComparison.Ordinal));
+            string path = AssetDatabase.GetAssetPath(changed);
+            ScriptableObject selected = ReadPrivateField<ScriptableObject>(window, "_selectedObject");
+            int generation = ReadPrivateField<int>(window, "_asyncLoadGeneration");
+            int originalCount = list.itemsSource.Count;
+            float offset = list.Q<ScrollView>().scrollOffset.y;
+            int bindings = 0;
+            Action<VisualElement, int> bind = list.bindItem;
+            list.bindItem = (element, index) =>
+            {
+                bindings++;
+                bind(element, index);
+            };
+            bindings = 0;
+            ((TestDataObject)changed).Title = "Changed row";
+            Assert.That(AssetDatabase.RenameAsset(path, "Changed row"), Is.Empty);
+            string renamed = AssetDatabase.GetAssetPath(changed);
+            window.QueueAssetChanges(new[] { renamed }, null, null, null);
+            yield return WaitForRefresh(window);
+            EditorSurfaceCapture.SettleLayout(window);
+            Assert.That(changedRow.Q<Label>("object-item-label").text, Is.EqualTo("Changed row"));
+            Assert.That(changedRow.Q<Label>("object-item-label").tooltip, Is.EqualTo("Changed row"));
+            Assert.That(changedRow.Q<Button>("go-up-button").tooltip, Does.Contain("Changed row"));
+            Assert.That(bindings, Is.Zero, "A nonstructural edit must not rebind unchanged rows.");
+            Assert.That(list.itemsSource.Count, Is.EqualTo(originalCount));
+            Assert.That(ReadPrivateField<ScriptableObject>(window, "_selectedObject") == selected);
+            Assert.That(ReadPrivateField<int>(window, "_asyncLoadGeneration"), Is.EqualTo(generation));
+            Assert.That(list.Q<ScrollView>().scrollOffset.y, Is.EqualTo(offset).Within(1));
+            AssetDatabase.SetLabels(changed, new[] { "New label" });
+            window.QueueAssetChanges(new[] { renamed }, null, null, null);
+            yield return WaitForRefresh(window);
+            Assert.That(bindings, Is.Zero, "Label edits without membership changes keep row bindings.");
+            TypeLabelFilterConfig filter = state.UserState.labelFilterConfigs.Find(config => config.typeFullName == type.FullName);
+            filter.andLabels.Add("New label");
+            InvokePrivate(window, "ApplyLabelFilter", true);
+            yield return null;
+            Assert.That(filtered.Contains(changed));
+            AssetDatabase.SetLabels(changed, Array.Empty<string>());
+            window.QueueAssetChanges(new[] { renamed }, null, null, null);
+            yield return WaitForRefresh(window);
+            Assert.That(filtered.Contains(changed), Is.False, "Label edits that hide a row must refresh membership.");
+            AssetDatabase.SetLabels(changed, new[] { "New label" });
+            window.QueueAssetChanges(new[] { renamed }, null, null, null);
+            yield return WaitForRefresh(window);
+            Assert.That(filtered.Contains(changed), Is.True, "Label edits that reveal a row must refresh membership.");
+            filter.andLabels.Clear();
+            InvokePrivate(window, "ApplyLabelFilter", true);
+            yield return null;
+            Assert.That(AssetDatabase.DeleteAsset(renamed));
+            window.QueueAssetChanges(null, new[] { renamed }, null, null);
+            yield return WaitForRefresh(window);
+            EditorSurfaceCapture.SettleLayout(window);
+            Assert.That(list.itemsSource.Count, Is.EqualTo(originalCount - 1));
+            Assert.That(bindings, Is.Positive, "Deletion must reconcile the changed list structure.");
+        }
+
+        [UnityTest]
         public IEnumerator ShouldReconcileActualPlayModeAssetChangesWithoutDomainReload()
         {
             using TestCleanupScope cleanup = new();
