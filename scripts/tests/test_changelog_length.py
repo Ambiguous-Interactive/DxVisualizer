@@ -300,6 +300,26 @@ def case_fails_when_the_changelog_is_missing() -> None:
         remove_temp_root(root)
 
 
+def case_checks_spacing_in_all_sections() -> None:
+    cases = [
+        ("- Add first.\n- Add second.", "- Released first.\n- Released second.", 0),
+        ("- Add first.\n  Wrapped text.\n- Add second.", "- Released.", 0),
+        ("- Add first.\n\n### Fixed\n\n- Fix second.", "- Released.", 0),
+        ("- Add first.\n\n- Add second.", "- Released.", 1),
+        ("- Add first.\n  Wrapped text.\n\n- Add second.", "- Released.", 1),
+        ("- Add first.", "- Released first.\n\n- Released second.", 1),
+    ]
+    for unreleased, released, expected in cases:
+        root = new_changelog_fixture(unreleased, released)
+        try:
+            output, code = invoke_fixture_lint(root)
+            assert_exit_code(expected, f"spacing policy: {output}", code)
+            if expected:
+                assert_true("remove blank lines between changelog entries" in output, output)
+        finally:
+            remove_temp_root(root)
+
+
 def case_passes_against_the_repository_itself() -> None:
     output, exit_code = invoke_changelog_length_lint(REPO_ROOT / "CHANGELOG.md", ["--verbose"])
     assert_exit_code(0, f"the repository must satisfy its own cap: {output}", exit_code)
@@ -317,6 +337,7 @@ def main() -> int:
         ("Fails_WhenUnreleasedIsMissing", case_fails_when_unreleased_is_missing),
         ("Fails_WhenUnreleasedIsDuplicated", case_fails_when_unreleased_is_duplicated),
         ("Fails_WhenTheChangelogIsMissing", case_fails_when_the_changelog_is_missing),
+        ("Checks_SpacingInAllSections", case_checks_spacing_in_all_sections),
         ("Passes_AgainstTheRepositoryItself", case_passes_against_the_repository_itself),
     ])
 

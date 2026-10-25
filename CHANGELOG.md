@@ -10,62 +10,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Add viewport-bounded catalog rows for large type collections. Keep filtering, collapse, keyboard navigation and saved ordering while scrolling. Change selection without
   recreating visible rows or losing action focus (#324, #312).
-
 - Add atomic GUID selection import and copied export for headless editor tools, sharing browser selection intent and exact type identities (#315).
-
 - Add paged C# and JSON discovery of browser-eligible types with exact identities, without opening a window or loading assets (#315, #316).
-
 - Add shared C# and JSON previews and cooperative create, clone, rename, move and delete operations (#315, #316).
-
 - Add shared C# and JSON data-folder and active-selection preferences. Configure persistence mode and themes from C# or JSON with state migration and idempotent writes (#315,
   #316).
-
 - Add SELECTED processor scope with GUID selections, exact target previews, cancellable preparation and explicit batch failure outcomes (#317).
-
 - Add named saved searches for query text, exact type scopes and label expressions, with cancellable results and user or project persistence. Use saved searches and validation
   inside the themed browser (#318).
-
 - Add versioned JSON queries, validation and explicit processor preview/apply with paged responses, cancellation, and a Unity file entrypoint (#316).
-
 - Add read-only validation of selected assets for missing Unity references and duplicate authored IDs, with cancellable progress and per-asset findings (#319).
-
 - Add editor queries with exact type scopes and GUID pages. Preview explicit processor targets, cancel preparation, and inspect batch outcomes (#315).
-
 - Add Show all results to reach matches beyond the first 25, with virtualized rows, keyboard navigation, and a return to quick search (#311).
 
 ### Fixed
 
 - Fix catalog reorder and remove buttons changing the selected type or starting a drag (#312).
-
 - Fix catalog arrow moves resetting after reopening the window. Preserve namespace and type order in user and project state (#324).
-
 - Fix script-folder scans adding unsupported types. Add only eligible ScriptableObject types without creating instances (#376).
-
 - Fix browser refreshes stalling asset imports. Keep unchanged rows stable, ignore unrelated edits, preserve missing-script selection, clear deleted references, and pause or stop
   refreshes with their owner (#308).
 
 ### Changed
 
 - Yield selected-type asset loading between short work slices. Prioritize saved selection and keep custom order while remaining objects load (#309).
-
 - Speed up custom namespace ordering in large catalogs while preserving saved positions and stable ties (#324).
-
 - Keep repeated searches responsive during partial indexing by reusing prepared result order and search data across window rebuilds. Load assets only when activating search results
   without retaining every indexed asset (#309, #310).
-
 - Search available asset text while indexing continues. Speed up Unicode queries, keep final ordering responsive, and refresh open searches as records arrive or change. Keep
   completed results stable when indexing adds no new search data (#310).
-
 - Simplify label filtering with Match all and Match any, keyboard-selectable pills, clear controls, and a readable Advanced expression. Keep missing active labels and show neutral
   counts (#314).
-
 - Keep the inspector readable with pane controls and single-pane navigation in narrow windows. Restore preferred pane widths when space returns (#313).
-
 - Clarify Add types and search controls. Group row commands in Actions menus and add selected-asset keyboard shortcuts. Skip hidden catalog entries with arrow keys and collapse
   namespaces by keyboard (#312).
-
 - Reduce the vertical gap between object rows by at least half (#292).
-
 - Point new installs and documentation links to Ambiguous-Interactive/DxVisualizer. Update site bookmarks to <https://ambiguous-interactive.github.io/DxVisualizer/>; the old Pages
   site does not redirect. Existing Git installs keep working (#151).
 
@@ -74,11 +53,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Add the DxVisualizer mark to the editor tab (#146).
-
 - Publish a measured-performance page with the first recorded window-open, search, and selection timings, produced by a new reproducible measurement driver (#114).
 - Add a captured global-search image to the search and filtering docs page, regenerated from the live window by the docs capture pipeline (#114).
 - Show the asset-creation controls opening in the managing-assets guide.
-
 - Add the Migration and Roadmap pages, and move the repository branding in-repo: the DxVisualizer mark, favicon, and banner from the rebrand kit now live under `docs/images/` and
   the site and README use them (#149, #150).
 
