@@ -3,6 +3,7 @@
 This directory preserves recorded test evidence. It is excluded from the documentation site and the UPM/npm package. Raw JSON reports and their Unity metadata moved here from
 `docs/` without changing their bytes or GUIDs. Historical commit links still locate the original reports.
 
+- [Refresh type relevance](refresh-relevance-2026-10-25.md): namespace-scoped exact-type checks and paired synthetic component timings.
 - [Direct catalog control binding](catalog-controls-2026-10-25.md): keyboard boundaries and mixed scroll/binding/layout observations.
 - [Catalog scroll binding](catalog-scroll-2026-10-25.md): separate call/binding/layout clocks, captured-row recycling and canonical ordering controls.
 - [Filtered catalog navigation](catalog-navigation-2026-10-25.md): paired hidden-tail navigation timings and exact identity regressions.

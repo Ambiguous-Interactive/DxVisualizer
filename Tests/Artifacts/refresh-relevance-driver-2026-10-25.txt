@@ -1,0 +1,42 @@
+
+var windowType = typeof(WallstopStudios.DataVisualizer.Editor.DataVisualizer);
+var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+var instanceField = windowType.GetField("Instance", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+var previous = instanceField.GetValue(null);
+WallstopStudios.DataVisualizer.Editor.DataVisualizer window = null;
+var cleanup = new WallstopStudios.DataVisualizer.Editor.Utilities.ReusableDisposalScope<System.Action>(action => action());
+using var lease = cleanup.Acquire(() => { if (window != null) UnityEngine.Object.DestroyImmediate(window); instanceField.SetValue(null, previous); });
+window = UnityEngine.ScriptableObject.CreateInstance<WallstopStudios.DataVisualizer.Editor.DataVisualizer>();
+var managed = (System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<System.Type>>)windowType.GetField("_scriptableObjectTypes", flags).GetValue(window);
+var method = windowType.GetMethod("IsTrackedAssetType", flags);
+var predicate = (System.Func<System.Type,bool>)System.Delegate.CreateDelegate(typeof(System.Func<System.Type,bool>), window, method);
+var driver = typeof(WallstopStudios.DataVisualizer.Tests.Editor.CatalogLayoutScaleTests);
+var dataset = ((System.Type[][])driver.GetMethod("CreateTypes", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic).Invoke(null,new object[]{false}))[1];
+var identityType = driver.Assembly.GetType("WallstopStudios.DataVisualizer.Tests.Editor.BenchmarkCodeIdentity");
+var identity = System.Activator.CreateInstance(identityType,new object[]{windowType.Assembly,"Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/DataVisualizer.cs"});
+identityType.GetMethod("Verify").Invoke(identity,null);
+var report = new System.Text.StringBuilder();
+report.AppendLine("# synthetic CLR catalog; no Unity assets; warm process; calls=200; warmups=5; samples=30");
+report.AppendLine("# unity="+UnityEngine.Application.unityVersion+"; os="+UnityEngine.SystemInfo.operatingSystem);
+report.AppendLine("# source="+identityType.GetProperty("SourceSha256").GetValue(identity)+"; module="+windowType.Assembly.ManifestModule.ModuleVersionId);
+report.AppendLine("types,namespaces,condition,sample,millisecondsPerCall");
+foreach (int size in new[]{100,1000,2000}) {
+    managed.Clear();
+    for (int i=0;i<size;i++) {
+        string key=WallstopStudios.DataVisualizer.Editor.NamespaceController.GetNamespaceKey(dataset[i]);
+        if (!managed.TryGetValue(key,out var list)) { list=new System.Collections.Generic.List<System.Type>();managed.Add(key,list); }
+        list.Add(dataset[i]);
+    }
+    foreach (string condition in new[]{"last","absent","settings"}) {
+        System.Type candidate = condition=="last" ? dataset[size-1] : condition=="absent" ? typeof(string) : typeof(WallstopStudios.DataVisualizer.Editor.Data.DataVisualizerSettings);
+        bool expected=condition!="absent";
+        for(int repetition=-5;repetition<30;repetition++) {
+            long start=System.Diagnostics.Stopwatch.GetTimestamp();
+            for (int call=0;call<200;call++) { if(predicate(candidate)!=expected) throw new System.Exception("Relevance changed"); }
+            double elapsed=(System.Diagnostics.Stopwatch.GetTimestamp()-start)*1000.0/System.Diagnostics.Stopwatch.Frequency/200;
+            if(0<=repetition) report.AppendLine(size+","+managed.Count+","+condition+","+repetition+","+elapsed.ToString("R",System.Globalization.CultureInfo.InvariantCulture));
+        }
+    }
+}
+identityType.GetMethod("Verify").Invoke(identity,null);
+return report.ToString();

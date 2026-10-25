@@ -124,6 +124,42 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.Fail("Asset changes did not settle after the Play transition.");
         }
 
+        [Test]
+        public void ShouldMatchRefreshTypesByExactIdentityInTheirCanonicalNamespace()
+        {
+            using TestCleanupScope cleanup = new();
+            object previousInstance = ReadSharedInstance();
+            cleanup.Defer(() => RestoreSharedInstance(previousInstance));
+            DataVisualizerWindow window = ScriptableObject.CreateInstance<DataVisualizerWindow>();
+            cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(window));
+            Dictionary<string, List<Type>> managed = ReadPrivateField<Dictionary<string, List<Type>>>(window, "_scriptableObjectTypes");
+            managed.Clear();
+            Type[][] datasets = CatalogLayoutScaleTests.CreateTypes();
+            foreach (Type type in datasets[1])
+            {
+                string key = NamespaceController.GetNamespaceKey(type);
+                if (!managed.TryGetValue(key, out List<Type> types))
+                {
+                    types = new List<Type>();
+                    managed.Add(key, types);
+                }
+                types.Add(type);
+            }
+            Type last = datasets[1][datasets[1].Length - 1];
+            Assert.That((bool)InvokePrivate(window, "IsTrackedAssetType", last));
+            Assert.That((bool)InvokePrivate(window, "IsTrackedAssetType", typeof(string)), Is.False);
+            Assert.That((bool)InvokePrivate(window, "IsTrackedAssetType", typeof(DataVisualizerSettings)), "Settings imports still request a full refresh.");
+            Type collisionA = typeof(TypeIdentityCollision.First.Data.OrderCollisionData);
+            Type collisionB = typeof(TypeIdentityCollision.Second.Data.OrderCollisionData);
+            managed.Add(NamespaceController.GetNamespaceKey(collisionA), new List<Type> { collisionA });
+            Assert.That((bool)InvokePrivate(window, "IsTrackedAssetType", collisionA));
+            Assert.That((bool)InvokePrivate(window, "IsTrackedAssetType", collisionB), Is.False, "Equal short names do not match.");
+            managed[NamespaceController.GetNamespaceKey(last)].Remove(last);
+            Assert.That((bool)InvokePrivate(window, "IsTrackedAssetType", last), Is.False, "Catalog removals take effect without a cache rebuild.");
+            managed[NamespaceController.GetNamespaceKey(last)].Add(last);
+            Assert.That((bool)InvokePrivate(window, "IsTrackedAssetType", last), "Catalog additions take effect without a cache rebuild.");
+        }
+
         [TestCase(false, false)]
         [TestCase(false, true)]
         [TestCase(true, false)]
