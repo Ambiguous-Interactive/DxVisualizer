@@ -264,9 +264,18 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         {
             CatalogEntry? focused = _focusedEntry;
             string control = _focusedControl;
+            foreach (CatalogRow row in List.Query<CatalogRow>().Build())
+            {
+                if (row.HasPointerCapture(_pressedPointerId))
+                {
+                    row.ReleasePointer(_pressedPointerId);
+                }
+            }
+            _pressed = null;
+            _dragging = false;
             RebuildVisibleRows();
             int generation = ++_generation;
-            List.Rebuild();
+            List.RefreshItems();
             RestoreCatalogFocus(focused, control, generation);
         }
 
@@ -351,19 +360,23 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         {
             _rows.Clear();
             VisibleNamespaceCount = 0;
-            foreach (KeyValuePair<string, List<Type>> group in NamespaceController.GetOrderedNamespaceEntries(_managed, _order))
+            // Reconcile owns canonical ordering; filtering and collapse only project that snapshot.
+            for (int index = 0; index < _catalogRows.Count; )
             {
+                CatalogEntry group = _catalogRows[index++];
                 int header = _rows.Count;
-                _rows.Add(new CatalogEntry(group.Key, null));
+                _rows.Add(group);
+                bool expanded = !_collapsed.Contains(group.NamespaceKey);
                 bool matches = false;
-                foreach (Type type in group.Value)
+                while (index < _catalogRows.Count && !_catalogRows[index].IsNamespace)
                 {
-                    if (MatchesFilter(type))
+                    CatalogEntry entry = _catalogRows[index++];
+                    if (MatchesFilter(entry.Type))
                     {
                         matches = true;
-                        if (!_collapsed.Contains(group.Key))
+                        if (expanded)
                         {
-                            _rows.Add(new CatalogEntry(group.Key, type));
+                            _rows.Add(entry);
                         }
                     }
                 }
@@ -416,6 +429,10 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         private bool MatchesFilter(Type type)
         {
+            if (_terms.Count == 0)
+            {
+                return true;
+            }
             string title = NamespaceController.GetTypeDisplayName(type);
             foreach ((int Start, int Length) term in _terms)
             {
@@ -662,6 +679,10 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                     if (NamespaceController.IsTypeRemovable(type))
                     {
                         removable++;
+                        if (1 < removable)
+                        {
+                            break;
+                        }
                     }
                 }
             }

@@ -198,9 +198,11 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 VirtualizedTypeCatalogView view = controller.VirtualizedView;
                 Assert.That(view != null);
                 VisualElement focusedControl = null;
+                int createdRows = 0;
                 Func<VisualElement> makeRow = view.List.makeItem;
                 view.List.makeItem = () =>
                 {
+                    createdRows++;
                     VisualElement row = makeRow();
                     row.RegisterCallback<FocusInEvent>(evt => focusedControl = evt.target as VisualElement);
                     return row;
@@ -231,6 +233,47 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                     }
                 }
 
+                VisualElement pressedRow = view.Query<VisualElement>(className: StyleConstants.TypeItemClass).First();
+                using (
+                    PointerDownEvent down = PointerDownEvent.GetPooled(
+                        new Event
+                        {
+                            type = EventType.MouseDown,
+                            button = 0,
+                            mousePosition = pressedRow.worldBound.center,
+                        }
+                    )
+                )
+                {
+                    down.target = pressedRow;
+                    pressedRow.SendEvent(down);
+                }
+                Assert.That(pressedRow.HasPointerCapture(PointerId.mousePointerId));
+                createdRows = 0;
+                view.Filter("MeasuredType0");
+                Assert.That(pressedRow.HasPointerCapture(PointerId.mousePointerId), Is.False, "Filtering cancels gestures before recycling their rows.");
+                using (
+                    PointerUpEvent up = PointerUpEvent.GetPooled(
+                        new Event
+                        {
+                            type = EventType.MouseUp,
+                            button = 0,
+                            mousePosition = pressedRow.worldBound.center,
+                        }
+                    )
+                )
+                {
+                    up.target = pressedRow;
+                    pressedRow.SendEvent(up);
+                }
+                Assert.That(controller.SelectedType == null, "A stale pointer release must not activate a recycled row.");
+                yield return null;
+                EditorSurfaceCapture.SettleLayout(host);
+                Assert.That(createdRows, Is.Zero, "Filtering a filled viewport must reuse existing row controls.");
+                view.Filter(null);
+                yield return null;
+                EditorSurfaceCapture.SettleLayout(host);
+                Assert.That(createdRows, Is.Zero, "Clearing the filter must reuse existing row controls.");
                 List<VisualElement> rowsBefore = view.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass).ToList();
                 controller.Build(owner, ref catalogRoot);
                 CollectionAssert.AreEqual(
