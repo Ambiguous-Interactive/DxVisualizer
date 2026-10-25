@@ -89,7 +89,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         public bool HandleFocusOrButton(KeyDownEvent evt, DataVisualizerInputSettings input)
         {
-            if (IsRouting)
+            if (IsRouting || CatalogInputSettings.IsTextEntry(evt))
             {
                 return false;
             }
@@ -131,7 +131,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         public bool HandleListKey(EventBase evt, DataVisualizerInputSettings input)
         {
-            if (IsRouting || evt.target is VisualElement target && (target is Button || target.GetFirstAncestorOfType<Button>() != null))
+            if (IsRouting || CatalogInputSettings.IsTextEntry(evt) || evt.target is VisualElement target && (target is Button || target.GetFirstAncestorOfType<Button>() != null))
             {
                 return false;
             }

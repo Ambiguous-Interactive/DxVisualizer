@@ -46,7 +46,9 @@ metadata:
 - Defaults belong in `CatalogInputSettings`/`DataVisualizerInputSettings`.
   `NativeInputRouter` alone translates to Unity control gestures. Do not add
   physical key/button literals to handlers. Native OS menus and text editing keep
-  their platform behavior.
+  their platform behavior. Printable characters belong to a focused text field.
+  Keep native scrollbar and reorder-handle pointer sequences outside row-click
+  translation; relaying only down/up breaks their drag lifetime.
 - Test remaps through the hosted control, not just the binding matcher: new keys
   work, old keys stop working, None is unbound, and modifiers are exact. Keep
   catalog selection/navigation precedence when bindings overlap.

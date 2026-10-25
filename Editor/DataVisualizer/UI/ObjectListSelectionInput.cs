@@ -51,11 +51,28 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             _root.UnregisterCallback<PointerCancelEvent>(CancelInput, TrickleDown.TrickleDown);
         }
 
+        private bool IsListChrome(VisualElement target)
+        {
+            for (VisualElement element = target; element != null && element != _list; element = element.parent)
+            {
+                if (element is Scroller || element.ClassListContains(ListView.reorderableItemHandleUssClassName))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         private void BeginPointer(EventBase evt)
         {
             bool forwarded = _native.AcceptForwarded(evt);
             if (evt.isPropagationStopped || (!forwarded && IsRouting) || evt.target is not VisualElement target || (target != _list && !_list.Contains(target)))
             {
+                return;
+            }
+            if (IsListChrome(target))
+            {
+                SetInputState(false);
                 return;
             }
             IPointerEvent pointer = (IPointerEvent)evt;

@@ -52,7 +52,7 @@ modifiers; **Action modifier** accepts Control or Command across platforms. Choo
 
 **Toggle selection** defines the keyboard toggle and the additive pointer modifiers; **Range selection modifiers** replace Shift for pointer range selection. Native list and button
 input is translated through the same profile. Focused catalog navigation keeps precedence when bindings overlap; asset-action shortcuts take precedence over list navigation. Native
-OS menus and text-editing commands keep their platform behavior.
+OS menus, text entry, scrollbars and reorder handles keep their platform behavior. Printable text takes precedence over remapped navigation while a text field has focus.
 
 ## Pane widths
 

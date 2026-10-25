@@ -15,6 +15,99 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
     public sealed class EditorInputBindingTests
     {
         [UnityTest]
+        public IEnumerator ShouldKeepPrintableBindingsInTextFields()
+        {
+            using TestCleanupScope cleanup = new();
+            LayoutTestWindow host = ScriptableObject.CreateInstance<LayoutTestWindow>();
+            cleanup.Defer(() => EditorSurfaceCapture.CloseWindow(host));
+            DataVisualizerInputSettings input = new();
+            input.Navigation.NextTypeKey = KeyCode.N;
+            input.nextFocus = new EditorInputBinding(KeyCode.N);
+            SearchableThemeDropdown dropdown = new(Array.Empty<ThemeDropdownItem>(), null, null, getInput: () => input);
+            host.rootVisualElement.Add(dropdown);
+            host.position = new Rect(80, 80, 360, 240);
+            EditorSurfaceCapture.ShowPopup(host);
+            yield return null;
+            EditorSurfaceCapture.SettleLayout(host);
+            dropdown.SearchField.Focus();
+            yield return null;
+            Focusable textFocus = host.rootVisualElement.focusController.focusedElement;
+            Assert.That(textFocus != null);
+            VisualElement text = dropdown.SearchField.Q("unity-text-input");
+            using (
+                KeyDownEvent typed = KeyDownEvent.GetPooled(
+                    new Event
+                    {
+                        type = EventType.KeyDown,
+                        keyCode = KeyCode.N,
+                        character = 'n',
+                    }
+                )
+            )
+            {
+                text.SendEvent(typed);
+            }
+            yield return null;
+            Assert.That(dropdown.SearchField.value, Is.EqualTo("n"));
+            Assert.That(host.rootVisualElement.focusController.focusedElement, Is.SameAs(textFocus));
+        }
+
+        [UnityTest]
+        public IEnumerator ShouldKeepNativeListChromeWithRemappedPrimaryPointer()
+        {
+            using TestCleanupScope cleanup = new();
+            LayoutTestWindow host = ScriptableObject.CreateInstance<LayoutTestWindow>();
+            cleanup.Defer(() => EditorSurfaceCapture.CloseWindow(host));
+            DataVisualizerInputSettings input = new();
+            input.Navigation.PointerButton = 1;
+            ListView list = new()
+            {
+                itemsSource = new System.Collections.Generic.List<string> { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" },
+                fixedItemHeight = 30,
+                makeItem = () => new Label(),
+                bindItem = (element, index) => ((Label)element).text = index.ToString(),
+                reorderable = true,
+                reorderMode = ListViewReorderMode.Animated,
+                style = { height = 150 },
+            };
+            host.rootVisualElement.Add(list);
+            host.position = new Rect(80, 80, 360, 240);
+            EditorSurfaceCapture.ShowPopup(host);
+            using ObjectListSelectionInput owner = new(list, host.rootVisualElement, () => input);
+            yield return null;
+            EditorSurfaceCapture.SettleLayout(host);
+            VisualElement handle = list.Q(className: ListView.reorderableItemHandleUssClassName);
+            Assert.That(handle != null);
+            foreach (VisualElement chrome in new VisualElement[] { list.Q<ScrollView>().verticalScroller, handle })
+            {
+                int delivered = 0;
+                chrome.RegisterCallback<PointerDownEvent>(_ => delivered++, TrickleDown.TrickleDown);
+                foreach (EventType type in new[] { EventType.MouseDown, EventType.MouseUp })
+                {
+                    Event mouse = new()
+                    {
+                        type = type,
+                        button = 0,
+                        mousePosition = chrome.worldBound.center,
+                        clickCount = 1,
+                    };
+                    if (type == EventType.MouseDown)
+                    {
+                        using PointerDownEvent down = PointerDownEvent.GetPooled(mouse);
+                        chrome.SendEvent(down);
+                    }
+                    else
+                    {
+                        using PointerUpEvent up = PointerUpEvent.GetPooled(mouse);
+                        chrome.SendEvent(up);
+                    }
+                    yield return null;
+                }
+                Assert.That(delivered, Is.EqualTo(1), "Native scrollbar/reorder chrome still receives the physical primary button.");
+            }
+        }
+
+        [UnityTest]
         public IEnumerator ShouldRemapNativeButtonActivationAndSuppressOldSubmitKeys()
         {
             using TestCleanupScope cleanup = new();
@@ -222,6 +315,17 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(restored.clone.key, Is.EqualTo(KeyCode.C));
             Assert.That(restored.clone.modifiers, Is.EqualTo(EventModifiers.Alt));
             Assert.That(second.Navigation.NextTypeKey, Is.EqualTo(KeyCode.DownArrow));
+            Assert.That(
+                JsonUtility.FromJson<DataVisualizerInputSettings>("{}").rangeSelectionModifiers,
+                Is.EqualTo(EventModifiers.Shift),
+                "Missing serialized range bindings retain the field initializer."
+            );
+            first.rangeSelectionModifiers = EventModifiers.None;
+            Assert.That(
+                JsonUtility.FromJson<DataVisualizerInputSettings>(JsonUtility.ToJson(first)).rangeSelectionModifiers,
+                Is.EqualTo(EventModifiers.None),
+                "Explicit None disables range mapping."
+            );
             restored.Navigation.SelectKey = KeyCode.None;
             restored.Navigation.AlternateSelectKey = KeyCode.None;
             restored.Navigation.ToggleKey = KeyCode.None;

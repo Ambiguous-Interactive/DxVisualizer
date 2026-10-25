@@ -2,6 +2,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 {
     using System;
     using UnityEngine;
+    using UnityEngine.UIElements;
 
     /// <summary>Catalog row bindings. Existing selection/navigation keys take precedence over boundary keys. Unity buttons retain their platform activation behavior.</summary>
     [Serializable]
@@ -39,6 +40,16 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         [SerializeField]
         [Min(0)]
         private float dragThresholdPoints = DefaultDragThresholdPoints;
+
+        /// <summary>Printable input belongs to the focused text field even when a navigation binding uses that letter.</summary>
+        public static bool IsTextEntry(EventBase evt)
+        {
+            return evt is IKeyboardEvent key
+                && key.character != '\0'
+                && !char.IsControl(key.character)
+                && evt.target is VisualElement target
+                && (target is TextField || target.GetFirstAncestorOfType<TextField>() != null);
+        }
 
         public static bool IsUnitySubmitKey(KeyCode key) => key is KeyCode.Return or KeyCode.KeypadEnter or KeyCode.Space;
 
