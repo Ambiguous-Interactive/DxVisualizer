@@ -32,8 +32,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Fix catalog reorder and remove buttons changing the selected type or starting a drag (#312).
 - Fix catalog arrow moves resetting after reopening the window. Preserve namespace and type order in user and project state (#324).
 - Fix script-folder scans adding unsupported types. Add only eligible ScriptableObject types without creating instances (#376).
-- Fix browser refreshes stalling asset imports. Update changed rows without whole-list scans, coalesce notifications, ignore unrelated edits, preserve missing-script selection,
-  clear deleted references, and pause or stop work with its owner (#308).
+- Fix browser stalls during asset imports. Refresh changed rows without whole-list scans while preserving selection, order and lifecycle safety (#308).
+
+### Changed
+
 - Align asset-label entry and its Add button with consistent height and spacing across themes (#312).
 - Yield selected-type asset loading between short work slices. Prioritize saved selection and keep custom order while remaining objects load (#309).
 - Speed up custom namespace ordering and catalog scrolling while preserving saved positions and stable ties (#324).
