@@ -4230,6 +4230,19 @@ namespace WallstopStudios.DataVisualizer.Editor
                 return true;
             }
 
+            if ((evt.ctrlKey || evt.commandKey) && !evt.altKey && !evt.shiftKey && (evt.keyCode == KeyCode.Home || evt.keyCode == KeyCode.End))
+            {
+                if (evt.keyCode == KeyCode.Home)
+                {
+                    MoveObjectToTop(_selectedObject);
+                }
+                else
+                {
+                    MoveObjectToBottom(_selectedObject);
+                }
+                return true;
+            }
+
             VisualElement row = _objectListView?.Q<VisualElement>($"object-item-row-{_selectedObject.GetObjectIdString()}");
             VisualElement anchor = row?.Q<Button>("object-actions-button") ?? (VisualElement)_objectListView ?? _objectColumnElement;
             if (anchor == null)
@@ -5225,6 +5238,9 @@ namespace WallstopStudios.DataVisualizer.Editor
             menu.AddItem(new GUIContent("Clone", "Duplicate this asset beside its source"), false, () => CloneObject(dataObject));
             menu.AddItem(new GUIContent("Rename", "Rename this asset"), false, () => OpenRenamePopover(titleLabel, anchor, dataObject));
             menu.AddItem(new GUIContent("Move", "Move this asset to another folder"), false, () => MoveObjectToFolder(dataObject));
+            menu.AddSeparator(string.Empty);
+            menu.AddItem(new GUIContent("Move to top", "Place this asset first (Ctrl/Cmd+Home)"), false, () => MoveObjectToTop(dataObject));
+            menu.AddItem(new GUIContent("Move to bottom", "Place this asset last (Ctrl/Cmd+End)"), false, () => MoveObjectToBottom(dataObject));
             menu.AddSeparator(string.Empty);
             menu.AddItem(new GUIContent("Delete", "Ask for confirmation before deleting this asset"), false, () => OpenConfirmDeletePopover(anchor, dataObject));
             menu.DropDown(anchor.worldBound);
@@ -6375,7 +6391,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             {
                 name = "object-actions-button",
                 text = "Actions",
-                tooltip = "Clone (Ctrl/Cmd+D), Rename (F2), Move, or Delete this asset. Shift+F10 opens Actions for the selected asset.",
+                tooltip = "Clone (Ctrl/Cmd+D), Rename (F2), Move, Order (Ctrl/Cmd+Home/End), or Delete. Shift+F10 opens selected asset Actions.",
             };
             ProtectObjectRowAction(actionsButton);
             actionsButton.AddToClassList(StyleConstants.ObjectActionsButtonClass);
@@ -7859,7 +7875,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         private void MoveObjectToTop(ScriptableObject dataObject)
         {
-            if (dataObject == null)
+            if (IsAssetOperationEditingBlocked || dataObject == null)
             {
                 return;
             }
@@ -7876,8 +7892,10 @@ namespace WallstopStudios.DataVisualizer.Editor
 
             _selectedObjects.Remove(dataObject);
             _selectedObjects.Insert(0, dataObject);
-            _filteredObjects.Remove(dataObject);
-            _filteredObjects.Insert(0, dataObject);
+            if (_filteredObjects.Remove(dataObject))
+            {
+                _filteredObjects.Insert(0, dataObject);
+            }
             UpdateAndSaveObjectOrderList(dataObject.GetType(), _selectedObjects);
             BuildObjectsView();
             FocusMovedObject(dataObject);
@@ -7885,7 +7903,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         private void MoveObjectToBottom(ScriptableObject dataObject)
         {
-            if (dataObject == null)
+            if (IsAssetOperationEditingBlocked || dataObject == null)
             {
                 return;
             }
@@ -7902,8 +7920,10 @@ namespace WallstopStudios.DataVisualizer.Editor
 
             _selectedObjects.Remove(dataObject);
             _selectedObjects.Add(dataObject);
-            _filteredObjects.Remove(dataObject);
-            _filteredObjects.Add(dataObject);
+            if (_filteredObjects.Remove(dataObject))
+            {
+                _filteredObjects.Add(dataObject);
+            }
             UpdateAndSaveObjectOrderList(dataObject.GetType(), _selectedObjects);
             BuildObjectsView();
             FocusMovedObject(dataObject);
