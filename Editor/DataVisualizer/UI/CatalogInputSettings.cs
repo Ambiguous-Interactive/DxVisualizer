@@ -4,41 +4,52 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
     using UnityEngine;
 
     /// <summary>Catalog row bindings. Existing selection/navigation keys take precedence over boundary keys. Unity buttons retain their platform activation behavior.</summary>
+    [Serializable]
     public sealed class CatalogInputSettings
     {
         // Six logical points ignore small pointer jitter before a drag starts.
         public const float DefaultDragThresholdPoints = 6f;
-
-        public KeyCode SelectKey { get; set; } = KeyCode.Return;
-        public KeyCode AlternateSelectKey { get; set; } = KeyCode.KeypadEnter;
-        public KeyCode ToggleKey { get; set; } = KeyCode.Space;
-        public KeyCode PreviousTypeKey { get; set; } = KeyCode.UpArrow;
-        public KeyCode NextTypeKey { get; set; } = KeyCode.DownArrow;
-        public KeyCode FirstRowKey { get; set; } = KeyCode.Home;
-        public KeyCode LastRowKey { get; set; } = KeyCode.End;
-        public KeyCode PreviousPageKey { get; set; } = KeyCode.PageUp;
-        public KeyCode NextPageKey { get; set; } = KeyCode.PageDown;
-        public KeyCode CollapseKey { get; set; } = KeyCode.LeftArrow;
-        public KeyCode ExpandKey { get; set; } = KeyCode.RightArrow;
-        public KeyCode CancelDragKey { get; set; } = KeyCode.Escape;
-        public int PointerButton { get; set; }
         public float DragThresholdPoints
         {
-            get => _dragThresholdPoints;
+            get => dragThresholdPoints;
             set
             {
                 if (value < 0 || float.IsNaN(value) || float.IsInfinity(value))
                 {
                     throw new ArgumentOutOfRangeException(nameof(value));
                 }
-                _dragThresholdPoints = value;
+                dragThresholdPoints = value;
             }
         }
 
-        private float _dragThresholdPoints = DefaultDragThresholdPoints;
+        public KeyCode SelectKey = KeyCode.Return;
+        public KeyCode AlternateSelectKey = KeyCode.KeypadEnter;
+        public KeyCode ToggleKey = KeyCode.Space;
+        public KeyCode PreviousTypeKey = KeyCode.UpArrow;
+        public KeyCode NextTypeKey = KeyCode.DownArrow;
+        public KeyCode FirstRowKey = KeyCode.Home;
+        public KeyCode LastRowKey = KeyCode.End;
+        public KeyCode PreviousPageKey = KeyCode.PageUp;
+        public KeyCode NextPageKey = KeyCode.PageDown;
+        public KeyCode CollapseKey = KeyCode.LeftArrow;
+        public KeyCode ExpandKey = KeyCode.RightArrow;
+        public KeyCode CancelDragKey = KeyCode.Escape;
+        public int PointerButton;
 
-        public bool IsSelectionKey(KeyCode key) => key == SelectKey || key == AlternateSelectKey || key == ToggleKey;
+        [SerializeField]
+        private float dragThresholdPoints = DefaultDragThresholdPoints;
 
-        public bool HasPassedDragThreshold(Vector2 start, Vector2 current) => _dragThresholdPoints * _dragThresholdPoints < (current - start).sqrMagnitude;
+        public static bool MatchesKey(KeyCode actual, KeyCode configured) => configured != KeyCode.None && actual == configured;
+
+        public bool IsConfirmKey(KeyCode key) => MatchesKey(key, SelectKey) || MatchesKey(key, AlternateSelectKey);
+
+        public bool IsConfirmCharacter(KeyCode key, char character)
+        {
+            return key == KeyCode.None && character is '\n' or '\r' && (IsConfirmKey(KeyCode.Return) || IsConfirmKey(KeyCode.KeypadEnter));
+        }
+
+        public bool IsSelectionKey(KeyCode key) => IsConfirmKey(key) || MatchesKey(key, ToggleKey);
+
+        public bool HasPassedDragThreshold(Vector2 start, Vector2 current) => dragThresholdPoints * dragThresholdPoints < (current - start).sqrMagnitude;
     }
 }

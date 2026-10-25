@@ -11,9 +11,10 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
     public sealed class VirtualizedTypeCatalogView : VisualElement
     {
         public ListView List { get; }
-        public CatalogInputSettings Input { get; }
+        public CatalogInputSettings Input => _input ?? _owner.Input.Navigation;
         public int VisibleNamespaceCount { get; private set; }
 
+        private readonly CatalogInputSettings _input;
         private readonly DataVisualizer _owner;
         private readonly NamespaceController _controller;
         private readonly Dictionary<string, List<Type>> _managed;
@@ -42,7 +43,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             CatalogInputSettings input = null
         )
         {
-            Input = input ?? new CatalogInputSettings();
+            _input = input;
             if (owner == null)
             {
                 throw new ArgumentNullException(nameof(owner));

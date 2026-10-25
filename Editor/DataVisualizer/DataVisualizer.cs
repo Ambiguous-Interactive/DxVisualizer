@@ -172,6 +172,8 @@ namespace WallstopStudios.DataVisualizer.Editor
         public int SearchQuerySliceOverrunCount { get; private set; }
         public int SearchIndexSliceOverrunCount { get; private set; }
 
+        public DataVisualizerInputSettings Input => Settings.inputProfile != null ? Settings.inputProfile.Bindings : _defaultInput;
+
         internal DataVisualizerUserState UserState
         {
             get
@@ -418,6 +420,7 @@ namespace WallstopStudios.DataVisualizer.Editor
         private float? _lastAddTypeClicked;
         private float? _lastSettingsClicked;
         private float? _lastEnterPressed;
+        private readonly DataVisualizerInputSettings _defaultInput = new();
         private AssetChangeRefreshService _assetChanges;
         private AssetObjectCache _assetObjectCache;
         private readonly AssetLabelUsage _selectedLabelUsage = new();
@@ -4517,6 +4520,30 @@ namespace WallstopStudios.DataVisualizer.Editor
                 }
             });
             contentWrapper.Add(selectionToggle);
+
+            ObjectField inputProfile = new("Input profile")
+            {
+                name = "settings-input-profile",
+                objectType = typeof(DataVisualizerInputProfile),
+                allowSceneObjects = false,
+                value = settings.inputProfile,
+                tooltip = "Create an Input Profile asset from Assets/Create/Wallstop Studios/DxVisualizer, assign it here, then edit its bindings in the Inspector.",
+            };
+            inputProfile.SetEnabled(!IsConfigurationEditingPaused);
+            inputProfile.RegisterValueChangedCallback(evt =>
+            {
+                if (IsConfigurationEditingPaused || AssetGuidDiscovery.IsAssetDatabaseBusy())
+                {
+                    inputProfile.SetValueWithoutNotify(Settings.inputProfile);
+                    return;
+                }
+                if (Settings.inputProfile != evt.newValue)
+                {
+                    Settings.inputProfile = evt.newValue as DataVisualizerInputProfile;
+                    EditorUtility.SetDirty(Settings);
+                }
+            });
+            contentWrapper.Add(inputProfile);
 
             VisualElement themeContainer = new()
             {

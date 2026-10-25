@@ -2,6 +2,7 @@ namespace WallstopStudios.DataVisualizer.Editor.Data
 {
     using System;
     using System.Collections.Generic;
+    using UI;
     using UnityEditor;
     using UnityEngine;
     using UnityEngine.Serialization;
@@ -22,6 +23,9 @@ namespace WallstopStudios.DataVisualizer.Editor.Data
 
         [Tooltip("If true, when selecting an Object, it will be selected in the Inspector.")]
         public bool selectActiveObject;
+
+        [Tooltip("Optional package input bindings. Create an Input Profile asset to customize keys and pointer gestures.")]
+        public DataVisualizerInputProfile inputProfile;
 
         [SerializeField]
         [ReadOnly]
