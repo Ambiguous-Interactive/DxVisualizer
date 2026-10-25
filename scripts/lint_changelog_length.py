@@ -160,6 +160,27 @@ def extract_entries(section_lines: List[str]) -> List[Entry]:
     return entries
 
 
+def collect_spacing_failures(lines: List[str], source: Path) -> List[str]:
+    """Require tight entry lists throughout the changelog, including history."""
+    failures: List[str] = []
+    in_entry = False
+    blank_after_entry = False
+    for number, line in enumerate(lines, start=1):
+        if not line.strip():
+            blank_after_entry = in_entry
+        elif BULLET.match(line):
+            if blank_after_entry:
+                failures.append(f"{display_path(source)}:{number}: remove blank lines between changelog entries.")
+            in_entry = True
+            blank_after_entry = False
+        elif line[:1].isspace() and in_entry:
+            blank_after_entry = False
+        else:
+            in_entry = False
+            blank_after_entry = False
+    return failures
+
+
 def render_entry(entry: Entry) -> str:
     """Return the rendered text an entry counts toward the cap.
 
@@ -184,10 +205,11 @@ def main() -> int:
         else REPO_ROOT / "CHANGELOG.md"
     )
     text = read_file_or_throw(changelog, "read the changelog")
-    section = extract_unreleased(re.split(r"\r?\n", text), changelog)
+    lines = re.split(r"\r?\n", text)
+    section = extract_unreleased(lines, changelog)
     entries = collect_measured_entries(section)
 
-    failures: List[str] = []
+    failures = collect_spacing_failures(lines, changelog)
     for measured in entries:
         if measured.length > CAP:
             origin = f" {measured.entry.subsection}" if measured.entry.subsection else ""
@@ -198,7 +220,7 @@ def main() -> int:
 
     if failures:
         print(
-            "The changelog entry cap is broken. Entries measure as rendered text: emphasis and "
+            "Changelog formatting or entry length is invalid. Entries measure as rendered text: emphasis and "
             "code markers stripped, soft-wrapped lines joined, issue references and inline "
             "link targets excluded.",
             file=sys.stderr,

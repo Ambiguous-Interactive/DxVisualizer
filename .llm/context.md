@@ -218,8 +218,8 @@ Keep `docs/` user-facing. Retained raw reports, benchmark procedures and experim
 - Write all agent-to-user copy (PR titles and bodies, commit messages, code comments, handoffs, CHANGELOG entries) in Simplified Technical English: short, plain, active sentences
   answering why, how, and what, in that order.
 - Agent-written PR and issue bodies start with `DISCLOSURE: LLM-GENERATED TEXT`. CHANGELOG entries: one or two sentences, 300 rendered characters max (issue links do not count),
-  verb-first, user effect first, no mechanism or narration; never modify released sections. CHANGELOG.md stays user-facing only (tests, CI, tooling, and release mechanics belong
-  elsewhere).
+  verb-first, user effect first, no mechanism or narration; keep adjacent entries in tight lists without blank lines; never modify released entry text. CHANGELOG.md stays
+  user-facing only (tests, CI, tooling, and release mechanics belong elsewhere).
 - PR titles: 50 characters max, imperative, the user-visible effect. PR bodies: `**Why:**` one sentence naming the problem, `**What:**` two to five one-line bullets of at most 12
   words each, then `Fixes`/`Refs`. Validation evidence lives in commits, tests, and issues, never in the body.
 - Commit subjects: imperative, 72 characters max, subsystem up front ("Fix settings persistence dirty state"); the body explains why first and references related issue IDs. Confirm
