@@ -299,9 +299,19 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(!service.EnqueueGuid("unknown"));
             Assert.That(service.EnqueueGuid("known"));
             Assert.That(!service.EnqueueGuid("known"));
+            Assert.That(service.EnqueuePath("Assets/Known.asset"), Is.False, "Path and GUID notifications share coalescing.");
+            Assert.That(service.EnqueuePath(null), Is.False);
+            Assert.That(service.EnqueuePath("Assets/Texture.png"), Is.False);
+            Assert.That(service.PendingCount, Is.EqualTo(1));
             Assert.AreEqual(0, resolved);
             service.ProcessSlice();
             Assert.AreEqual(1, resolved);
+            Assert.That(service.EnqueuePath("Assets/Known.asset"), Is.True);
+            Assert.That(service.EnqueueGuid("known"), Is.False);
+            service.ProcessSlice();
+            Assert.AreEqual(2, resolved);
+            service.Dispose();
+            Assert.That(service.EnqueuePath("Assets/Known.asset"), Is.False);
         }
 
         [Test]
