@@ -608,6 +608,13 @@ namespace WallstopStudios.DataVisualizer.Editor
                     tooltip =
                         $"Collapse or expand {key} ({dataVisualizer.Input.Navigation.SelectKey}/{dataVisualizer.Input.Navigation.ToggleKey}; {dataVisualizer.Input.Navigation.CollapseKey}/{dataVisualizer.Input.Navigation.ExpandKey})",
                 };
+                indicator.RegisterCallback<TooltipEvent>(evt =>
+                {
+                    CatalogInputSettings input = dataVisualizer.Input.Navigation;
+                    evt.tooltip = $"Collapse or expand {key} ({input.SelectKey}/{input.ToggleKey}; {input.CollapseKey}/{input.ExpandKey})";
+                    evt.rect = indicator.worldBound;
+                    evt.StopImmediatePropagation();
+                });
                 indicator.AddToClassList(StyleConstants.NamespaceIndicatorClass);
                 indicator.AddToClassList(StyleConstants.ClickableClass);
                 ProtectCatalogAction(indicator);

@@ -25,6 +25,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         private static readonly string[] ExpectedSettingsAssetFieldNames =
         {
             "_dataFolderPath",
+            "inputProfile",
             "labelFilterConfigs",
             "lastObjectSelections",
             "lastSelectedNamespaceKey",

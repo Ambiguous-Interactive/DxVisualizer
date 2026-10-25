@@ -2609,6 +2609,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             _addTypeButton?.SetEnabled(!paused);
             _inspectorContainer?.SetEnabled(!paused);
             _settingsPopover?.Q("settings-selection-toggle")?.SetEnabled(!paused);
+            _settingsPopover?.Q("settings-input-profile")?.SetEnabled(!paused);
             _settingsPopover?.Q("settings-data-folder-button")?.SetEnabled(!paused);
         }
 

@@ -12,8 +12,32 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         public bool IsRouting { get; private set; }
         public int PendingCount => _forwarded.Count;
 
-        private readonly HashSet<EventBase> _forwarded = new();
+        private readonly Dictionary<EventBase, (VisualElement Owner, object Identity, IPanel Panel)> _forwarded = new();
         private readonly ReusableDisposalScope<NativeInputRouter> _scope = new(static router => router.IsRouting = false);
+
+        private static (VisualElement Owner, object Identity, IPanel Panel) CaptureIdentity(VisualElement target, Vector2 position)
+        {
+            VisualElement picked = target.panel?.Pick(position) ?? target;
+            for (VisualElement element = picked; element != null; element = element.parent)
+            {
+                if (element.userData != null)
+                {
+                    return (element, element.userData, target.panel);
+                }
+            }
+            return (target, null, target.panel);
+        }
+
+        private static char NativeCharacter(KeyCode key)
+        {
+            return key switch
+            {
+                KeyCode.Tab => '\t',
+                KeyCode.Return or KeyCode.KeypadEnter => '\n',
+                KeyCode.Space => ' ',
+                _ => '\0',
+            };
+        }
 
         private static void Consume(EventBase evt)
         {
@@ -22,7 +46,39 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             evt.StopImmediatePropagation();
         }
 
-        public bool AcceptForwarded(EventBase evt) => _forwarded.Remove(evt);
+        private static bool MoveFocus(KeyDownEvent evt, bool previous)
+        {
+            if (evt.target is not VisualElement target || target.panel == null)
+            {
+                return false;
+            }
+            IPanel panel = target.panel;
+            VisualElementFocusRing ring = new(panel.visualTree);
+            Focusable next = ring.GetNextFocusable(
+                panel.focusController.focusedElement,
+                previous ? VisualElementFocusChangeDirection.left : VisualElementFocusChangeDirection.right
+            );
+            next?.Focus();
+            Consume(evt);
+            return true;
+        }
+
+        public bool AcceptForwarded(EventBase evt)
+        {
+            if (!_forwarded.TryGetValue(evt, out var captured))
+            {
+                return false;
+            }
+            _forwarded.Remove(evt);
+            bool identityMatches = captured.Identity is Object asset
+                ? asset != null && ReferenceEquals(asset, captured.Owner.userData)
+                : Equals(captured.Identity, captured.Owner.userData);
+            if (captured.Owner.panel != captured.Panel || !identityMatches)
+            {
+                Consume(evt);
+            }
+            return true;
+        }
 
         public int ClearPending()
         {
@@ -59,11 +115,11 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             }
             if (input.nextFocus.Matches(evt))
             {
-                return RouteKey(evt, KeyCode.Tab, EventModifiers.None);
+                return MoveFocus(evt, false);
             }
             if (input.previousFocus.Matches(evt))
             {
-                return RouteKey(evt, KeyCode.Tab, EventModifiers.Shift);
+                return MoveFocus(evt, true);
             }
             if (evt.keyCode == KeyCode.Tab)
             {
@@ -160,14 +216,14 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             {
                 using PointerDownEvent forwarded = PointerDownEvent.GetPooled(mouse);
                 forwarded.target = target;
-                _forwarded.Add(forwarded);
+                _forwarded.Add(forwarded, CaptureIdentity(target, pointer.position));
                 target.SendEvent(forwarded);
             }
             else
             {
                 using PointerUpEvent forwarded = PointerUpEvent.GetPooled(mouse);
                 forwarded.target = target;
-                _forwarded.Add(forwarded);
+                _forwarded.Add(forwarded, CaptureIdentity(target, pointer.position));
                 target.SendEvent(forwarded);
             }
             Consume(evt);
@@ -189,13 +245,13 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             IsRouting = true;
             if (evt is KeyUpEvent)
             {
-                using KeyUpEvent forwarded = KeyUpEvent.GetPooled(original.character, key, modifiers);
+                using KeyUpEvent forwarded = KeyUpEvent.GetPooled(NativeCharacter(key), key, modifiers);
                 forwarded.target = target;
                 target.SendEvent(forwarded);
             }
             else
             {
-                using KeyDownEvent forwarded = KeyDownEvent.GetPooled(original.character, key, modifiers);
+                using KeyDownEvent forwarded = KeyDownEvent.GetPooled(NativeCharacter(key), key, modifiers);
                 forwarded.target = target;
                 target.SendEvent(forwarded);
             }

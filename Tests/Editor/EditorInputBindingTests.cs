@@ -43,6 +43,34 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 button.SendEvent(old);
             }
             Assert.That(clicks, Is.EqualTo(1), "The old native submit must not also invoke the action.");
+            NativeInputRouter focus = new();
+            input.nextFocus = new EditorInputBinding(KeyCode.F4);
+            input.previousFocus = new EditorInputBinding(KeyCode.F5);
+            host.rootVisualElement.RegisterCallback<KeyDownEvent>(evt => focus.HandleFocusOrButton(evt, input), TrickleDown.TrickleDown);
+            TextField next = new() { name = "next-focus-field" };
+            host.rootVisualElement.Add(next);
+            EditorSurfaceCapture.SettleLayout(host);
+            button.Focus();
+            using (KeyDownEvent configured = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.F4 }))
+            {
+                button.SendEvent(configured);
+            }
+            yield return null;
+            VisualElement focused = host.rootVisualElement.focusController.focusedElement as VisualElement;
+            Assert.That(focused == next || next.Contains(focused), "Configured focus navigation reaches the next control.");
+            VisualElement textInput = next.Q("unity-text-input");
+            Assert.That(textInput != null);
+            using (KeyDownEvent old = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.Tab }))
+            {
+                textInput.SendEvent(old);
+            }
+            Assert.That(host.rootVisualElement.focusController.focusedElement, Is.SameAs(focused), "An unbound native Tab does not move focus.");
+            using (KeyDownEvent configured = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.F5 }))
+            {
+                textInput.SendEvent(configured);
+            }
+            yield return null;
+            Assert.That(host.rootVisualElement.focusController.focusedElement, Is.SameAs(button));
         }
 
         [UnityTest]
@@ -57,7 +85,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             {
                 itemsSource = new[] { "first", "second", "third" },
                 fixedItemHeight = 30,
-                makeItem = () => new Label(),
+                makeItem = () => new Label { pickingMode = PickingMode.Position },
                 bindItem = (element, index) => ((Label)element).text = index.ToString(),
                 style = { height = 180 },
             };
@@ -66,6 +94,17 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             EditorSurfaceCapture.ShowPopup(host);
             string route = string.Empty;
             host.rootVisualElement.RegisterCallback<KeyDownEvent>(evt => route += " root:" + evt.keyCode + ":" + list.selectedIndex, TrickleDown.TrickleDown);
+            VisualElement recycledTarget = null;
+            host.rootVisualElement.RegisterCallback<PointerDownEvent>(
+                evt =>
+                {
+                    if (recycledTarget != null && evt.button == 0)
+                    {
+                        recycledTarget.userData = "recycled-row";
+                    }
+                },
+                TrickleDown.TrickleDown
+            );
             using ObjectListSelectionInput owner = new(list, host.rootVisualElement, () => input);
             list.RegisterCallback<KeyDownEvent>(evt => route += " list:" + evt.keyCode + ":" + list.selectedIndex, TrickleDown.TrickleDown);
             host.rootVisualElement.RegisterCallback<PointerDownEvent>(
@@ -121,6 +160,32 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 yield return null;
             }
             Assert.That(list.selectedIndices, Is.EquivalentTo(new[] { 0, 1 }), "Configured primary/additive gestures reach native list selection. " + route);
+            list.SetSelection(0);
+            second.userData = "original-row";
+            recycledTarget = second;
+            foreach (EventType type in new[] { EventType.MouseDown, EventType.MouseUp })
+            {
+                Event mouse = new()
+                {
+                    type = type,
+                    button = 1,
+                    modifiers = EventModifiers.Alt,
+                    clickCount = 1,
+                    mousePosition = second.worldBound.center,
+                };
+                if (type == EventType.MouseDown)
+                {
+                    using PointerDownEvent down = PointerDownEvent.GetPooled(mouse);
+                    second.SendEvent(down);
+                }
+                else
+                {
+                    using PointerUpEvent up = PointerUpEvent.GetPooled(mouse);
+                    second.SendEvent(up);
+                }
+            }
+            yield return null;
+            Assert.That(list.selectedIndices, Is.EquivalentTo(new[] { 0 }), "Queued pointer input cannot select a recycled row identity.");
         }
 
         [TestCase(EventModifiers.Control, true)]

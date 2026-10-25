@@ -57,11 +57,17 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 PreviousPageKey = KeyCode.P,
                 NextPageKey = KeyCode.Q,
             };
+            string key = NamespaceController.GetNamespaceKey(typeof(TestDataObject));
+            managed[key] = new List<Type> { typeof(TestDataObject) };
+            order[key] = 0;
             VirtualizedTypeCatalogView view = new(owner, new NamespaceController(managed, order), managed, order, input);
             LayoutTestWindow host = ScriptableObject.CreateInstance<LayoutTestWindow>();
             cleanup.Defer(() => EditorSurfaceCapture.CloseWindow(host));
+            view.style.flexGrow = 1;
             host.rootVisualElement.Add(view);
+            host.position = new Rect(80, 80, 360, 240);
             EditorSurfaceCapture.ShowPopup(host);
+            EditorSurfaceCapture.SettleLayout(host);
             using (TooltipEvent tooltip = TooltipEvent.GetPooled())
             {
                 tooltip.target = view;
@@ -76,6 +82,18 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 tooltip.target = view;
                 view.SendEvent(tooltip);
                 Assert.That(tooltip.tooltip, Does.Contain("K/J"), "Tooltips follow mutable input settings.");
+            }
+            input.SelectKey = KeyCode.F6;
+            input.ToggleKey = KeyCode.F9;
+            input.CollapseKey = KeyCode.F7;
+            input.ExpandKey = KeyCode.F8;
+            Button collapse = view.Q<Button>("catalog-collapse");
+            Assert.That(collapse != null);
+            using (TooltipEvent tooltip = TooltipEvent.GetPooled())
+            {
+                tooltip.target = collapse;
+                collapse.SendEvent(tooltip);
+                Assert.That(tooltip.tooltip, Does.Contain("F6/F9; F7/F8"), "A realized control reads current bindings rather than its old bind-time hint.");
             }
             Button action = new() { tooltip = "Keep the action hint" };
             view.Add(action);
