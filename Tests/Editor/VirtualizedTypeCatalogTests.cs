@@ -156,6 +156,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             DataVisualizerSettings settings = (DataVisualizerSettings)typeof(DataVisualizerWindow).GetProperty("Settings", members).GetValue(owner);
             DataVisualizerUserState user = (DataVisualizerUserState)typeof(DataVisualizerWindow).GetProperty("UserState", members).GetValue(owner);
             state = new PerfWindowStateScope(settings, user, "Temp/VirtualizedCatalog");
+            state.Settings.inputProfile = null;
             typeof(DataVisualizerWindow).GetField("_settings", members).SetValue(owner, state.Settings);
             typeof(DataVisualizerWindow).GetField("_userState", members).SetValue(owner, state.UserState);
             typeof(DataVisualizerWindow).GetField("_userStateFilePath", members).SetValue(owner, state.FilePath);
