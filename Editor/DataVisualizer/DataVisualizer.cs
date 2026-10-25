@@ -3146,6 +3146,11 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         private void HandleSearchKeyDown(KeyDownEvent evt)
         {
+            if (CatalogInputSettings.IsTextEntry(evt))
+            {
+                return;
+            }
+
             if (_activePopover != _searchPopover || _searchPopover.style.display == DisplayStyle.None)
             {
                 return;
@@ -4085,6 +4090,11 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         private void HandleGlobalKeyDown(KeyDownEvent evt)
         {
+            if (CatalogInputSettings.IsTextEntry(evt))
+            {
+                return;
+            }
+
             if (_nativeInput.IsRouting || _objectSelectionInput?.IsRouting == true)
             {
                 return;
@@ -4283,6 +4293,11 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         private void HandlePopoverKeyDown(KeyDownEvent evt)
         {
+            if (CatalogInputSettings.IsTextEntry(evt))
+            {
+                return;
+            }
+
             VisualElement activePopover = _activeNestedPopover ?? _activePopover;
             if (activePopover == null || activePopover.style.display != DisplayStyle.Flex)
             {
@@ -5605,6 +5620,11 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         private void HandleTypePopoverKeyDown(KeyDownEvent evt)
         {
+            if (CatalogInputSettings.IsTextEntry(evt))
+            {
+                return;
+            }
+
             if (_activePopover != _typeAddPopover || _typeAddPopover.style.display == DisplayStyle.None || _currentTypePopoverItems.Count == 0)
             {
                 return;
@@ -8435,6 +8455,11 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         private void HandleNewLabelInputKeyDown(KeyDownEvent evt)
         {
+            if (CatalogInputSettings.IsTextEntry(evt))
+            {
+                return;
+            }
+
             if (_activePopover != _inspectorLabelSuggestionsPopover || _currentLabelSuggestionItems.Count == 0)
             {
                 if (Input.Navigation.IsConfirmKey(evt.keyCode))

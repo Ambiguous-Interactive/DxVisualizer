@@ -224,7 +224,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         private void OnKeyDown(KeyDownEvent evt)
         {
-            if (_nativeInput.IsRouting)
+            if (_nativeInput.IsRouting || CatalogInputSettings.IsTextEntry(evt))
             {
                 return;
             }
