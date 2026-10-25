@@ -81,6 +81,12 @@ suites stay outside it.
   sections; edit `[Unreleased]` entries in place. A fix for a defect that was
   never in a release is not a `Fixed` entry: fold what the user gets into that
   feature's entry.
+- Keep adjacent headings and entries intact when replacing a changelog bullet.
+  A text-range edit must stop at the next bullet or heading, whichever comes first.
+  Compare section headings with the PR base after the edit.
+- Soft-wrapped Markdown is one rendered entry. If a review asks for a note on one
+  source line, shorten that note to fit Prettier's width; keep global formatting
+  and avoid formatter escapes.
 
 ## Pull Requests
 

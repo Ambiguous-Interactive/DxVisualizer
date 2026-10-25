@@ -124,6 +124,12 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.Fail("Asset changes did not settle after the Play transition.");
         }
 
+        private static void AssertRowOrderingControls(VisualElement row, bool canMoveUp, bool canMoveDown)
+        {
+            Assert.That(row.Q<Button>("go-up-button").ClassListContains("go-button-disabled"), Is.EqualTo(!canMoveUp));
+            Assert.That(row.Q<Button>("go-down-button").ClassListContains("go-button-disabled"), Is.EqualTo(!canMoveDown));
+        }
+
         [Test]
         public void ShouldMatchRefreshTypesByExactIdentityInTheirCanonicalNamespace()
         {
@@ -374,6 +380,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 }
             }
             Assert.That(changedRow != null, "The uniquely owned fixture must be realized before editing.");
+            AssertRowOrderingControls(changedRow, canMoveUp: 0 < changedIndex, canMoveDown: changedIndex < filtered.Count - 1);
             Assert.That(AssetDatabase.GetAssetPath(changed).StartsWith(folder + "/", StringComparison.Ordinal));
             string path = AssetDatabase.GetAssetPath(changed);
             ScriptableObject selected = ReadPrivateField<ScriptableObject>(window, "_selectedObject");
@@ -402,26 +409,49 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(ReadPrivateField<ScriptableObject>(window, "_selectedObject") == selected);
             Assert.That(ReadPrivateField<int>(window, "_asyncLoadGeneration"), Is.EqualTo(generation));
             Assert.That(list.Q<ScrollView>().scrollOffset.y, Is.EqualTo(offset).Within(1));
-            AssetDatabase.SetLabels(changed, new[] { "New label" });
+            string filterLabel = "Targeted-row-" + Guid.NewGuid().ToString("N");
+            AssetDatabase.SetLabels(changed, new[] { filterLabel });
             window.QueueAssetChanges(new[] { renamed }, null, null, null);
             yield return WaitForRefresh(window);
             Assert.That(bindings, Is.Zero, "Label edits without membership changes keep row bindings.");
             TypeLabelFilterConfig filter = state.UserState.labelFilterConfigs.Find(config => config.typeFullName == type.FullName);
-            filter.andLabels.Add("New label");
+            filter.andLabels.Add(filterLabel);
             InvokePrivate(window, "ApplyLabelFilter", true);
             yield return null;
             Assert.That(filtered.Contains(changed));
+            Assert.That(filtered.Count, Is.EqualTo(1), "The uniquely labeled asset is the only visible row.");
+            changedRow = list.Query<VisualElement>().Where(element => ReferenceEquals(element.userData, changed)).First();
+            Assert.That(changedRow != null);
+            AssertRowOrderingControls(changedRow, canMoveUp: false, canMoveDown: false);
             AssetDatabase.SetLabels(changed, Array.Empty<string>());
             window.QueueAssetChanges(new[] { renamed }, null, null, null);
             yield return WaitForRefresh(window);
             Assert.That(filtered.Contains(changed), Is.False, "Label edits that hide a row must refresh membership.");
-            AssetDatabase.SetLabels(changed, new[] { "New label" });
+            AssetDatabase.SetLabels(changed, new[] { filterLabel });
             window.QueueAssetChanges(new[] { renamed }, null, null, null);
             yield return WaitForRefresh(window);
             Assert.That(filtered.Contains(changed), Is.True, "Label edits that reveal a row must refresh membership.");
             filter.andLabels.Clear();
             InvokePrivate(window, "ApplyLabelFilter", true);
             yield return null;
+            InvokePrivate(window, "MoveObjectToTop", changed);
+            yield return null;
+            yield return null;
+            EditorSurfaceCapture.SettleLayout(window);
+            changedRow = list.Query<VisualElement>().Where(element => ReferenceEquals(element.userData, changed)).First();
+            Assert.That(changedRow != null);
+            AssertRowOrderingControls(changedRow, canMoveUp: false, canMoveDown: true);
+            InvokePrivate(window, "MoveObjectToBottom", changed);
+            yield return null;
+            yield return null;
+            EditorSurfaceCapture.SettleLayout(window);
+            changedRow = list.Query<VisualElement>().Where(element => ReferenceEquals(element.userData, changed)).First();
+            Assert.That(changedRow != null);
+            AssertRowOrderingControls(changedRow, canMoveUp: true, canMoveDown: false);
+            bindings = 0;
+            window.QueueAssetChanges(new[] { renamed }, null, null, null);
+            yield return WaitForRefresh(window);
+            AssertRowOrderingControls(changedRow, canMoveUp: true, canMoveDown: false);
             Assert.That(AssetDatabase.DeleteAsset(renamed));
             window.QueueAssetChanges(null, new[] { renamed }, null, null);
             yield return WaitForRefresh(window);

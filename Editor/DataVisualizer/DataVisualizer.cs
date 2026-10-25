@@ -2412,7 +2412,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                     VisualElement row = _objectListView.Q<VisualElement>($"object-item-row-{current.GetObjectIdString()}");
                     if (row != null)
                     {
-                        BindObjectRow(row, current, _filteredObjects.IndexOf(current));
+                        BindObjectRow(row, current);
                     }
                 }
             }
@@ -6060,7 +6060,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             {
                 if (0 <= i && i < _filteredObjects.Count)
                 {
-                    BindObjectRow(element, _filteredObjects[i], i);
+                    BindObjectRow(element, _filteredObjects[i]);
                 }
             };
             _objectListView.AddToClassList("object-scrollview");
@@ -7889,10 +7889,10 @@ namespace WallstopStudios.DataVisualizer.Editor
         }
 
         /*
-            Populates a row skeleton for a specific object at a display index. Serves as the ListView
+            Populates a row skeleton for a specific object. Serves as the ListView
             bindItem.
         */
-        private void BindObjectRow(VisualElement row, ScriptableObject dataObject, int index)
+        private void BindObjectRow(VisualElement row, ScriptableObject dataObject)
         {
             if (row == null || dataObject == null)
             {
@@ -7915,7 +7915,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             if (goUpButton != null)
             {
                 goUpButton.tooltip = $"Move {dataObjectName} to top";
-                bool disabled = _selectedObjects.Count == 1 || index == 0;
+                bool disabled = _filteredObjects.Count == 0 || dataObject == _filteredObjects[0];
                 goUpButton.EnableInClassList("go-button-disabled", disabled);
                 goUpButton.EnableInClassList(StyleConstants.ActionButtonClass, !disabled);
                 goUpButton.EnableInClassList("go-button", !disabled);
@@ -7925,7 +7925,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             if (goDownButton != null)
             {
                 goDownButton.tooltip = $"Move {dataObjectName} to bottom";
-                bool disabled = _filteredObjects.Count == 1 || index == _filteredObjects.Count - 1;
+                bool disabled = _filteredObjects.Count == 0 || dataObject == _filteredObjects[_filteredObjects.Count - 1];
                 goDownButton.EnableInClassList("go-button-disabled", disabled);
                 goDownButton.EnableInClassList(StyleConstants.ActionButtonClass, !disabled);
                 goDownButton.EnableInClassList("go-button", !disabled);
