@@ -70,8 +70,8 @@ preserving query semantics and labels. Older state without searches starts empty
 
 ## Type filter
 
-The **Filter types** field above the namespace list narrows the type rows by display name, without case sensitivity. Namespace headers are not filtered, so you keep the structure
-while the types inside it narrow.
+The **Filter types** field above the namespace list narrows the type rows by display name, without case sensitivity. Matching types stay grouped by namespace. A namespace with no
+matching types is hidden, even when collapsed.
 
 A display name comes from `[CustomDataVisualization]` when your type sets `TypeName`; otherwise it is the C# type name. Every space-separated term must match the display name.
 

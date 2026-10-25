@@ -387,6 +387,10 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                 while (index < _catalogRows.Count && !_catalogRows[index].IsNamespace)
                 {
                     CatalogEntry entry = _catalogRows[index++];
+                    if (!expanded && matches)
+                    {
+                        continue;
+                    }
                     if (MatchesFilter(entry.Type))
                     {
                         matches = true;

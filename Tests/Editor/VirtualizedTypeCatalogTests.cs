@@ -50,6 +50,155 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             return saved;
         }
 
+        [Test]
+        public void ShouldStopCheckingCollapsedTypesAfterFindingAMatch()
+        {
+            using TestCleanupScope cleanup = new();
+            FieldInfo instance = typeof(DataVisualizerWindow).GetField("Instance", BindingFlags.Static | BindingFlags.NonPublic);
+            object previous = instance.GetValue(null);
+            cleanup.Defer(() => instance.SetValue(null, previous));
+            DataVisualizerWindow owner = ScriptableObject.CreateInstance<DataVisualizerWindow>();
+            const BindingFlags members = BindingFlags.Instance | BindingFlags.NonPublic;
+            DataVisualizerSettings settings = (DataVisualizerSettings)typeof(DataVisualizerWindow).GetProperty("Settings", members).GetValue(owner);
+            DataVisualizerUserState user = (DataVisualizerUserState)typeof(DataVisualizerWindow).GetProperty("UserState", members).GetValue(owner);
+            using PerfWindowStateScope state = new(settings, user, "Temp/CollapsedCatalogChecks");
+            using TestCleanupScope ownerCleanup = new();
+            ownerCleanup.Defer(() => Object.DestroyImmediate(owner));
+            state.Settings.persistStateInSettingsAsset = false;
+            typeof(DataVisualizerWindow).GetField("_settings", members).SetValue(owner, state.Settings);
+            typeof(DataVisualizerWindow).GetField("_userState", members).SetValue(owner, state.UserState);
+            typeof(DataVisualizerWindow).GetField("_userStateFilePath", members).SetValue(owner, state.FilePath);
+            Type[] dataset = CatalogLayoutScaleTests.CreateTypes()[0];
+            string key = NamespaceController.GetNamespaceKey(dataset[0]);
+            state.UserState.SetNamespaceCollapsed(key, true);
+            List<Type> types = new();
+            List<CatalogTypeProbe> probes = new();
+            for (int index = 0; index < 100; index++)
+            {
+                CatalogTypeProbe probe = new(dataset[index]);
+                types.Add(probe);
+                probes.Add(probe);
+            }
+            Dictionary<string, List<Type>> managed = new() { { key, types } };
+            Dictionary<string, int> order = new();
+            VirtualizedTypeCatalogView view = new(owner, new NamespaceController(managed, order), managed, order);
+            foreach (
+                var scenario in new[]
+                {
+                    (Filter: "MeasuredType", Checks: 1, Rows: 1),
+                    (Filter: "MeasuredType0099", Checks: 100, Rows: 1),
+                    (Filter: "NotPresent", Checks: 100, Rows: 0),
+                    (Filter: "", Checks: 0, Rows: 1),
+                }
+            )
+            {
+                foreach (CatalogTypeProbe probe in probes)
+                {
+                    probe.ResetChecks();
+                }
+                Assert.That(view.Filter(scenario.Filter));
+                int checks = 0;
+                foreach (CatalogTypeProbe probe in probes)
+                {
+                    checks += probe.AttributeChecks;
+                }
+                Assert.That(checks, Is.EqualTo(scenario.Checks), scenario.Filter);
+                Assert.That(view.List.itemsSource.Count, Is.EqualTo(scenario.Rows), scenario.Filter);
+            }
+            view.Select(types[0]);
+            view.Filter("MeasuredType");
+            Assert.That(view.List.itemsSource.Count, Is.EqualTo(101), "Expanded groups must include every matching type.");
+            view.Filter("MeasuredType0099");
+            Assert.That(view.List.itemsSource.Count, Is.EqualTo(2), "Expanded groups must still evaluate later matches.");
+            Assert.That(((CatalogEntry)view.List.itemsSource[1]).Type, Is.SameAs(types[99]));
+        }
+
+        [Test, Explicit("Collapsed catalog matching component; creates no assets or native windows")]
+        public void ShouldMeasureCollapsedCatalogFiltering()
+        {
+            BenchmarkCodeIdentity production = new(
+                typeof(VirtualizedTypeCatalogView).Assembly,
+                "Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/UI/VirtualizedTypeCatalogView.cs"
+            );
+            BenchmarkCodeIdentity driver = new(
+                typeof(VirtualizedTypeCatalogTests).Assembly,
+                "Packages/com.wallstop-studios.data-visualizer/Tests/Editor/VirtualizedTypeCatalogTests.cs"
+            );
+            BenchmarkCodeIdentity probeCode = new(typeof(CatalogTypeProbe).Assembly, "Packages/com.wallstop-studios.data-visualizer/Tests/Editor/CatalogTypeProbe.cs");
+            production.Verify();
+            driver.Verify();
+            probeCode.Verify();
+            using TestCleanupScope cleanup = new();
+            FieldInfo instance = typeof(DataVisualizerWindow).GetField("Instance", BindingFlags.Static | BindingFlags.NonPublic);
+            object previous = instance.GetValue(null);
+            cleanup.Defer(() => instance.SetValue(null, previous));
+            DataVisualizerWindow owner = ScriptableObject.CreateInstance<DataVisualizerWindow>();
+            const BindingFlags members = BindingFlags.Instance | BindingFlags.NonPublic;
+            DataVisualizerSettings settings = (DataVisualizerSettings)typeof(DataVisualizerWindow).GetProperty("Settings", members).GetValue(owner);
+            DataVisualizerUserState user = (DataVisualizerUserState)typeof(DataVisualizerWindow).GetProperty("UserState", members).GetValue(owner);
+            using PerfWindowStateScope state = new(settings, user, "Temp/CollapsedCatalogMeasurements");
+            using TestCleanupScope ownerCleanup = new();
+            ownerCleanup.Defer(() => Object.DestroyImmediate(owner));
+            state.Settings.persistStateInSettingsAsset = false;
+            typeof(DataVisualizerWindow).GetField("_settings", members).SetValue(owner, state.Settings);
+            typeof(DataVisualizerWindow).GetField("_userState", members).SetValue(owner, state.UserState);
+            typeof(DataVisualizerWindow).GetField("_userStateFilePath", members).SetValue(owner, state.FilePath);
+            Type[] dataset = CatalogLayoutScaleTests.CreateTypes()[0];
+            string key = NamespaceController.GetNamespaceKey(dataset[0]);
+            List<string> output = new()
+            {
+                "# Unity=" + Application.unityVersion + "; OS=" + SystemInfo.operatingSystem + "; CPU=" + SystemInfo.processorType,
+                "# productionSource=" + production.SourceSha256 + "; module=" + production.LoadedModuleId,
+                "# driverSource=" + driver.SourceSha256 + "; module=" + driver.LoadedModuleId,
+                "# probeSource=" + probeCode.SourceSha256,
+                "types,collapsed,sample,milliseconds,attributeChecks",
+            };
+            foreach (int count in new[] { 100, 1000, 2000 })
+            {
+                List<Type> types = new(count);
+                List<CatalogTypeProbe> probes = new(count);
+                for (int index = 0; index < count; index++)
+                {
+                    CatalogTypeProbe probe = new(dataset[index]);
+                    types.Add(probe);
+                    probes.Add(probe);
+                }
+                foreach (bool collapsed in new[] { false, true })
+                {
+                    state.UserState.SetNamespaceCollapsed(key, collapsed);
+                    Dictionary<string, List<Type>> managed = new() { { key, types } };
+                    Dictionary<string, int> order = new();
+                    VirtualizedTypeCatalogView view = new(owner, new NamespaceController(managed, order), managed, order);
+                    for (int sample = -5; sample < 30; sample++)
+                    {
+                        foreach (CatalogTypeProbe probe in probes)
+                        {
+                            probe.ResetChecks();
+                        }
+                        long start = System.Diagnostics.Stopwatch.GetTimestamp();
+                        bool changed = view.Filter(sample % 2 == 0 ? "MeasuredType" : "MeasuredType Data");
+                        double milliseconds = (System.Diagnostics.Stopwatch.GetTimestamp() - start) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+                        Assert.That(changed);
+                        Assert.That(view.List.itemsSource.Count, Is.EqualTo(collapsed ? 1 : count + 1));
+                        int checks = 0;
+                        foreach (CatalogTypeProbe probe in probes)
+                        {
+                            checks += probe.AttributeChecks;
+                        }
+                        if (0 <= sample)
+                        {
+                            output.Add(count + "," + collapsed + "," + sample + "," + milliseconds.ToString("R", System.Globalization.CultureInfo.InvariantCulture) + "," + checks);
+                        }
+                    }
+                }
+            }
+            production.Verify();
+            driver.Verify();
+            probeCode.Verify();
+            output.Add("# status=complete; five discarded warmups and thirty samples per condition; synthetic types, unhosted controls, no assets or native windows");
+            File.WriteAllText("Temp/collapsed-catalog-filter.csv", string.Join("\n", output) + "\n");
+        }
+
         [Test, Explicit("Paired synthetic catalog navigation; creates no Unity assets")]
         public void ShouldMeasureFilteredCatalogNavigation()
         {
