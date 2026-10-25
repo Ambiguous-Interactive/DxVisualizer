@@ -54,7 +54,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         private void BeginPointer(EventBase evt)
         {
             bool forwarded = _native.AcceptForwarded(evt);
-            if ((!forwarded && IsRouting) || evt.target is not VisualElement target || (target != _list && !_list.Contains(target)))
+            if (evt.isPropagationStopped || (!forwarded && IsRouting) || evt.target is not VisualElement target || (target != _list && !_list.Contains(target)))
             {
                 return;
             }

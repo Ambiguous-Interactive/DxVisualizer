@@ -512,6 +512,12 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             row.AddToClassList(StyleConstants.VirtualCatalogRowClass);
             Button collapse = new(() => Toggle((CatalogEntry)row.userData)) { name = "catalog-collapse" };
             row.CollapseButton = collapse;
+            collapse.RegisterCallback<TooltipEvent>(evt =>
+            {
+                evt.tooltip = $"Collapse or expand {row.TitleLabel.text} ({Input.SelectKey}/{Input.ToggleKey}; {Input.CollapseKey}/{Input.ExpandKey})";
+                evt.rect = collapse.worldBound;
+                evt.StopImmediatePropagation();
+            });
             collapse.AddToClassList(StyleConstants.NamespaceIndicatorClass);
             row.Add(collapse);
             Button up = new(() => Move((CatalogEntry)row.userData, true)) { name = "go-up-button", text = "↑" };

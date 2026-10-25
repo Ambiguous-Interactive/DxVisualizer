@@ -579,6 +579,8 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(window));
 
                 ScriptableObject asset = CreateFixtureAsset(folder, "First.asset");
+                ReadPrivateField<List<ScriptableObject>>(window, "_selectedObjects").Add(asset);
+                ReadPrivateField<List<ScriptableObject>>(window, "_filteredObjects").Add(asset);
 
                 SuspendForPlayMode(window);
                 InvokePrivate(window, "CloneObject", asset);
@@ -812,12 +814,15 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             window.CreateGUI();
             ActionButtonToggle toggle = window.rootVisualElement.Q<ActionButtonToggle>("settings-selection-toggle");
             Button folder = window.rootVisualElement.Q<Button>("settings-data-folder-button");
+            VisualElement inputProfile = window.rootVisualElement.Q("settings-input-profile");
             bool stored = toggle.value;
             Assert.That(toggle.enabledSelf, Is.True);
             Assert.That(folder.enabledSelf, Is.True);
+            Assert.That(inputProfile.enabledSelf, Is.True);
             SuspendForPlayMode(window);
             Assert.That(toggle.enabledSelf, Is.False);
             Assert.That(folder.enabledSelf, Is.False);
+            Assert.That(inputProfile.enabledSelf, Is.False);
             // Deliver a stale change even though normal disabled controls suppress events.
             toggle.SetEnabled(true);
             Assert.DoesNotThrow(() => toggle.value = !stored);
@@ -826,12 +831,15 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             InvokePrivate(window, "BuildSettingsPopoverContent");
             toggle = window.rootVisualElement.Q<ActionButtonToggle>("settings-selection-toggle");
             folder = window.rootVisualElement.Q<Button>("settings-data-folder-button");
+            inputProfile = window.rootVisualElement.Q("settings-input-profile");
             Assert.That(toggle.enabledSelf, Is.False);
             Assert.That(folder.enabledSelf, Is.False);
+            Assert.That(inputProfile.enabledSelf, Is.False);
             Assert.That(toggle.value, Is.EqualTo(stored));
             ResumeFromPlayMode(window);
             Assert.That(toggle.enabledSelf, Is.True);
             Assert.That(folder.enabledSelf, Is.True);
+            Assert.That(inputProfile.enabledSelf, Is.True);
         }
 
         [Test]
