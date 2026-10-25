@@ -34,7 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - Yield selected-type asset loading between short work slices. Prioritize saved selection and keep custom order while remaining objects load (#309).
-- Speed up custom namespace ordering in large catalogs while preserving saved positions and stable ties (#324).
+- Speed up custom namespace ordering and catalog scrolling while preserving saved positions and stable ties (#324).
 - Keep repeated searches responsive during partial indexing by reusing prepared result order and search data across window rebuilds. Load assets only when activating search results
   without retaining every indexed asset (#309, #310).
 - Search available asset text while indexing continues. Speed up Unicode queries, keep final ordering responsive, and refresh open searches as records arrive or change. Keep

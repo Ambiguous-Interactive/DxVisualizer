@@ -455,23 +455,6 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                 && (entry.Type == null ? string.Equals(entry.NamespaceKey, NamespaceController.GetNamespaceKey(_selected), StringComparison.Ordinal) : entry.Type == _selected);
         }
 
-        private int NamespacePosition(string key)
-        {
-            int position = 0;
-            foreach (CatalogEntry entry in _catalogRows)
-            {
-                if (entry.Type == null)
-                {
-                    if (string.Equals(entry.NamespaceKey, key, StringComparison.Ordinal))
-                    {
-                        return position;
-                    }
-                    position++;
-                }
-            }
-            return -1;
-        }
-
         private int Find(Type type)
         {
             for (int i = 0; i < _rows.Count; i++)
@@ -669,10 +652,10 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             Button down = row.Q<Button>("go-down-button");
             up.tooltip = "Move " + title + " to top";
             down.tooltip = "Move " + title + " to bottom";
-            int position = header ? NamespacePosition(entry.NamespaceKey) : types.IndexOf(entry.Type);
-            int count = header ? _managed.Count : types.Count;
-            row.CanMoveUp = position != 0;
-            row.CanMoveDown = position != count - 1;
+            row.CanMoveUp = header ? !string.Equals(entry.NamespaceKey, _catalogRows[0].NamespaceKey, StringComparison.Ordinal) : entry.Type != types[0];
+            row.CanMoveDown = header
+                ? !string.Equals(entry.NamespaceKey, _catalogRows[_catalogRows.Count - 1].NamespaceKey, StringComparison.Ordinal)
+                : entry.Type != types[types.Count - 1];
             UpdateRowPresentation(row, entry);
             Button remove = row.Q<Button>("catalog-remove");
             int removable = 0;
