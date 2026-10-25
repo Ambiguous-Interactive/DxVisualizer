@@ -2,6 +2,7 @@ namespace WallstopStudios.DataVisualizer.Editor.Styles
 {
     public static class StyleConstants
     {
+        public const string InspectorLabelEntryClass = "inspector-label-entry";
         public const string VirtualCatalogClass = "virtual-catalog";
         public const string VirtualCatalogRowClass = "virtual-catalog-row";
         public const string AssetToolScopeClass = "asset-tool-scope";
