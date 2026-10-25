@@ -605,7 +605,8 @@ namespace WallstopStudios.DataVisualizer.Editor
                 {
                     text = StyleConstants.ArrowExpanded,
                     name = $"namespace-indicator-{key}",
-                    tooltip = $"Collapse or expand {key} (Enter/Space; Left to collapse, Right to expand)",
+                    tooltip =
+                        $"Collapse or expand {key} ({dataVisualizer.Input.Navigation.SelectKey}/{dataVisualizer.Input.Navigation.ToggleKey}; {dataVisualizer.Input.Navigation.CollapseKey}/{dataVisualizer.Input.Navigation.ExpandKey})",
                 };
                 indicator.AddToClassList(StyleConstants.NamespaceIndicatorClass);
                 indicator.AddToClassList(StyleConstants.ClickableClass);
@@ -719,11 +720,23 @@ namespace WallstopStudios.DataVisualizer.Editor
                 indicator.clicked += ToggleNamespace;
                 indicator.RegisterCallback<KeyDownEvent>(evt =>
                 {
-                    if (dataVisualizer.IsAssetEditingSuspended || (evt.keyCode != KeyCode.LeftArrow && evt.keyCode != KeyCode.RightArrow))
+                    if (
+                        dataVisualizer.IsAssetEditingSuspended
+                        || (
+                            !CatalogInputSettings.MatchesKey(evt.keyCode, dataVisualizer.Input.Navigation.CollapseKey)
+                            && !CatalogInputSettings.MatchesKey(evt.keyCode, dataVisualizer.Input.Navigation.ExpandKey)
+                        )
+                    )
                     {
                         return;
                     }
-                    ApplyNamespaceCollapsedState(dataVisualizer, indicator, typesContainer, evt.keyCode == KeyCode.LeftArrow, true);
+                    ApplyNamespaceCollapsedState(
+                        dataVisualizer,
+                        indicator,
+                        typesContainer,
+                        CatalogInputSettings.MatchesKey(evt.keyCode, dataVisualizer.Input.Navigation.CollapseKey),
+                        true
+                    );
                     evt.StopPropagation();
                     evt.PreventDefaultCompat();
                 });
@@ -810,7 +823,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                     // ReSharper disable once HeapView.CanAvoidClosure
                     typeItem.RegisterCallback<PointerUpEvent>(evt =>
                     {
-                        if (dataVisualizer._isDragging || evt.button != 0)
+                        if (dataVisualizer._isDragging || evt.button != dataVisualizer.Input.Navigation.PointerButton)
                         {
                             return;
                         }

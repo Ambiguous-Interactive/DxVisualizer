@@ -1,10 +1,12 @@
 namespace WallstopStudios.DataVisualizer.Tests.Editor
 {
     using System;
+    using System.Collections;
     using System.Collections.Generic;
     using System.Reflection;
     using NUnit.Framework;
     using UnityEngine;
+    using UnityEngine.TestTools;
     using UnityEngine.UIElements;
     using WallstopStudios.DataVisualizer.Editor;
     using WallstopStudios.DataVisualizer.Editor.UI;
@@ -12,6 +14,78 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
 
     public sealed class EditorInputBindingTests
     {
+        [UnityTest]
+        public IEnumerator ShouldRemapNativeButtonActivationAndSuppressOldSubmitKeys()
+        {
+            using TestCleanupScope cleanup = new();
+            LayoutTestWindow host = ScriptableObject.CreateInstance<LayoutTestWindow>();
+            cleanup.Defer(() => EditorSurfaceCapture.CloseWindow(host));
+            DataVisualizerInputSettings input = new();
+            input.Navigation.SelectKey = KeyCode.F6;
+            input.Navigation.AlternateSelectKey = KeyCode.None;
+            input.Navigation.ToggleKey = KeyCode.None;
+            int clicks = 0;
+            Button button = new(() => clicks++) { text = "Configured action" };
+            host.rootVisualElement.Add(button);
+            host.rootVisualElement.RegisterCallback<KeyDownEvent>(evt => input.HandleButton(evt), TrickleDown.TrickleDown);
+            host.position = new Rect(80, 80, 360, 240);
+            EditorSurfaceCapture.ShowPopup(host);
+            yield return null;
+            EditorSurfaceCapture.SettleLayout(host);
+            button.Focus();
+            using (KeyDownEvent configured = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.F6 }))
+            {
+                button.SendEvent(configured);
+            }
+            Assert.That(clicks, Is.EqualTo(1));
+            using (KeyDownEvent old = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.Return }))
+            {
+                button.SendEvent(old);
+            }
+            Assert.That(clicks, Is.EqualTo(1), "The old native submit must not also invoke the action.");
+        }
+
+        [UnityTest]
+        public IEnumerator ShouldRemapNativeListNavigationWithoutLeavingTheOldKeyActive()
+        {
+            using TestCleanupScope cleanup = new();
+            LayoutTestWindow host = ScriptableObject.CreateInstance<LayoutTestWindow>();
+            cleanup.Defer(() => EditorSurfaceCapture.CloseWindow(host));
+            DataVisualizerInputSettings input = new();
+            input.Navigation.NextTypeKey = KeyCode.N;
+            ListView list = new()
+            {
+                itemsSource = new[] { "first", "second", "third" },
+                fixedItemHeight = 30,
+                makeItem = () => new Label(),
+                bindItem = (element, index) => ((Label)element).text = index.ToString(),
+                style = { height = 180 },
+            };
+            host.rootVisualElement.Add(list);
+            host.position = new Rect(80, 80, 360, 240);
+            EditorSurfaceCapture.ShowPopup(host);
+            string route = string.Empty;
+            host.rootVisualElement.RegisterCallback<KeyDownEvent>(evt => route += " root:" + evt.keyCode + ":" + list.selectedIndex, TrickleDown.TrickleDown);
+            using ObjectListSelectionInput owner = new(list, host.rootVisualElement, () => input);
+            list.RegisterCallback<KeyDownEvent>(evt => route += " list:" + evt.keyCode + ":" + list.selectedIndex, TrickleDown.TrickleDown);
+
+            yield return null;
+            EditorSurfaceCapture.SettleLayout(host);
+            list.SetSelection(0);
+            list.Focus();
+            using (KeyDownEvent configured = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.N }))
+            {
+                list.SendEvent(configured);
+            }
+            Assert.That(list.selectedIndex, Is.EqualTo(1));
+            using (KeyDownEvent old = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.DownArrow }))
+            {
+                list.SendEvent(old);
+            }
+            Assert.That(list.selectedIndex, Is.EqualTo(1), route);
+            Assert.That(owner.IsRouting, Is.False, "Dispatch restores the relay guard.");
+        }
+
         [TestCase(EventModifiers.Control, true)]
         [TestCase(EventModifiers.Command, true)]
         [TestCase(EventModifiers.Control | EventModifiers.Shift, false)]

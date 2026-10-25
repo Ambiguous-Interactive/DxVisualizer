@@ -7,20 +7,26 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
     /// <summary>Distinguishes explicit deselection gestures from incidental empty ListView notifications.</summary>
     public sealed class ObjectListSelectionInput : IDisposable
     {
+        public bool IsRouting => _native.IsRouting;
         public bool AllowsEmptySelection { get; private set; }
+        public DataVisualizerInputSettings Input => _getInput?.Invoke() ?? _defaults;
 
+        private readonly DataVisualizerInputSettings _defaults = new();
+        private readonly Func<DataVisualizerInputSettings> _getInput;
+        private readonly NativeInputRouter _native = new();
         private readonly ListView _list;
         private readonly VisualElement _root;
         private IVisualElementScheduledItem _reset;
 
-        public ObjectListSelectionInput(ListView list, VisualElement root)
+        public ObjectListSelectionInput(ListView list, VisualElement root, Func<DataVisualizerInputSettings> getInput = null)
         {
+            _getInput = getInput;
             _list = list ?? throw new ArgumentNullException(nameof(list));
             _root = root ?? throw new ArgumentNullException(nameof(root));
-            _list.RegisterCallback<PointerDownEvent>(BeginPointer, TrickleDown.TrickleDown);
-            _list.RegisterCallback<PointerUpEvent>(BeginPointer, TrickleDown.TrickleDown);
-            _list.RegisterCallback<KeyDownEvent>(BeginKey, TrickleDown.TrickleDown);
-            _list.RegisterCallback<KeyUpEvent>(BeginKey, TrickleDown.TrickleDown);
+            _root.RegisterCallback<PointerDownEvent>(BeginPointer, TrickleDown.TrickleDown);
+            _root.RegisterCallback<PointerUpEvent>(BeginPointer, TrickleDown.TrickleDown);
+            _root.RegisterCallback<KeyDownEvent>(BeginKey, TrickleDown.TrickleDown);
+            _root.RegisterCallback<KeyUpEvent>(BeginKey, TrickleDown.TrickleDown);
             _root.RegisterCallback<PointerCancelEvent>(CancelInput, TrickleDown.TrickleDown);
         }
 
@@ -37,15 +43,19 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         public void Dispose()
         {
             SetInputState(false);
-            _list.UnregisterCallback<PointerDownEvent>(BeginPointer, TrickleDown.TrickleDown);
-            _list.UnregisterCallback<PointerUpEvent>(BeginPointer, TrickleDown.TrickleDown);
-            _list.UnregisterCallback<KeyDownEvent>(BeginKey, TrickleDown.TrickleDown);
-            _list.UnregisterCallback<KeyUpEvent>(BeginKey, TrickleDown.TrickleDown);
+            _root.UnregisterCallback<PointerDownEvent>(BeginPointer, TrickleDown.TrickleDown);
+            _root.UnregisterCallback<PointerUpEvent>(BeginPointer, TrickleDown.TrickleDown);
+            _root.UnregisterCallback<KeyDownEvent>(BeginKey, TrickleDown.TrickleDown);
+            _root.UnregisterCallback<KeyUpEvent>(BeginKey, TrickleDown.TrickleDown);
             _root.UnregisterCallback<PointerCancelEvent>(CancelInput, TrickleDown.TrickleDown);
         }
 
         private void BeginPointer(EventBase evt)
         {
+            if (evt.target is not VisualElement target || (target != _list && !_list.Contains(target)))
+            {
+                return;
+            }
             IPointerEvent pointer = (IPointerEvent)evt;
             bool rowTarget = false;
             for (VisualElement element = evt.target as VisualElement; element != null && element != _list; element = element.parent)
@@ -56,13 +66,18 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                     break;
                 }
             }
-            SetInputState(pointer.button == 0 && !IsButton(evt.target) && (pointer.ctrlKey || pointer.commandKey || !rowTarget));
+            SetInputState(pointer.button == Input.Navigation.PointerButton && !IsButton(evt.target) && (Input.toggleSelection.MatchesModifiers(pointer.modifiers) || !rowTarget));
         }
 
         private void BeginKey(EventBase evt)
         {
+            if (IsRouting || evt.target is not VisualElement target || (target != _list && !_list.Contains(target)))
+            {
+                return;
+            }
             IKeyboardEvent key = (IKeyboardEvent)evt;
-            SetInputState(!IsButton(evt.target) && key.keyCode == KeyCode.Space && (key.ctrlKey || key.commandKey));
+            SetInputState(!IsButton(evt.target) && Input.toggleSelection.Matches(key));
+            _native.HandleListKey(evt, Input);
         }
 
         private void CancelInput(EventBase evt)
