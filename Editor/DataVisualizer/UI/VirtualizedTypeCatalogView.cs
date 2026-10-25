@@ -61,6 +61,14 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                 evt.rect = worldBound;
                 evt.StopPropagation();
             });
+            RegisterCallback<KeyDownEvent>(evt =>
+            {
+                if (evt.target == this && !_owner.IsAssetEditingSuspended && TryFocusBoundary(evt))
+                {
+                    evt.StopPropagation();
+                    evt.PreventDefaultCompat();
+                }
+            });
             AddToClassList(StyleConstants.VirtualCatalogClass);
             foreach (string key in managed.Keys)
             {
@@ -446,6 +454,29 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             RestoreCatalogFocus(_focusedEntry, null, ++_generation);
         }
 
+        private bool TryFocusBoundary(KeyDownEvent evt, CatalogEntry? entry = null)
+        {
+            if (_rows.Count == 0)
+            {
+                return false;
+            }
+            if (CatalogInputSettings.MatchesKey(evt.keyCode, Input.FirstRowKey) || CatalogInputSettings.MatchesKey(evt.keyCode, Input.LastRowKey))
+            {
+                FocusVisibleRow(CatalogInputSettings.MatchesKey(evt.keyCode, Input.FirstRowKey) ? 0 : _rows.Count - 1);
+                return true;
+            }
+            if (CatalogInputSettings.MatchesKey(evt.keyCode, Input.PreviousPageKey) || CatalogInputSettings.MatchesKey(evt.keyCode, Input.NextPageKey))
+            {
+                float viewportHeight = List.Q<ScrollView>()?.contentViewport.layout.height ?? 0;
+                int pageRows = float.IsNaN(viewportHeight) || float.IsInfinity(viewportHeight) ? 1 : Math.Max(1, Mathf.FloorToInt(viewportHeight / List.fixedItemHeight));
+                int index = entry.HasValue ? _rows.IndexOf(entry.Value) : 0;
+                int destination = CatalogInputSettings.MatchesKey(evt.keyCode, Input.NextPageKey) ? Math.Min(_rows.Count - 1, index + pageRows) : Math.Max(0, index - pageRows);
+                FocusVisibleRow(destination);
+                return true;
+            }
+            return false;
+        }
+
         private bool MatchesFilter(Type type)
         {
             if (_terms.Count == 0)
@@ -538,7 +569,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             });
             row.Add(up);
             row.Add(down);
-            Label label = new() { name = "catalog-label" };
+            Label label = new() { name = "catalog-label", displayTooltipWhenElided = false };
             row.TitleLabel = label;
             label.AddToClassList(StyleConstants.TypeLabelClass);
             row.Add(label);
@@ -603,19 +634,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                     }
                     Activate(entry);
                 }
-                else if (CatalogInputSettings.MatchesKey(evt.keyCode, Input.FirstRowKey) || CatalogInputSettings.MatchesKey(evt.keyCode, Input.LastRowKey))
-                {
-                    FocusVisibleRow(CatalogInputSettings.MatchesKey(evt.keyCode, Input.FirstRowKey) ? 0 : _rows.Count - 1);
-                }
-                else if (CatalogInputSettings.MatchesKey(evt.keyCode, Input.PreviousPageKey) || CatalogInputSettings.MatchesKey(evt.keyCode, Input.NextPageKey))
-                {
-                    float viewportHeight = List.Q<ScrollView>()?.contentViewport.layout.height ?? 0;
-                    int pageRows = float.IsNaN(viewportHeight) || float.IsInfinity(viewportHeight) ? 1 : Math.Max(1, Mathf.FloorToInt(viewportHeight / List.fixedItemHeight));
-                    int index = _rows.IndexOf(entry);
-                    int destination = CatalogInputSettings.MatchesKey(evt.keyCode, Input.NextPageKey) ? Math.Min(_rows.Count - 1, index + pageRows) : Math.Max(0, index - pageRows);
-                    FocusVisibleRow(destination);
-                }
-                else
+                else if (!TryFocusBoundary(evt, entry))
                 {
                     return;
                 }
@@ -709,7 +728,10 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             row.EnableInClassList(StyleConstants.NamespaceHeaderClass, header);
             Label label = row.TitleLabel;
             label.text = title;
-            label.tooltip = header ? entry.NamespaceKey : entry.Type.FullName;
+            label.tooltip =
+                header ? entry.NamespaceKey
+                : string.Equals(title, entry.Type.Name, StringComparison.Ordinal) ? entry.Type.FullName
+                : title + "\n" + entry.Type.FullName;
             label.EnableInClassList(StyleConstants.BoldClass, header);
             Button collapse = row.CollapseButton;
             collapse.style.display = header ? DisplayStyle.Flex : DisplayStyle.None;

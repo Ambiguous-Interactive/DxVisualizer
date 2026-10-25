@@ -99,3 +99,6 @@ samples. The default remains the full run. Browsing reports record `searchMeasur
 are omitted measurements, not zero query latency. Index extraction and indexing readiness remain enabled. A positive `partialSearchFraction` requires search measurements and is
 rejected before staging when they are disabled. One-type distributions omit type switching; they still measure opening, selection, labels and scrolling. Use separate uniquely owned
 ordinary-SO and BaseDataObject runs to compare one-large-type distributions without conflating their retention or staging costs.
+
+The [catalog keyboard-entry follow-up](catalog-entry-2026-10-25.md) retains root-focus/title-hint regressions and paired synthetic catalog observations with source identity and
+limits.

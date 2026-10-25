@@ -156,6 +156,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             DataVisualizerSettings settings = (DataVisualizerSettings)typeof(DataVisualizerWindow).GetProperty("Settings", members).GetValue(owner);
             DataVisualizerUserState user = (DataVisualizerUserState)typeof(DataVisualizerWindow).GetProperty("UserState", members).GetValue(owner);
             state = new PerfWindowStateScope(settings, user, "Temp/VirtualizedCatalog");
+            state.Settings.inputProfile = null;
             typeof(DataVisualizerWindow).GetField("_settings", members).SetValue(owner, state.Settings);
             typeof(DataVisualizerWindow).GetField("_userState", members).SetValue(owner, state.UserState);
             typeof(DataVisualizerWindow).GetField("_userStateFilePath", members).SetValue(owner, state.FilePath);
@@ -268,6 +269,14 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                     action.SendEvent(tooltip);
                     Assert.That(tooltip.tooltip, Is.EqualTo(hint.Text), "Hints use the recycled row's current identity.");
                     Assert.That(tooltip.rect, Is.EqualTo(action.worldBound));
+                }
+                Label reboundLabel = recycledRow.Q<Label>("catalog-label");
+                using (TooltipEvent titleHint = TooltipEvent.GetPooled())
+                {
+                    titleHint.target = reboundLabel;
+                    reboundLabel.SendEvent(titleHint);
+                    Assert.That(titleHint.tooltip, Is.EqualTo(reboundLabel.tooltip), "Title hints survive catalog guidance after recycling.");
+                    Assert.That(titleHint.rect, Is.EqualTo(reboundLabel.worldBound));
                 }
                 Assert.That(recycledActionLostFocus, Is.True, "Recycling must remove focus before an action targets a different type.");
                 Assert.That(controller.SelectedType == null, "Scrolling must preserve selection.");
@@ -496,6 +505,12 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                     .Find(row => row.userData is CatalogEntry entry && entry.Type == dataset[1997]);
                 Assert.That(localizedRow != null);
                 Assert.That(localizedRow.Q<Label>("catalog-label").text, Does.Contain("très long"));
+                Label localizedTitle = localizedRow.Q<Label>("catalog-label");
+                Assert.That(
+                    localizedTitle.tooltip,
+                    Is.EqualTo(localizedTitle.text + "\n" + dataset[1997].FullName),
+                    "Custom titles expose both full display text and exact identity."
+                );
                 view.Filter("  OBJET TRÈS   LONG  ");
                 yield return null;
                 Assert.That(view.List.itemsSource.Count, Is.EqualTo(2), "Span terms preserve localized ordinal matching");
@@ -536,7 +551,70 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 Assert.That(view.List.itemsSource.Count, Is.Zero);
                 Assert.That(view.Adjacent(last, true) == null);
                 Assert.That(view.Adjacent(last, false) == null);
+                view.Focus();
+                using (KeyDownEvent emptyEnd = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = view.Input.LastRowKey }))
+                {
+                    view.SendEvent(emptyEnd);
+                }
+                yield return null;
+                Assert.That(host.rootVisualElement.focusController.focusedElement, Is.SameAs(view), "An empty catalog keeps root focus.");
                 view.Filter(null);
+                yield return null;
+                view.Focus();
+                KeyCode originalLast = view.Input.LastRowKey;
+                view.Input.LastRowKey = KeyCode.J;
+                using (KeyDownEvent oldEnd = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = originalLast }))
+                {
+                    view.SendEvent(oldEnd);
+                }
+                yield return null;
+                Assert.That(host.rootVisualElement.focusController.focusedElement, Is.SameAs(view), "The former boundary key is inactive after remapping.");
+                using (KeyDownEvent rootEnd = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = view.Input.LastRowKey }))
+                {
+                    view.SendEvent(rootEnd);
+                }
+                CatalogEntry rootDestination = (CatalogEntry)view.List.itemsSource[view.List.itemsSource.Count - 1];
+                for (
+                    int frame = 0;
+                    frame < 20 && (!Equals(focusedControl?.userData, rootDestination) || !ReferenceEquals(host.rootVisualElement.focusController.focusedElement, focusedControl));
+                    frame++
+                )
+                {
+                    yield return null;
+                }
+                Assert.That(focusedControl?.userData, Is.EqualTo(rootDestination), "A boundary key enters the catalog after empty-filter focus recovery.");
+                yield return null;
+                yield return null;
+                view.Input.LastRowKey = KeyCode.None;
+                view.Focus();
+                using (KeyDownEvent disabledEnd = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.J }))
+                {
+                    view.SendEvent(disabledEnd);
+                }
+                yield return null;
+                Assert.That(host.rootVisualElement.focusController.focusedElement, Is.SameAs(view), "None disables the root boundary binding.");
+                view.Input.LastRowKey = originalLast;
+                Type rootSelection = controller.SelectedType;
+                foreach (bool pageForward in new[] { true, false })
+                {
+                    view.Focus();
+                    int rootPageRows = Math.Max(1, Mathf.FloorToInt(view.List.Q<ScrollView>().contentViewport.layout.height / view.List.fixedItemHeight));
+                    CatalogEntry expectedRootPage = (CatalogEntry)view.List.itemsSource[pageForward ? Math.Min(view.List.itemsSource.Count - 1, rootPageRows) : 0];
+                    using (
+                        KeyDownEvent rootPage = KeyDownEvent.GetPooled(
+                            new Event { type = EventType.KeyDown, keyCode = pageForward ? view.Input.NextPageKey : view.Input.PreviousPageKey }
+                        )
+                    )
+                    {
+                        view.SendEvent(rootPage);
+                    }
+                    for (int frame = 0; frame < 20 && !Equals(focusedControl?.userData, expectedRootPage); frame++)
+                    {
+                        yield return null;
+                    }
+                    Assert.That(focusedControl?.userData, Is.EqualTo(expectedRootPage), "Root page navigation uses current viewport size and clamps at the start.");
+                }
+                Assert.That(controller.SelectedType, Is.EqualTo(rootSelection), "Root focus entry preserves selected type.");
                 view.List.ScrollToItem(0);
                 yield return null;
                 Button collapse = view.Query<Button>("catalog-collapse").ToList().Find(button => button.style.display.value == DisplayStyle.Flex);
