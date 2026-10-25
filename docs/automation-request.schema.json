@@ -112,6 +112,11 @@
       "type": ["string", "null"],
       "pattern": "^([0-9a-fA-F]{32})?$",
       "description": "Full configuration preview/apply: exact theme main GUID, or empty for default."
+    },
+    "inputProfileGuid": {
+      "type": ["string", "null"],
+      "pattern": "^([0-9a-fA-F]{32}|keep)?$",
+      "description": "Configuration: exact input profile main-asset GUID; empty restores defaults, keep or omission preserves the current profile."
     }
   },
   "allOf": [

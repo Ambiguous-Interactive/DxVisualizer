@@ -4552,10 +4552,15 @@ namespace WallstopStudios.DataVisualizer.Editor
                     inputProfile.SetValueWithoutNotify(Settings.inputProfile);
                     return;
                 }
-                if (Settings.inputProfile != evt.newValue)
+                try
                 {
-                    Settings.inputProfile = evt.newValue as DataVisualizerInputProfile;
-                    EditorUtility.SetDirty(Settings);
+                    string guid = evt.newValue == null ? string.Empty : AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(evt.newValue));
+                    new EditorConfigurationService(Settings).SetInputProfileGuid(guid);
+                }
+                catch (EditorConfigurationException error)
+                {
+                    inputProfile.SetValueWithoutNotify(Settings.inputProfile);
+                    Debug.LogWarning(error.Message);
                 }
             });
             contentWrapper.Add(inputProfile);

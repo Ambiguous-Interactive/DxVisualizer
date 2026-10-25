@@ -512,6 +512,7 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
                     || !string.IsNullOrEmpty(request.selectionMode)
                     || !string.IsNullOrEmpty(request.persistenceMode)
                     || !string.IsNullOrEmpty(request.themeGuid)
+                    || (!string.IsNullOrEmpty(request.inputProfileGuid) && request.inputProfileGuid != "keep")
                     || (request.confirmPaths?.Length ?? 0) != 0
                 )
                 {
@@ -521,6 +522,10 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
             else
             {
                 EditorConfigurationService.ValidateDataFolder(request.dataFolderPath);
+                if (request.inputProfileGuid != null && request.inputProfileGuid != "keep")
+                {
+                    EditorConfigurationService.ValidateInputProfileGuid(request.inputProfileGuid);
+                }
                 if (request.selectionMode != "keep" && request.selectionMode != "select")
                 {
                     throw new ArgumentException("selectionMode must explicitly be keep or select.");
@@ -565,8 +570,14 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
                 try
                 {
                     bool changed = full
-                        ? service.Apply(request.dataFolderPath, request.selectionMode == "select", request.persistenceMode == "settings", request.themeGuid)
-                        : service.Apply(request.dataFolderPath, request.selectionMode == "select");
+                        ? service.Apply(
+                            request.dataFolderPath,
+                            request.selectionMode == "select",
+                            request.persistenceMode == "settings",
+                            request.themeGuid,
+                            request.inputProfileGuid
+                        )
+                        : service.Apply(request.dataFolderPath, request.selectionMode == "select", request.inputProfileGuid == "keep" ? null : request.inputProfileGuid);
                     code = changed ? "applied" : "unchanged";
                     folder = service.DataFolderPath;
                     selection = service.SelectActiveObject ? "select" : "keep";
@@ -599,7 +610,7 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
                 availableCount = 1,
                 coverage = full
                     ? "Explicit settings and user-state stores; full preferences and state migration in one synchronous unit. No cross-file rollback."
-                    : "Explicit settings asset; data folder and active object selection only. Configuration is one synchronous unit.",
+                    : "Explicit settings asset; data folder, active object selection and optional input profile. Configuration is one synchronous unit.",
                 items = new[]
                 {
                     new EditorAutomationItem
@@ -613,6 +624,10 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
                             !full || failed ? null
                             : read || apply ? (service.PersistStateInSettingsAsset ? "settings" : "user")
                             : request.persistenceMode,
+                        inputProfileGuid =
+                            failed ? null
+                            : read || apply || request.inputProfileGuid == null || request.inputProfileGuid == "keep" ? service.InputProfileGuid
+                            : request.inputProfileGuid.ToLowerInvariant(),
                         themeGuid =
                             !full || failed ? null
                             : read || apply ? service.ThemeGuid
