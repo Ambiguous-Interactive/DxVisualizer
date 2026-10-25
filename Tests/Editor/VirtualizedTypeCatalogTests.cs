@@ -233,7 +233,69 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                     }
                 }
 
+                VisualElement recycledRow = view.Query<VisualElement>(className: StyleConstants.TypeItemClass).First();
+                CatalogEntry recycledIdentity = (CatalogEntry)recycledRow.userData;
+                Button recycledAction = recycledRow.Q<Button>("go-down-button");
+                bool recycledActionLostFocus = false;
+                recycledAction.RegisterCallback<FocusOutEvent>(_ => recycledActionLostFocus = true);
+                recycledAction.Focus();
+                yield return null;
+                Assert.That(focusedControl, Is.SameAs(recycledAction));
+                view.List.ScrollToItem(view.List.itemsSource.Count - 1);
+                yield return null;
+                yield return null;
+                EditorSurfaceCapture.SettleLayout(host);
+                Assert.That(recycledRow.userData, Is.Not.EqualTo(recycledIdentity), "The probe must reuse the focused control for another identity.");
+                Assert.That(recycledActionLostFocus, Is.True, "Recycling must remove focus before an action targets a different type.");
+                Assert.That(controller.SelectedType == null, "Scrolling must preserve selection.");
+                view.List.ScrollToItem(0);
+                yield return null;
+                yield return null;
+                EditorSurfaceCapture.SettleLayout(host);
+
                 VisualElement pressedRow = view.Query<VisualElement>(className: StyleConstants.TypeItemClass).First();
+                using (
+                    PointerDownEvent down = PointerDownEvent.GetPooled(
+                        new Event
+                        {
+                            type = EventType.MouseDown,
+                            button = 0,
+                            mousePosition = pressedRow.worldBound.center,
+                        }
+                    )
+                )
+                {
+                    down.target = pressedRow;
+                    pressedRow.SendEvent(down);
+                }
+                Assert.That(pressedRow.HasPointerCapture(PointerId.mousePointerId));
+                CatalogEntry pressedIdentity = (CatalogEntry)pressedRow.userData;
+                view.List.ScrollToItem(view.List.itemsSource.Count - 1);
+                yield return null;
+                yield return null;
+                EditorSurfaceCapture.SettleLayout(host);
+                Assert.That(pressedRow.userData, Is.Not.EqualTo(pressedIdentity), "Scrolling must recycle the captured row.");
+                Assert.That(pressedRow.HasPointerCapture(PointerId.mousePointerId), Is.False, "Scrolling must cancel capture before reusing the row identity.");
+                using (
+                    PointerUpEvent up = PointerUpEvent.GetPooled(
+                        new Event
+                        {
+                            type = EventType.MouseUp,
+                            button = 0,
+                            mousePosition = pressedRow.worldBound.center,
+                        }
+                    )
+                )
+                {
+                    up.target = pressedRow;
+                    pressedRow.SendEvent(up);
+                }
+                Assert.That(controller.SelectedType == null, "A release after scrolling must not select the old or recycled type.");
+                view.List.ScrollToItem(0);
+                yield return null;
+                yield return null;
+                EditorSurfaceCapture.SettleLayout(host);
+                pressedRow = view.Query<VisualElement>(className: StyleConstants.TypeItemClass).First();
                 using (
                     PointerDownEvent down = PointerDownEvent.GetPooled(
                         new Event

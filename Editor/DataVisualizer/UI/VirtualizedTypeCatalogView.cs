@@ -641,6 +641,10 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         {
             CatalogRow row = (CatalogRow)slot[0];
             CatalogEntry entry = _rows[index];
+            if (row.userData is CatalogEntry previous && !previous.Equals(entry) && row.HasPointerCapture(_pressedPointerId))
+            {
+                row.ReleasePointer(_pressedPointerId);
+            }
             if (!_managed.TryGetValue(entry.NamespaceKey, out List<Type> types))
             {
                 row.style.display = DisplayStyle.None;
