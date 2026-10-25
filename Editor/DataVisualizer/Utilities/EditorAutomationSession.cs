@@ -84,9 +84,17 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
             session.DefaultPageSize = request.pageSize;
             try
             {
-                if (!configuration && (!string.IsNullOrEmpty(request.userStatePath) || !string.IsNullOrEmpty(request.persistenceMode) || !string.IsNullOrEmpty(request.themeGuid)))
+                if (
+                    !configuration
+                    && (
+                        !string.IsNullOrEmpty(request.userStatePath)
+                        || !string.IsNullOrEmpty(request.persistenceMode)
+                        || !string.IsNullOrEmpty(request.themeGuid)
+                        || (request.inputProfileGuid != null && request.inputProfileGuid != "keep")
+                    )
+                )
                 {
-                    throw new ArgumentException("State configuration fields are accepted only by configuration operations.");
+                    throw new ArgumentException("Configuration fields are accepted only by configuration operations.");
                 }
                 if (assets)
                 {
@@ -498,6 +506,7 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
                 return;
             }
             bool full = !string.IsNullOrEmpty(request.userStatePath);
+            string inputProfileGuid = request.inputProfileGuid == "keep" ? null : request.inputProfileGuid;
             if (!full && (!string.IsNullOrEmpty(request.persistenceMode) || !string.IsNullOrEmpty(request.themeGuid)))
             {
                 throw new ArgumentException("State configuration requires an explicit userStatePath.");
@@ -512,7 +521,7 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
                     || !string.IsNullOrEmpty(request.selectionMode)
                     || !string.IsNullOrEmpty(request.persistenceMode)
                     || !string.IsNullOrEmpty(request.themeGuid)
-                    || (!string.IsNullOrEmpty(request.inputProfileGuid) && request.inputProfileGuid != "keep")
+                    || !string.IsNullOrEmpty(inputProfileGuid)
                     || (request.confirmPaths?.Length ?? 0) != 0
                 )
                 {
@@ -522,9 +531,9 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
             else
             {
                 EditorConfigurationService.ValidateDataFolder(request.dataFolderPath);
-                if (request.inputProfileGuid != null && request.inputProfileGuid != "keep")
+                if (inputProfileGuid != null)
                 {
-                    EditorConfigurationService.ValidateInputProfileGuid(request.inputProfileGuid);
+                    EditorConfigurationService.ValidateInputProfileGuid(inputProfileGuid);
                 }
                 if (request.selectionMode != "keep" && request.selectionMode != "select")
                 {
@@ -570,14 +579,8 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
                 try
                 {
                     bool changed = full
-                        ? service.Apply(
-                            request.dataFolderPath,
-                            request.selectionMode == "select",
-                            request.persistenceMode == "settings",
-                            request.themeGuid,
-                            request.inputProfileGuid
-                        )
-                        : service.Apply(request.dataFolderPath, request.selectionMode == "select", request.inputProfileGuid == "keep" ? null : request.inputProfileGuid);
+                        ? service.Apply(request.dataFolderPath, request.selectionMode == "select", request.persistenceMode == "settings", request.themeGuid, inputProfileGuid)
+                        : service.Apply(request.dataFolderPath, request.selectionMode == "select", inputProfileGuid);
                     code = changed ? "applied" : "unchanged";
                     folder = service.DataFolderPath;
                     selection = service.SelectActiveObject ? "select" : "keep";
@@ -626,8 +629,8 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
                             : request.persistenceMode,
                         inputProfileGuid =
                             failed ? null
-                            : read || apply || request.inputProfileGuid == null || request.inputProfileGuid == "keep" ? service.InputProfileGuid
-                            : request.inputProfileGuid.ToLowerInvariant(),
+                            : read || apply || inputProfileGuid == null ? service.InputProfileGuid
+                            : inputProfileGuid.ToLowerInvariant(),
                         themeGuid =
                             !full || failed ? null
                             : read || apply ? service.ThemeGuid
