@@ -41,8 +41,8 @@ production repair is inferred from this experiment.
 
 ## Validation and limits
 
-The final full EditMode invocation passes all 894 tests in 746.49 seconds. PlayMode passes all 15 tests in 0.38 seconds, including its actual-Play assertion. Nine focused budget
-tests pass. The full 16-step non-Unity gate, strict documentation build and package whitelist audit pass.
+Before the review repair, the full EditMode invocation passes all 894 tests in 746.49 seconds. PlayMode passes all 15 tests in 0.38 seconds, including its actual-Play assertion.
+Nine focused budget tests pass. The full 16-step non-Unity gate, strict documentation build and package whitelist audit pass.
 
 The first full EditMode invocation passes 893 of 894 tests: `ShouldSkipUnsupportedRareFieldsDuringLiveRebuilds` reaches the existing five-minute driver watchdog in
 `WaitingWarmReady`. Its focused rerun passes in 211.05 seconds, then the complete suite passes with identical source and unchanged deadlines. The original failure remains in the
@@ -50,8 +50,17 @@ validation record. The failed fixture cleans its temporary output, so its inner 
 timing sensitivity.
 
 [Validation and source proof](object-loading-validation-2026-10-25.json) bind the loaded code to the compiler's source checksums, module/assembly identities and committed bytes.
-Source remains frozen throughout the accepted run and suites. The legacy driver's source is unchanged; no substitute measurement harness is added. The failed input and successful
-raw report retain their emitted bytes.
+The measured revision stays frozen throughout that accepted run and its pre-review suites. The later selection repair has separate source proof and suites below. The legacy
+driver's source is unchanged; no substitute measurement harness is added. The failed input and successful raw report retain their emitted bytes.
+
+The configured review found that an initial slice interrupted after insertion could resume with populated rows and skip auto-selection, leaving a blank or stale-type inspector. The
+repair removes that populated-list guard and keeps the explicit-selection-intent guard. Two regression cases reproduce the blank and stale-type states before the fix. All 15
+mutation-gate cases pass afterward, including the existing actual Play transition fixture. These regression cases model the interrupted boundary through the window's normal
+suspension/resume callbacks; they do not force a mid-call Play transition.
+
+The repaired code at `034ce70fac3390d9e7c5b313428ec7fb3588c6c5` passes all 896 EditMode tests in 620.41 seconds and all 15 actual PlayMode tests in 0.32 seconds. Separate final
+source/module/assembly checks include the added mutation-gate regression source. The package audit matches all tracked payload bytes. The earlier 1k browsing observation remains
+tied to `690fc20`; it is not rerun or presented as a measurement of the selection-only repair.
 
 No runtime API, saved GUID order, settings key or authored ID semantics change. This work does not complete #309's retained-object/cache/recovery or full lifecycle/platform
 criteria, or #306's large-asset/distribution/operation matrices. There is no Unity 2021.3 execution or broad support guarantee, and no release is published.
