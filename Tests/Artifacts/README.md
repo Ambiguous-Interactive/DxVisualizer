@@ -102,3 +102,5 @@ ordinary-SO and BaseDataObject runs to compare one-large-type distributions with
 
 The [catalog keyboard-entry follow-up](catalog-entry-2026-10-25.md) retains root-focus/title-hint regressions and paired synthetic catalog observations with source identity and
 limits.
+
+The [changed-row binding follow-up](row-refresh-2026-10-25.md) retains a bounded component probe and hosted ordering/filtering regressions, with explicit synthetic-list limits.

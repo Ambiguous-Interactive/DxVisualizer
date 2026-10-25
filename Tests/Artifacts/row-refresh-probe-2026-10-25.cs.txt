@@ -1,0 +1,70 @@
+var windowType = typeof(WallstopStudios.DataVisualizer.Editor.DataVisualizer);
+var tests = typeof(WallstopStudios.DataVisualizer.Tests.Editor.VirtualizedTypeCatalogTests).Assembly;
+var identityType = tests.GetType("WallstopStudios.DataVisualizer.Tests.Editor.BenchmarkCodeIdentity", true);
+var identity = System.Activator.CreateInstance(identityType, new object[] { windowType.Assembly, "Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/DataVisualizer.cs" });
+identityType.GetMethod("Verify").Invoke(identity, null);
+var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+var instanceField = windowType.GetField("Instance", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+object previousInstance = instanceField.GetValue(null);
+var owned = new System.Collections.Generic.List<UnityEngine.Object>();
+int windowsBefore = UnityEngine.Resources.FindObjectsOfTypeAll<UnityEditor.EditorWindow>().Length;
+var cleanup = new WallstopStudios.DataVisualizer.Editor.Utilities.ReusableDisposalScope<System.Action>(action => action());
+using var lifetime = cleanup.Acquire(() =>
+{
+    foreach (var item in owned) { if (item != null) { UnityEngine.Object.DestroyImmediate(item); } }
+    instanceField.SetValue(null, previousInstance);
+});
+var window = UnityEngine.ScriptableObject.CreateInstance<WallstopStudios.DataVisualizer.Editor.DataVisualizer>();
+owned.Add(window);
+var fixtureType = tests.GetType("WallstopStudios.DataVisualizer.Tests.Editor.TestDataObject", true);
+var filler = UnityEngine.ScriptableObject.CreateInstance(fixtureType);
+owned.Add(filler);
+var target = UnityEngine.ScriptableObject.CreateInstance(fixtureType);
+owned.Add(target);
+filler.name = "Filler";
+target.name = "Changed row";
+var filtered = (System.Collections.Generic.List<UnityEngine.ScriptableObject>)windowType.GetField("_filteredObjects", flags).GetValue(window);
+var selected = (System.Collections.Generic.List<UnityEngine.ScriptableObject>)windowType.GetField("_selectedObjects", flags).GetValue(window);
+var row = window.MakeObjectRow();
+var method = windowType.GetMethod("BindObjectRow", flags);
+bool indexed = method.GetParameters().Length == 3;
+System.Action rebind;
+if (indexed)
+{
+    var bind = (System.Action<UnityEngine.UIElements.VisualElement, UnityEngine.ScriptableObject, int>)System.Delegate.CreateDelegate(typeof(System.Action<UnityEngine.UIElements.VisualElement, UnityEngine.ScriptableObject, int>), window, method);
+    rebind = () => bind(row, target, filtered.IndexOf(target));
+}
+else
+{
+    var bind = (System.Action<UnityEngine.UIElements.VisualElement, UnityEngine.ScriptableObject>)System.Delegate.CreateDelegate(typeof(System.Action<UnityEngine.UIElements.VisualElement, UnityEngine.ScriptableObject>), window, method);
+    rebind = () => bind(row, target);
+}
+var samples = new System.Collections.Generic.List<object>();
+var budget = System.Diagnostics.Stopwatch.StartNew();
+foreach (int count in new[] { 1000, 10000, 100000 })
+{
+    filtered.Clear();
+    selected.Clear();
+    for (int index = 1; index < count; index++) { filtered.Add(filler); }
+    filtered.Add(target);
+    selected.AddRange(filtered);
+    for (int repetition = -5; repetition < 30; repetition++)
+    {
+        if (30 < budget.Elapsed.TotalSeconds) { throw new System.TimeoutException("Thirty-second component probe limit"); }
+        long start = System.Diagnostics.Stopwatch.GetTimestamp();
+        for (int call = 0; call < 10; call++) { rebind(); }
+        double milliseconds = (System.Diagnostics.Stopwatch.GetTimestamp() - start) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        if (0 <= repetition) { samples.Add(new { count, repetition, calls = 10, milliseconds }); }
+    }
+}
+identityType.GetMethod("Verify").Invoke(identity, null);
+lifetime.Dispose();
+int windowsAfter = UnityEngine.Resources.FindObjectsOfTypeAll<UnityEditor.EditorWindow>().Length;
+if (windowsBefore != windowsAfter) { throw new System.InvalidOperationException("Window wrapper cleanup failed"); }
+return Newtonsoft.Json.JsonConvert.SerializeObject(new
+{
+    complete = true, unity = UnityEngine.Application.unityVersion, platform = UnityEngine.SystemInfo.operatingSystem,
+    source = identityType.GetProperty("SourceSha256").GetValue(identity), module = identityType.GetProperty("LoadedModuleId").GetValue(identity),
+    scope = "Synchronous production row binding with the old caller's IndexOf or new endpoint path; unhosted visual row, repeated filler references and one final target; two transient ScriptableObjects, no assets or whole refresh measured",
+    indexed, windowsBefore, windowsAfter, timeoutSeconds = 30, warmups = 5, samplesPerCondition = 30, samples
+});
