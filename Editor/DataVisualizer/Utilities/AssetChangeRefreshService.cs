@@ -92,16 +92,27 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
             int added = 0;
             for (int index = 0; index < paths.Count; index++)
             {
-                string path = paths[index];
-                if (path?.EndsWith(".asset", StringComparison.OrdinalIgnoreCase) == true && _pendingPaths.Add(path))
+                if (AddPendingPath(paths[index]))
                 {
-                    _pending.Enqueue(path);
                     added++;
                 }
             }
 
-            Transition();
+            if (0 < added)
+            {
+                Transition();
+            }
             return added;
+        }
+
+        public bool EnqueuePath(string path)
+        {
+            if (_disposed || !AddPendingPath(path))
+            {
+                return false;
+            }
+            Transition();
+            return true;
         }
 
         // Capture callback arrays without scanning paths on Unity's import callback.
@@ -118,7 +129,7 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
 
         public bool EnqueueGuid(string guid)
         {
-            return !_disposed && !string.IsNullOrEmpty(guid) && _pathByGuid.TryGetValue(guid, out string path) && 0 < Enqueue(new[] { path });
+            return !_disposed && !string.IsNullOrEmpty(guid) && _pathByGuid.TryGetValue(guid, out string path) && EnqueuePath(path);
         }
 
         public int ProcessSlice(double budgetMilliseconds = 4)
@@ -137,10 +148,7 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
             Stopwatch clock = Stopwatch.StartNew();
             while (_incomingPaths.TryDequeue(out string incoming))
             {
-                if (incoming?.EndsWith(".asset", StringComparison.OrdinalIgnoreCase) == true && _pendingPaths.Add(incoming))
-                {
-                    _pending.Enqueue(incoming);
-                }
+                AddPendingPath(incoming);
                 if (budgetMilliseconds <= clock.Elapsed.TotalMilliseconds)
                 {
                     LongestSliceMilliseconds = Math.Max(LongestSliceMilliseconds, clock.Elapsed.TotalMilliseconds);
@@ -173,7 +181,7 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
                         Track(currentPath, knownGuid);
                         if (!string.Equals(currentPath, path, StringComparison.Ordinal))
                         {
-                            Enqueue(new[] { path });
+                            EnqueuePath(path);
                         }
                     }
                     else
@@ -192,7 +200,7 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
                     if (_suspended)
                     {
                         // A replacement still needs publication after its removal callback paused work.
-                        Enqueue(new[] { path });
+                        EnqueuePath(path);
                     }
                     else
                     {
@@ -200,7 +208,7 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
                         if (!string.Equals(currentPath, path, StringComparison.Ordinal))
                         {
                             // The old path can now contain a different newly imported asset.
-                            Enqueue(new[] { path });
+                            EnqueuePath(path);
                         }
 
                         if (published.Add(guid))
@@ -237,6 +245,16 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
             _guidByPath.Clear();
             _pathByGuid.Clear();
             Transition();
+        }
+
+        private bool AddPendingPath(string path)
+        {
+            if (path?.EndsWith(".asset", StringComparison.OrdinalIgnoreCase) != true || !_pendingPaths.Add(path))
+            {
+                return false;
+            }
+            _pending.Enqueue(path);
+            return true;
         }
 
         private void CompleteSlice()

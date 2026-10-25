@@ -2297,7 +2297,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                 {
                     _assetChanges.Track(change.Path, change.PreviousGuid);
                 }
-                _assetChanges.Enqueue(new[] { change.Path });
+                _assetChanges.EnqueuePath(change.Path);
             }
         }
 

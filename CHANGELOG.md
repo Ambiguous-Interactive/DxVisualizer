@@ -32,7 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Fix catalog arrow moves resetting after reopening the window. Preserve namespace and type order in user and project state (#324).
 - Fix script-folder scans adding unsupported types. Add only eligible ScriptableObject types without creating instances (#376).
 - Fix browser refreshes stalling asset imports. Update only changed visible rows, ignore unrelated edits, preserve missing-script selection, clear deleted references, and pause or
-  stop refreshes with their owner (#308).
+  stop refreshes with their owner. Coalesce repeated notifications (#308).
 
 ### Changed
 
