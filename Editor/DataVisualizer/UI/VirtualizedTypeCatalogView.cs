@@ -546,25 +546,30 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                     return;
                 }
                 CatalogEntry entry = (CatalogEntry)row.userData;
-                if (evt.keyCode == Input.CancelDragKey && _pressed.HasValue)
+                if (CatalogInputSettings.MatchesKey(evt.keyCode, Input.CancelDragKey) && _pressed.HasValue)
                 {
                     row.ReleasePointer(_pressedPointerId);
                 }
-                else if (entry.IsNamespace && (evt.keyCode == Input.PreviousTypeKey || evt.keyCode == Input.NextTypeKey))
+                else if (
+                    entry.IsNamespace && (CatalogInputSettings.MatchesKey(evt.keyCode, Input.PreviousTypeKey) || CatalogInputSettings.MatchesKey(evt.keyCode, Input.NextTypeKey))
+                )
                 {
-                    FocusVisibleRow(_rows.IndexOf(entry) + (evt.keyCode == Input.NextTypeKey ? 1 : -1));
+                    FocusVisibleRow(_rows.IndexOf(entry) + (CatalogInputSettings.MatchesKey(evt.keyCode, Input.NextTypeKey) ? 1 : -1));
                 }
-                else if (entry.Type != null && (evt.keyCode == Input.PreviousTypeKey || evt.keyCode == Input.NextTypeKey))
+                else if (
+                    entry.Type != null
+                    && (CatalogInputSettings.MatchesKey(evt.keyCode, Input.PreviousTypeKey) || CatalogInputSettings.MatchesKey(evt.keyCode, Input.NextTypeKey))
+                )
                 {
-                    Type next = Adjacent(entry.Type, evt.keyCode == Input.NextTypeKey);
+                    Type next = Adjacent(entry.Type, CatalogInputSettings.MatchesKey(evt.keyCode, Input.NextTypeKey));
                     if (next != null)
                     {
                         _controller.SelectType(_owner, next);
                     }
                 }
-                else if (entry.Type == null && (evt.keyCode == Input.CollapseKey || evt.keyCode == Input.ExpandKey))
+                else if (entry.Type == null && (CatalogInputSettings.MatchesKey(evt.keyCode, Input.CollapseKey) || CatalogInputSettings.MatchesKey(evt.keyCode, Input.ExpandKey)))
                 {
-                    SetCollapsed(entry.NamespaceKey, evt.keyCode == Input.CollapseKey);
+                    SetCollapsed(entry.NamespaceKey, CatalogInputSettings.MatchesKey(evt.keyCode, Input.CollapseKey));
                 }
                 else if (Input.IsSelectionKey(evt.keyCode))
                 {
@@ -574,16 +579,16 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                     }
                     Activate(entry);
                 }
-                else if (evt.keyCode == Input.FirstRowKey || evt.keyCode == Input.LastRowKey)
+                else if (CatalogInputSettings.MatchesKey(evt.keyCode, Input.FirstRowKey) || CatalogInputSettings.MatchesKey(evt.keyCode, Input.LastRowKey))
                 {
-                    FocusVisibleRow(evt.keyCode == Input.FirstRowKey ? 0 : _rows.Count - 1);
+                    FocusVisibleRow(CatalogInputSettings.MatchesKey(evt.keyCode, Input.FirstRowKey) ? 0 : _rows.Count - 1);
                 }
-                else if (evt.keyCode == Input.PreviousPageKey || evt.keyCode == Input.NextPageKey)
+                else if (CatalogInputSettings.MatchesKey(evt.keyCode, Input.PreviousPageKey) || CatalogInputSettings.MatchesKey(evt.keyCode, Input.NextPageKey))
                 {
                     float viewportHeight = List.Q<ScrollView>()?.contentViewport.layout.height ?? 0;
                     int pageRows = float.IsNaN(viewportHeight) || float.IsInfinity(viewportHeight) ? 1 : Math.Max(1, Mathf.FloorToInt(viewportHeight / List.fixedItemHeight));
                     int index = _rows.IndexOf(entry);
-                    int destination = evt.keyCode == Input.NextPageKey ? Math.Min(_rows.Count - 1, index + pageRows) : Math.Max(0, index - pageRows);
+                    int destination = CatalogInputSettings.MatchesKey(evt.keyCode, Input.NextPageKey) ? Math.Min(_rows.Count - 1, index + pageRows) : Math.Max(0, index - pageRows);
                     FocusVisibleRow(destination);
                 }
                 else

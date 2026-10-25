@@ -47,7 +47,12 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             {
                 return "Unbound";
             }
-            return (actionModifier ? "Ctrl/Cmd+" : string.Empty) + (modifiers == EventModifiers.None ? string.Empty : modifiers + "+") + key;
+            EventModifiers display = modifiers & (EventModifiers.Control | EventModifiers.Command | EventModifiers.Shift | EventModifiers.Alt);
+            if (actionModifier)
+            {
+                display &= ~(EventModifiers.Control | EventModifiers.Command);
+            }
+            return (actionModifier ? "Ctrl/Cmd+" : string.Empty) + (display == EventModifiers.None ? string.Empty : display + "+") + key;
         }
     }
 }

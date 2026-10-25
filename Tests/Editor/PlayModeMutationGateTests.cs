@@ -213,6 +213,53 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 Assert.That(saved[key == KeyCode.Home ? 0 : saved.Count - 1], Is.EqualTo(guid));
                 Assert.That(ReadPrivateField<ScriptableObject>(window, "_selectedObject"), Is.SameAs(selected));
             }
+            DataVisualizerInputProfile profile = ScriptableObject.CreateInstance<DataVisualizerInputProfile>();
+            cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(profile));
+            state.Settings.inputProfile = profile;
+            profile.Bindings.moveFirst = new EditorInputBinding(KeyCode.F7, EventModifiers.Alt);
+            profile.Bindings.moveLast = new EditorInputBinding(KeyCode.F8, EventModifiers.Shift);
+            using (
+                KeyDownEvent oldKey = KeyDownEvent.GetPooled(
+                    new Event
+                    {
+                        type = EventType.KeyDown,
+                        keyCode = KeyCode.Home,
+                        modifiers = modifier,
+                    }
+                )
+            )
+            {
+                Assert.That((bool)InvokePrivate(window, "HandleObjectActionShortcut", oldKey), Is.False, "Remapped actions no longer accept the old gesture.");
+            }
+            using (
+                KeyDownEvent remapped = KeyDownEvent.GetPooled(
+                    new Event
+                    {
+                        type = EventType.KeyDown,
+                        keyCode = KeyCode.F7,
+                        modifiers = EventModifiers.Alt,
+                    }
+                )
+            )
+            {
+                Assert.That((bool)InvokePrivate(window, "HandleObjectActionShortcut", remapped));
+                Assert.That(all[0], Is.SameAs(selected));
+            }
+            using (
+                KeyDownEvent remapped = KeyDownEvent.GetPooled(
+                    new Event
+                    {
+                        type = EventType.KeyDown,
+                        keyCode = KeyCode.F8,
+                        modifiers = EventModifiers.Shift,
+                    }
+                )
+            )
+            {
+                Assert.That((bool)InvokePrivate(window, "HandleObjectActionShortcut", remapped));
+                Assert.That(all[all.Count - 1], Is.SameAs(selected));
+            }
+            state.Settings.inputProfile = null;
             all.Remove(selected);
             ScriptableObject[] members = all.ToArray();
             string[] savedBeforeStaleCallback = ((List<string>)InvokePrivate(window, "GetObjectOrderForType", typeof(TestDataObject))).ToArray();
@@ -230,6 +277,9 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 Assert.That(canonical["pending-guid"], Is.Zero);
                 Assert.That((List<string>)InvokePrivate(window, "GetObjectOrderForType", typeof(TestDataObject)), Is.EqualTo(savedBeforeStaleCallback));
             }
+            InvokePrivate(window, "CloneObject", selected);
+            Assert.That(AssetDatabase.FindAssets("", new[] { folder }).Length, Is.EqualTo(3), "Stale clone actions must not add an asset or pollute active rows.");
+            Assert.That(all, Is.EqualTo(members));
             SetPrivateField(window, "_isLoadingObjectsAsync", false);
             all.Add(selected);
             SetPrivateField(window, "_suspendedForPlayMode", true);
@@ -280,6 +330,32 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             InvokePrivate(window, "LoadInitialContent");
             ReadPrivateField<NamespaceController>(window, "_namespaceController").SelectType(window, type);
             yield return WaitForRefresh(window);
+            EditorSurfaceCapture.SettleLayout(window);
+            DataVisualizerThemeSelection labelTheme = new();
+            cleanup.Defer(() => labelTheme.Apply(null, null));
+            foreach (string themeName in new[] { "Dx", "Classic", "Nord", "Dracula", "Compact", "Minimal" })
+            {
+                labelTheme.Apply(
+                    window.rootVisualElement,
+                    AssetDatabase.LoadAssetAtPath<DataVisualizerThemeSettings>("Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/Styles/" + themeName + ".asset")
+                );
+                foreach (float width in new[] { 1180f, 760f })
+                {
+                    window.position = new Rect(40, 40, width, 780);
+                    yield return null;
+                    InvokePrivate(window, "ShowInspectorIfCompact");
+                    EditorSurfaceCapture.SettleLayout(window);
+                    TextField field = window.rootVisualElement.Q<TextField>("inspector-new-label-input");
+                    Button add = window.rootVisualElement.Q<Button>("inspector-add-label-button");
+                    Assert.That(field != null && add != null);
+                    Assert.That(field.worldBound.height, Is.EqualTo(add.worldBound.height).Within(1), themeName + " entry controls share a height.");
+                    Assert.That(field.Q("unity-text-input").worldBound.height, Is.EqualTo(add.worldBound.height).Within(1), themeName + " text input is not a short strip.");
+                    Assert.That(field.worldBound.y, Is.EqualTo(add.worldBound.y).Within(1));
+                    Assert.That(field.worldBound.width, Is.GreaterThan(add.worldBound.width));
+                }
+            }
+            window.position = new Rect(40, 40, 1180, 780);
+            yield return null;
             EditorSurfaceCapture.SettleLayout(window);
             ListView list = ReadPrivateField<ListView>(window, "_objectListView");
             List<ScriptableObject> filtered = ReadPrivateField<List<ScriptableObject>>(window, "_filteredObjects");

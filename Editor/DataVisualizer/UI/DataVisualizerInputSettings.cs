@@ -1,6 +1,7 @@
 namespace WallstopStudios.DataVisualizer.Editor.UI
 {
     using System;
+    using Extensions;
     using UnityEngine;
     using UnityEngine.UIElements;
 
@@ -10,6 +11,8 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
     {
         public CatalogInputSettings Navigation => navigation ??= new CatalogInputSettings();
 
+        public EditorInputBinding nextFocus = new(KeyCode.Tab);
+        public EditorInputBinding previousFocus = new(KeyCode.Tab, EventModifiers.Shift);
         public EditorInputBinding clone = new(KeyCode.D, actionModifier: true);
         public EditorInputBinding rename = new(KeyCode.F2);
         public EditorInputBinding delete = new(KeyCode.Delete);
@@ -23,6 +26,29 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         [SerializeField]
         private CatalogInputSettings navigation = new();
+
+        public bool HandleButton(KeyDownEvent evt, CatalogInputSettings navigation = null)
+        {
+            VisualElement target = evt.target as VisualElement;
+            Button button = target as Button ?? target?.GetFirstAncestorOfType<Button>();
+            if (button == null || !button.enabledInHierarchy)
+            {
+                return false;
+            }
+            if ((navigation ?? Navigation).IsSelectionKey(evt.keyCode))
+            {
+                using NavigationSubmitEvent submit = NavigationSubmitEvent.GetPooled();
+                submit.target = button;
+                button.SendEvent(submit);
+            }
+            else if (!CatalogInputSettings.IsUnitySubmitKey(evt.keyCode))
+            {
+                return false;
+            }
+            evt.PreventDefaultCompat();
+            evt.StopImmediatePropagation();
+            return true;
+        }
 
         public bool IsDelete(IKeyboardEvent evt)
         {

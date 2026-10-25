@@ -10,13 +10,20 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
     {
         public SearchableThemeDropdown Dropdown { get; private set; }
 
+        private readonly Func<DataVisualizerInputSettings> _getInput;
         private readonly DataVisualizerThemeSettings _selectedTheme;
         private readonly Action<DataVisualizerThemeSettings> _onSelect;
         private readonly Action<VisualElement> _loadBaseStyleSheet;
         private readonly DataVisualizerThemeSelection _themeSelection = new();
 
-        public ThemeDropdownPopup(DataVisualizerThemeSettings selectedTheme, Action<DataVisualizerThemeSettings> onSelect, Action<VisualElement> loadBaseStyleSheet)
+        public ThemeDropdownPopup(
+            DataVisualizerThemeSettings selectedTheme,
+            Action<DataVisualizerThemeSettings> onSelect,
+            Action<VisualElement> loadBaseStyleSheet,
+            Func<DataVisualizerInputSettings> getInput = null
+        )
         {
+            _getInput = getInput;
             _selectedTheme = selectedTheme;
             _onSelect = onSelect;
             _loadBaseStyleSheet = loadBaseStyleSheet;
@@ -33,7 +40,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             root.AddToClassList("dataviz-root");
             _loadBaseStyleSheet?.Invoke(root);
             _themeSelection.Apply(root, _selectedTheme);
-            Dropdown = new SearchableThemeDropdown(SearchableThemeDropdown.DiscoverItems(), _selectedTheme, SelectAndClose, Close);
+            Dropdown = new SearchableThemeDropdown(SearchableThemeDropdown.DiscoverItems(), _selectedTheme, SelectAndClose, Close, _getInput);
             root.Add(Dropdown);
             Dropdown.schedule.Execute(() => Dropdown.SearchField.Focus());
         }

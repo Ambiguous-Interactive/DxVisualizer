@@ -16,20 +16,26 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         public ScrollView Results { get; }
         public int HighlightedIndex => _highlightedIndex;
         public string Filter => SearchField.value;
+        public DataVisualizerInputSettings Input => _getInput?.Invoke() ?? _defaults;
 
         private readonly List<ThemeDropdownItem> _filteredItems = new();
         private readonly List<Button> _rows = new();
         private readonly Action<DataVisualizerThemeSettings> _onSelect;
         private readonly Action _onCancel;
+        private readonly DataVisualizerInputSettings _defaults = new();
+        private readonly NativeInputRouter _nativeInput = new();
+        private readonly Func<DataVisualizerInputSettings> _getInput;
         private int _highlightedIndex = -1;
 
         public SearchableThemeDropdown(
             IReadOnlyList<ThemeDropdownItem> items,
             DataVisualizerThemeSettings selectedTheme,
             Action<DataVisualizerThemeSettings> onSelect,
-            Action onCancel = null
+            Action onCancel = null,
+            Func<DataVisualizerInputSettings> getInput = null
         )
         {
+            _getInput = getInput;
             if (items == null)
             {
                 throw new ArgumentNullException(nameof(items));
@@ -60,6 +66,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             Add(Results);
             SearchField.RegisterValueChangedCallback(evt => SetFilter(evt.newValue));
             RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
+
             SetFilter(string.Empty);
             for (int i = 0; i < _filteredItems.Count; ++i)
             {
@@ -215,19 +222,27 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         private void OnKeyDown(KeyDownEvent evt)
         {
+            if (_nativeInput.IsRouting)
+            {
+                return;
+            }
+            if (_nativeInput.HandleFocusOrButton(evt, Input))
+            {
+                return;
+            }
             switch (evt.keyCode)
             {
-                case KeyCode.DownArrow:
+                case var configuredKey1 when CatalogInputSettings.MatchesKey(configuredKey1, Input.Navigation.NextTypeKey):
                     MoveHighlight(1);
                     break;
-                case KeyCode.UpArrow:
+                case var configuredKey2 when CatalogInputSettings.MatchesKey(configuredKey2, Input.Navigation.PreviousTypeKey):
                     MoveHighlight(-1);
                     break;
-                case KeyCode.Return:
-                case KeyCode.KeypadEnter:
+                case var configuredKey3 when CatalogInputSettings.MatchesKey(configuredKey3, Input.Navigation.SelectKey):
+                case var configuredKey4 when CatalogInputSettings.MatchesKey(configuredKey4, Input.Navigation.AlternateSelectKey):
                     SelectHighlighted();
                     break;
-                case KeyCode.Escape:
+                case var configuredKey5 when CatalogInputSettings.MatchesKey(configuredKey5, Input.Navigation.CancelDragKey):
                     Cancel();
                     break;
                 default:

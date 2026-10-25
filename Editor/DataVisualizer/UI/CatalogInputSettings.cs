@@ -11,7 +11,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         public const float DefaultDragThresholdPoints = 6f;
         public float DragThresholdPoints
         {
-            get => dragThresholdPoints;
+            get => float.IsNaN(dragThresholdPoints) || float.IsInfinity(dragThresholdPoints) ? DefaultDragThresholdPoints : Math.Max(0, dragThresholdPoints);
             set
             {
                 if (value < 0 || float.IsNaN(value) || float.IsInfinity(value))
@@ -37,9 +37,63 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         public int PointerButton;
 
         [SerializeField]
+        [Min(0)]
         private float dragThresholdPoints = DefaultDragThresholdPoints;
 
+        public static bool IsUnitySubmitKey(KeyCode key) => key is KeyCode.Return or KeyCode.KeypadEnter or KeyCode.Space;
+
         public static bool MatchesKey(KeyCode actual, KeyCode configured) => configured != KeyCode.None && actual == configured;
+
+        public static bool IsNativeNavigationKey(KeyCode key)
+        {
+            return key
+                is KeyCode.UpArrow
+                    or KeyCode.DownArrow
+                    or KeyCode.Home
+                    or KeyCode.End
+                    or KeyCode.PageUp
+                    or KeyCode.PageDown
+                    or KeyCode.Space
+                    or KeyCode.Return
+                    or KeyCode.KeypadEnter;
+        }
+
+        public KeyCode ToNativeKey(KeyCode key)
+        {
+            if (MatchesKey(key, PreviousTypeKey))
+            {
+                return KeyCode.UpArrow;
+            }
+            if (MatchesKey(key, NextTypeKey))
+            {
+                return KeyCode.DownArrow;
+            }
+            if (IsConfirmKey(key))
+            {
+                return KeyCode.Return;
+            }
+            if (MatchesKey(key, ToggleKey))
+            {
+                return KeyCode.Space;
+            }
+            if (MatchesKey(key, FirstRowKey))
+            {
+                return KeyCode.Home;
+            }
+            if (MatchesKey(key, LastRowKey))
+            {
+                return KeyCode.End;
+            }
+            if (MatchesKey(key, PreviousPageKey))
+            {
+                return KeyCode.PageUp;
+            }
+            if (MatchesKey(key, NextPageKey))
+            {
+                return KeyCode.PageDown;
+            }
+            return KeyCode.None;
+        }
 
         public bool IsConfirmKey(KeyCode key) => MatchesKey(key, SelectKey) || MatchesKey(key, AlternateSelectKey);
 
@@ -50,6 +104,6 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         public bool IsSelectionKey(KeyCode key) => IsConfirmKey(key) || MatchesKey(key, ToggleKey);
 
-        public bool HasPassedDragThreshold(Vector2 start, Vector2 current) => dragThresholdPoints * dragThresholdPoints < (current - start).sqrMagnitude;
+        public bool HasPassedDragThreshold(Vector2 start, Vector2 current) => DragThresholdPoints * DragThresholdPoints < (current - start).sqrMagnitude;
     }
 }

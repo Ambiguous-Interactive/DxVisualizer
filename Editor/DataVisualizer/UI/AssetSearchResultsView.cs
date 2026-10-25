@@ -12,16 +12,20 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
     {
         public ListView ResultsList { get; }
         public int ResultCount => _hits.Count;
+        public DataVisualizerInputSettings Input => _getInput?.Invoke() ?? _defaults;
 
         private readonly List<(AssetSearchDocument Document, SearchResultMatchInfo Match)> _hits = new();
         private readonly Action<AssetSearchDocument> _navigate;
         private readonly Action _close;
+        private readonly DataVisualizerInputSettings _defaults = new();
+        private readonly Func<DataVisualizerInputSettings> _getInput;
         private readonly Label _status;
         private IReadOnlyList<(AssetSearchDocument Document, SearchResultMatchInfo Match)> _source;
         private string _preferredSelectionGuid;
 
-        public AssetSearchResultsView(Action<AssetSearchDocument> navigate, Action back, Action close)
+        public AssetSearchResultsView(Action<AssetSearchDocument> navigate, Action back, Action close, Func<DataVisualizerInputSettings> getInput = null)
         {
+            _getInput = getInput;
             _navigate = navigate ?? throw new ArgumentNullException(nameof(navigate));
             _close = close ?? throw new ArgumentNullException(nameof(close));
             name = "all-search-results";
@@ -127,7 +131,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         public bool HandleNavigation(KeyCode key)
         {
-            if (key == KeyCode.Escape)
+            if (CatalogInputSettings.MatchesKey(key, Input.Navigation.CancelDragKey))
             {
                 _close();
                 return true;
@@ -137,14 +141,18 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                 return false;
             }
             int selected = ResultsList.selectedIndex;
-            if (key == KeyCode.DownArrow || key == KeyCode.UpArrow)
+            if (CatalogInputSettings.MatchesKey(key, Input.Navigation.NextTypeKey) || CatalogInputSettings.MatchesKey(key, Input.Navigation.PreviousTypeKey))
             {
-                selected = key == KeyCode.DownArrow ? (selected + 1) % _hits.Count : (selected <= 0 ? _hits.Count - 1 : selected - 1);
+                selected = CatalogInputSettings.MatchesKey(key, Input.Navigation.NextTypeKey) ? (selected + 1) % _hits.Count : (selected <= 0 ? _hits.Count - 1 : selected - 1);
                 ResultsList.selectedIndex = selected;
                 ResultsList.ScrollToItem(selected);
                 return true;
             }
-            if ((key == KeyCode.Return || key == KeyCode.KeypadEnter) && 0 <= selected && selected < _hits.Count)
+            if (
+                (CatalogInputSettings.MatchesKey(key, Input.Navigation.SelectKey) || CatalogInputSettings.MatchesKey(key, Input.Navigation.AlternateSelectKey))
+                && 0 <= selected
+                && selected < _hits.Count
+            )
             {
                 _navigate(_hits[selected].Document);
                 return true;
@@ -200,7 +208,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             row.Add(context);
             row.RegisterCallback<PointerDownEvent>(evt =>
             {
-                if (evt.button == 0 && row.panel != null && row.userData is AssetSearchDocument document)
+                if (evt.button == Input.Navigation.PointerButton && row.panel != null && row.userData is AssetSearchDocument document)
                 {
                     _navigate(document);
                     evt.StopPropagation();

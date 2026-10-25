@@ -421,6 +421,7 @@ namespace WallstopStudios.DataVisualizer.Editor
         private float? _lastSettingsClicked;
         private float? _lastEnterPressed;
         private readonly DataVisualizerInputSettings _defaultInput = new();
+        private readonly NativeInputRouter _nativeInput = new();
         private AssetChangeRefreshService _assetChanges;
         private AssetObjectCache _assetObjectCache;
         private readonly AssetLabelUsage _selectedLabelUsage = new();
@@ -1630,7 +1631,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                     IDataProcessor localProcessor = processor;
                     processorButton.RegisterCallback<PointerDownEvent>(evt =>
                     {
-                        if (evt.button != 0)
+                        if (evt.button != Input.Navigation.PointerButton)
                         {
                             return;
                         }
@@ -2963,7 +2964,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             _processorToggleCollapseButton.AddToClassList(StyleConstants.ClickableClass);
             _processorToggleCollapseButton.RegisterCallback<PointerDownEvent>(evt =>
             {
-                if (evt.button != 0)
+                if (evt.button != Input.Navigation.PointerButton)
                 {
                     return;
                 }
@@ -3144,7 +3145,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                 return;
             }
             if (
-                (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
+                (CatalogInputSettings.MatchesKey(evt.keyCode, Input.Navigation.SelectKey) || CatalogInputSettings.MatchesKey(evt.keyCode, Input.Navigation.AlternateSelectKey))
                 && evt.target is VisualElement keyTarget
                 && (keyTarget is Button || keyTarget.GetFirstAncestorOfType<Button>() != null)
             )
@@ -3157,7 +3158,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                 evt.StopPropagation();
                 return;
             }
-            if (_currentSearchResultItems.Count == 0 && evt.keyCode != KeyCode.Escape)
+            if (_currentSearchResultItems.Count == 0 && !CatalogInputSettings.MatchesKey(evt.keyCode, Input.Navigation.CancelDragKey))
             {
                 return;
             }
@@ -3166,7 +3167,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
             switch (evt.keyCode)
             {
-                case KeyCode.DownArrow:
+                case var configuredKey1 when CatalogInputSettings.MatchesKey(configuredKey1, Input.Navigation.NextTypeKey):
                 {
                     _searchHighlightIndex++;
                     if (_currentSearchResultItems.Count <= _searchHighlightIndex)
@@ -3177,7 +3178,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                     highlightChanged = true;
                     break;
                 }
-                case KeyCode.UpArrow:
+                case var configuredKey2 when CatalogInputSettings.MatchesKey(configuredKey2, Input.Navigation.PreviousTypeKey):
                 {
                     _searchHighlightIndex--;
                     if (_searchHighlightIndex < 0)
@@ -3188,8 +3189,8 @@ namespace WallstopStudios.DataVisualizer.Editor
                     highlightChanged = true;
                     break;
                 }
-                case KeyCode.Return:
-                case KeyCode.KeypadEnter:
+                case var configuredKey3 when CatalogInputSettings.MatchesKey(configuredKey3, Input.Navigation.SelectKey):
+                case var configuredKey4 when CatalogInputSettings.MatchesKey(configuredKey4, Input.Navigation.AlternateSelectKey):
                 {
                     if (0 <= _searchHighlightIndex && _searchHighlightIndex < _currentSearchResultItems.Count)
                     {
@@ -3204,7 +3205,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
                     break;
                 }
-                case KeyCode.Escape:
+                case var configuredKey5 when CatalogInputSettings.MatchesKey(configuredKey5, Input.Navigation.CancelDragKey):
                 {
                     CloseActivePopover();
                     evt.PreventDefaultCompat();
@@ -3537,7 +3538,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                     // ReSharper disable once HeapView.CanAvoidClosure
                     resultItem.RegisterCallback<PointerDownEvent>(evt =>
                     {
-                        if (evt.button != 0 || resultItem.userData is not AssetSearchDocument clickedDocument)
+                        if (evt.button != Input.Navigation.PointerButton || resultItem.userData is not AssetSearchDocument clickedDocument)
                         {
                             return;
                         }
@@ -3681,7 +3682,8 @@ namespace WallstopStudios.DataVisualizer.Editor
                         PerformSearch(_searchField.value);
                         _searchField.Focus();
                     },
-                    CloseActivePopover
+                    CloseActivePopover,
+                    () => Input
                 );
                 _searchPopover.Add(_allSearchResultsView);
             }
@@ -3802,7 +3804,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                 return;
             }
 
-            if (evt.button == 0)
+            if (evt.button == Input.Navigation.PointerButton)
             {
                 _isDraggingPopover = true;
                 _popoverDragStartMousePos = evt.position;
@@ -4072,9 +4074,17 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         private void HandleGlobalKeyDown(KeyDownEvent evt)
         {
+            if (_nativeInput.IsRouting || _objectSelectionInput?.IsRouting == true)
+            {
+                return;
+            }
+            if (_nativeInput.HandleFocusOrButton(evt, Input))
+            {
+                return;
+            }
             if (_assetToolPanel != null)
             {
-                if (evt.keyCode == KeyCode.Escape)
+                if (CatalogInputSettings.MatchesKey(evt.keyCode, Input.Navigation.CancelDragKey))
                 {
                     CloseAssetTool();
                     evt.StopPropagation();
@@ -4093,17 +4103,17 @@ namespace WallstopStudios.DataVisualizer.Editor
             {
                 switch (evt.keyCode)
                 {
-                    case KeyCode.Escape:
+                    case var configuredKey6 when CatalogInputSettings.MatchesKey(configuredKey6, Input.Navigation.CancelDragKey):
                     {
                         CloseActivePopover();
                         evt.PreventDefaultCompat();
                         evt.StopPropagation();
                         return;
                     }
-                    case KeyCode.DownArrow:
-                    case KeyCode.UpArrow:
-                    case KeyCode.Return:
-                    case KeyCode.KeypadEnter:
+                    case var configuredKey7 when CatalogInputSettings.MatchesKey(configuredKey7, Input.Navigation.NextTypeKey):
+                    case var configuredKey8 when CatalogInputSettings.MatchesKey(configuredKey8, Input.Navigation.PreviousTypeKey):
+                    case var configuredKey9 when CatalogInputSettings.MatchesKey(configuredKey9, Input.Navigation.SelectKey):
+                    case var configuredKey10 when CatalogInputSettings.MatchesKey(configuredKey10, Input.Navigation.AlternateSelectKey):
                     {
                         if (_lastActiveFocusArea == FocusArea.SearchResultsPopover)
                         {
@@ -4119,7 +4129,10 @@ namespace WallstopStudios.DataVisualizer.Editor
                             return;
                         }
 
-                        if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
+                        if (
+                            CatalogInputSettings.MatchesKey(evt.keyCode, Input.Navigation.SelectKey)
+                            || CatalogInputSettings.MatchesKey(evt.keyCode, Input.Navigation.AlternateSelectKey)
+                        )
                         {
                             Button primaryButton = FindPopoverPrimaryAction(activePopover);
 
@@ -4133,7 +4146,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                     }
                 }
 
-                if (evt.keyCode == KeyCode.DownArrow || evt.keyCode == KeyCode.UpArrow)
+                if (CatalogInputSettings.MatchesKey(evt.keyCode, Input.Navigation.NextTypeKey) || CatalogInputSettings.MatchesKey(evt.keyCode, Input.Navigation.PreviousTypeKey))
                 {
                     evt.PreventDefaultCompat();
                     evt.StopPropagation();
@@ -4167,7 +4180,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
             switch (evt.keyCode)
             {
-                case KeyCode.DownArrow:
+                case var configuredKey11 when CatalogInputSettings.MatchesKey(configuredKey11, Input.Navigation.NextTypeKey):
                 {
                     bool navigationHandled = false;
                     switch (_lastActiveFocusArea)
@@ -4188,7 +4201,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
                     break;
                 }
-                case KeyCode.UpArrow:
+                case var configuredKey12 when CatalogInputSettings.MatchesKey(configuredKey12, Input.Navigation.PreviousTypeKey):
                 {
                     bool navigationHandled = false;
                     switch (_lastActiveFocusArea)
@@ -4218,47 +4231,38 @@ namespace WallstopStudios.DataVisualizer.Editor
             {
                 return false;
             }
-
-            if (evt.keyCode == KeyCode.D && (evt.ctrlKey || evt.commandKey))
+            if (Input.clone.Matches(evt))
             {
                 CloneObject(_selectedObject);
                 return true;
             }
-
-            if ((evt.ctrlKey || evt.commandKey) && !evt.altKey && !evt.shiftKey && (evt.keyCode == KeyCode.Home || evt.keyCode == KeyCode.End))
+            if (Input.moveFirst.Matches(evt))
             {
-                if (evt.keyCode == KeyCode.Home)
-                {
-                    MoveObjectToTop(_selectedObject);
-                }
-                else
-                {
-                    MoveObjectToBottom(_selectedObject);
-                }
+                MoveObjectToTop(_selectedObject);
                 return true;
             }
-
+            if (Input.moveLast.Matches(evt))
+            {
+                MoveObjectToBottom(_selectedObject);
+                return true;
+            }
             VisualElement row = _objectListView?.Q<VisualElement>($"object-item-row-{_selectedObject.GetObjectIdString()}");
             VisualElement anchor = row?.Q<Button>("object-actions-button") ?? (VisualElement)_objectListView ?? _objectColumnElement;
             if (anchor == null)
             {
                 return false;
             }
-
-            bool contextMenuRequested = evt.keyCode == KeyCode.Menu || (evt.keyCode == KeyCode.F10 && evt.shiftKey);
-            if (contextMenuRequested && !evt.altKey && !evt.ctrlKey && !evt.commandKey)
+            if (Input.actions.Matches(evt) || Input.alternateActions.Matches(evt))
             {
                 ShowObjectActionsMenu(_selectedObject, anchor, row?.Q<Label>("object-item-label"));
                 return true;
             }
-
-            if (evt.keyCode == KeyCode.F2)
+            if (Input.rename.Matches(evt))
             {
                 OpenRenamePopover(row?.Q<Label>("object-item-label"), anchor, _selectedObject);
                 return true;
             }
-            bool deleteRequested = evt.keyCode == KeyCode.Delete || (Application.platform == RuntimePlatform.OSXEditor && evt.keyCode == KeyCode.Backspace);
-            if (deleteRequested)
+            if (Input.IsDelete(evt))
             {
                 OpenConfirmDeletePopover(anchor, _selectedObject);
                 return true;
@@ -4276,16 +4280,16 @@ namespace WallstopStudios.DataVisualizer.Editor
 
             switch (evt.keyCode)
             {
-                case KeyCode.Escape:
+                case var configuredKey13 when CatalogInputSettings.MatchesKey(configuredKey13, Input.Navigation.CancelDragKey):
                 {
                     CloseActivePopover();
                     evt.PreventDefaultCompat();
                     evt.StopPropagation();
                     return;
                 }
-                case KeyCode.None when evt.character is '\n' or '\r':
-                case KeyCode.Return:
-                case KeyCode.KeypadEnter:
+                case var rawKey when Input.Navigation.IsConfirmCharacter(rawKey, evt.character):
+                case var configuredKey14 when CatalogInputSettings.MatchesKey(configuredKey14, Input.Navigation.SelectKey):
+                case var configuredKey15 when CatalogInputSettings.MatchesKey(configuredKey15, Input.Navigation.AlternateSelectKey):
                 {
                     Button primaryButton = FindPopoverPrimaryAction(activePopover);
 
@@ -4586,7 +4590,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                     return;
                 }
 
-                UnityEditor.PopupWindow.Show(anchor, new ThemeDropdownPopup(GetSelectedTheme(), SelectTheme, LoadStyleSheetIfAvailable));
+                UnityEditor.PopupWindow.Show(anchor, new ThemeDropdownPopup(GetSelectedTheme(), SelectTheme, LoadStyleSheetIfAvailable, () => Input));
             };
             themeField.AddToClassList(StyleConstants.ThemeFieldClass);
             themeField.AddToClassList(StyleConstants.ClickableClass);
@@ -5258,8 +5262,8 @@ namespace WallstopStudios.DataVisualizer.Editor
             menu.AddItem(new GUIContent("Rename", "Rename this asset"), false, () => OpenRenamePopover(titleLabel, anchor, dataObject));
             menu.AddItem(new GUIContent("Move", "Move this asset to another folder"), false, () => MoveObjectToFolder(dataObject));
             menu.AddSeparator(string.Empty);
-            menu.AddItem(new GUIContent("Move to top", "Place this asset first (Ctrl/Cmd+Home)"), false, () => MoveObjectToTop(dataObject));
-            menu.AddItem(new GUIContent("Move to bottom", "Place this asset last (Ctrl/Cmd+End)"), false, () => MoveObjectToBottom(dataObject));
+            menu.AddItem(new GUIContent("Move to top", $"Place this asset first ({Input.moveFirst})"), false, () => MoveObjectToTop(dataObject));
+            menu.AddItem(new GUIContent("Move to bottom", $"Place this asset last ({Input.moveLast})"), false, () => MoveObjectToBottom(dataObject));
             menu.AddSeparator(string.Empty);
             menu.AddItem(new GUIContent("Delete", "Ask for confirmation before deleting this asset"), false, () => OpenConfirmDeletePopover(anchor, dataObject));
             menu.DropDown(anchor.worldBound);
@@ -5466,7 +5470,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                             // ReSharper disable once HeapView.CanAvoidClosure
                             namespaceLabel.RegisterCallback<PointerDownEvent>(evt =>
                             {
-                                if (evt.button != 0)
+                                if (evt.button != Input.Navigation.PointerButton)
                                 {
                                     return;
                                 }
@@ -5509,7 +5513,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
                         void ExpandNamespace(PointerDownEvent evt)
                         {
-                            if (evt != null && evt.button != 0)
+                            if (evt != null && evt.button != Input.Navigation.PointerButton)
                             {
                                 return;
                             }
@@ -5594,7 +5598,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
             switch (evt.keyCode)
             {
-                case KeyCode.DownArrow:
+                case var configuredKey16 when CatalogInputSettings.MatchesKey(configuredKey16, Input.Navigation.NextTypeKey):
                 {
                     _typePopoverHighlightIndex++;
                     if (_currentTypePopoverItems.Count <= _typePopoverHighlightIndex)
@@ -5605,7 +5609,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                     highlightChanged = true;
                     break;
                 }
-                case KeyCode.UpArrow:
+                case var configuredKey17 when CatalogInputSettings.MatchesKey(configuredKey17, Input.Navigation.PreviousTypeKey):
                 {
                     _typePopoverHighlightIndex--;
                     if (_typePopoverHighlightIndex < 0)
@@ -5616,8 +5620,8 @@ namespace WallstopStudios.DataVisualizer.Editor
                     highlightChanged = true;
                     break;
                 }
-                case KeyCode.Return:
-                case KeyCode.KeypadEnter:
+                case var configuredKey18 when CatalogInputSettings.MatchesKey(configuredKey18, Input.Navigation.SelectKey):
+                case var configuredKey19 when CatalogInputSettings.MatchesKey(configuredKey19, Input.Navigation.AlternateSelectKey):
                 {
                     if (0 <= _typePopoverHighlightIndex && _typePopoverHighlightIndex < _currentTypePopoverItems.Count)
                     {
@@ -5629,7 +5633,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
                     break;
                 }
-                case KeyCode.Escape:
+                case var configuredKey20 when CatalogInputSettings.MatchesKey(configuredKey20, Input.Navigation.CancelDragKey):
                 {
                     CloseActivePopover();
                     evt.PreventDefaultCompat();
@@ -5829,7 +5833,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             _labelCollapseToggle.AddToClassList("collapse-toggle");
             _labelCollapseToggle.RegisterCallback<PointerDownEvent>(evt =>
             {
-                if (evt.button != 0)
+                if (evt.button != Input.Navigation.PointerButton)
                 {
                     return;
                 }
@@ -6025,7 +6029,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             };
             _objectListView.AddToClassList("object-scrollview");
             _objectSelectionInput?.Dispose();
-            _objectSelectionInput = new ObjectListSelectionInput(_objectListView, rootVisualElement);
+            _objectSelectionInput = new ObjectListSelectionInput(_objectListView, rootVisualElement, () => Input);
             _objectListView.RegisterSelectionChangedCompat(OnObjectListSelectionChanged);
             _objectListView.itemIndexChanged += OnObjectListItemReordered;
             objectColumn.Add(_objectListView);
@@ -6410,8 +6414,14 @@ namespace WallstopStudios.DataVisualizer.Editor
             {
                 name = "object-actions-button",
                 text = "Actions",
-                tooltip = "Clone (Ctrl/Cmd+D), Rename (F2), Move, Order (Ctrl/Cmd+Home/End), or Delete. Shift+F10 opens selected asset Actions.",
+                tooltip = Input.AssetActionHint(),
             };
+            actionsButton.RegisterCallback<TooltipEvent>(evt =>
+            {
+                evt.tooltip = Input.AssetActionHint();
+                evt.rect = actionsButton.worldBound;
+                evt.StopPropagation();
+            });
             ProtectObjectRowAction(actionsButton);
             actionsButton.AddToClassList(StyleConstants.ObjectActionsButtonClass);
             actionsButton.AddToClassList(StyleConstants.ClickableClass);
@@ -6990,7 +7000,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                 return;
             }
 
-            if (evt.button == 0)
+            if (evt.button == Input.Navigation.PointerButton)
             {
                 _draggedElement = targetElement;
                 _draggedData = namespaceKey;
@@ -7011,7 +7021,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                 return;
             }
 
-            if (evt.button == 0)
+            if (evt.button == Input.Navigation.PointerButton)
             {
                 _lastActiveFocusArea = FocusArea.TypeList;
                 _draggedElement = targetElement;
@@ -7349,7 +7359,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                 {
                     return;
                 }
-                if (evt.button == 0)
+                if (evt.button == Input.Navigation.PointerButton)
                 {
                     _draggedLabelText = labelText;
                     _dragSourceSection = currentSection;
@@ -8384,7 +8394,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                     suggestionItem.userData = suggestionText;
                     suggestionItem.RegisterCallback<PointerUpEvent>(evt =>
                     {
-                        if (evt.button == 0 && suggestionItem.userData is string clickedSuggestion)
+                        if (evt.button == Input.Navigation.PointerButton && suggestionItem.userData is string clickedSuggestion)
                         {
                             _inspectorNewLabelInput.SetValueWithoutNotify(clickedSuggestion);
                             _inspectorNewLabelInput.Focus();
@@ -8411,7 +8421,7 @@ namespace WallstopStudios.DataVisualizer.Editor
         {
             if (_activePopover != _inspectorLabelSuggestionsPopover || _currentLabelSuggestionItems.Count == 0)
             {
-                if (evt.keyCode is KeyCode.Return or KeyCode.KeypadEnter)
+                if (Input.Navigation.IsConfirmKey(evt.keyCode))
                 {
                     AddLabelToSelectedAsset();
                     evt.PreventDefaultCompat();
@@ -8423,7 +8433,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             bool highlightChanged = false;
             switch (evt.keyCode)
             {
-                case KeyCode.DownArrow:
+                case var configuredKey21 when CatalogInputSettings.MatchesKey(configuredKey21, Input.Navigation.NextTypeKey):
                 {
                     _labelSuggestionHighlightIndex++;
                     if (_currentLabelSuggestionItems.Count <= _labelSuggestionHighlightIndex)
@@ -8434,7 +8444,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                     highlightChanged = true;
                     break;
                 }
-                case KeyCode.UpArrow:
+                case var configuredKey22 when CatalogInputSettings.MatchesKey(configuredKey22, Input.Navigation.PreviousTypeKey):
                 {
                     _labelSuggestionHighlightIndex--;
                     if (_labelSuggestionHighlightIndex < 0)
@@ -8445,8 +8455,8 @@ namespace WallstopStudios.DataVisualizer.Editor
                     highlightChanged = true;
                     break;
                 }
-                case KeyCode.Return:
-                case KeyCode.KeypadEnter:
+                case var configuredKey23 when CatalogInputSettings.MatchesKey(configuredKey23, Input.Navigation.SelectKey):
+                case var configuredKey24 when CatalogInputSettings.MatchesKey(configuredKey24, Input.Navigation.AlternateSelectKey):
                 {
                     if (0 <= _labelSuggestionHighlightIndex && _labelSuggestionHighlightIndex < _currentLabelSuggestionItems.Count)
                     {
@@ -8467,7 +8477,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                     evt.StopPropagation();
                     break;
                 }
-                case KeyCode.Escape:
+                case var configuredKey25 when CatalogInputSettings.MatchesKey(configuredKey25, Input.Navigation.CancelDragKey):
                 {
                     CloseActivePopover();
                     evt.PreventDefaultCompat();
@@ -8658,7 +8668,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         private void CloneObject(ScriptableObject originalObject)
         {
-            if (IsAssetOperationEditingBlocked || originalObject == null)
+            if (IsAssetOperationEditingBlocked || originalObject == null || !_selectedObjects.Contains(originalObject))
             {
                 return;
             }
