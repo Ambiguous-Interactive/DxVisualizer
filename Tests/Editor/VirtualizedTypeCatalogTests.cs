@@ -21,6 +21,24 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
 
     public sealed class VirtualizedTypeCatalogTests
     {
+        private static Type LegacyAdjacent(List<CatalogEntry> rows, List<Type> types, Type current, bool forward)
+        {
+            int index = types.IndexOf(current);
+            int step = forward ? 1 : -1;
+            for (int offset = 1; offset <= types.Count; offset++)
+            {
+                Type candidate = types[(index + step * offset + types.Count) % types.Count];
+                for (int row = 0; row < rows.Count; row++)
+                {
+                    if (rows[row].Type == candidate)
+                    {
+                        return candidate;
+                    }
+                }
+            }
+            return null;
+        }
+
         private static DataVisualizerUserState SavedState(PerfWindowStateScope state)
         {
             if (!state.Settings.persistStateInSettingsAsset)
@@ -30,6 +48,90 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             DataVisualizerUserState saved = new();
             saved.HydrateFrom(state.Settings);
             return saved;
+        }
+
+        [Test, Explicit("Paired synthetic catalog navigation; creates no Unity assets")]
+        public void ShouldMeasureFilteredCatalogNavigation()
+        {
+            BenchmarkCodeIdentity production = new(
+                typeof(VirtualizedTypeCatalogView).Assembly,
+                "Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/UI/VirtualizedTypeCatalogView.cs"
+            );
+            BenchmarkCodeIdentity driver = new(
+                typeof(VirtualizedTypeCatalogTests).Assembly,
+                "Packages/com.wallstop-studios.data-visualizer/Tests/Editor/VirtualizedTypeCatalogTests.cs"
+            );
+            production.Verify();
+            driver.Verify();
+            using TestCleanupScope cleanup = new();
+            FieldInfo instance = typeof(DataVisualizerWindow).GetField("Instance", BindingFlags.Static | BindingFlags.NonPublic);
+            object previousInstance = instance.GetValue(null);
+            cleanup.Defer(() => instance.SetValue(null, previousInstance));
+            DataVisualizerWindow owner = ScriptableObject.CreateInstance<DataVisualizerWindow>();
+            cleanup.Defer(() => Object.DestroyImmediate(owner));
+            Type[] dataset = CatalogLayoutScaleTests.CreateTypes()[0];
+            string key = NamespaceController.GetNamespaceKey(dataset[0]);
+            List<string> output = new()
+            {
+                "# Unity=" + Application.unityVersion + "; OS=" + SystemInfo.operatingSystem + "; CPU=" + SystemInfo.processorType,
+                "# productionSource=" + production.SourceSha256 + "; module=" + production.LoadedModuleId,
+                "# driverSource=" + driver.SourceSha256 + "; module=" + driver.LoadedModuleId,
+                "implementation,count,forward,sample,milliseconds",
+            };
+            cleanup.Defer(() => File.WriteAllText("Temp/catalog-navigation.csv", string.Join("\n", output) + "\n"));
+            foreach (int count in new[] { 100, 1000, 2000 })
+            {
+                List<Type> types = new(count);
+                for (int i = 0; i < count; i++)
+                {
+                    types.Add(dataset[i]);
+                }
+                Dictionary<string, List<Type>> managed = new() { { key, types } };
+                Dictionary<string, int> order = new();
+                NamespaceController controller = new(managed, order);
+                VirtualizedTypeCatalogView view = new(owner, controller, managed, order);
+                string filter =
+                    count == 100 ? "MeasuredType000"
+                    : count == 1000 ? "MeasuredType00"
+                    : "MeasuredType0";
+                view.Filter(filter);
+                int visibleCount = view.List.itemsSource.Count - 1;
+                Assert.That(visibleCount, Is.Positive);
+                foreach (bool forward in new[] { true, false })
+                {
+                    Type current = types[forward ? visibleCount - 1 : 0];
+                    Type expected = types[forward ? 0 : visibleCount - 1];
+                    for (int sample = -5; sample < 30; sample++)
+                    {
+                        // Alternate the paired order to reduce systematic warm-process bias.
+                        for (int pair = 0; pair < 2; pair++)
+                        {
+                            bool legacy = (sample + pair) % 2 == 0;
+                            System.Diagnostics.Stopwatch timer = System.Diagnostics.Stopwatch.StartNew();
+                            Type actual = legacy ? LegacyAdjacent((List<CatalogEntry>)view.List.itemsSource, types, current, forward) : view.Adjacent(current, forward);
+                            timer.Stop();
+                            Assert.That(actual, Is.EqualTo(expected));
+                            if (0 <= sample)
+                            {
+                                output.Add(
+                                    (legacy ? "legacy" : "production")
+                                        + ","
+                                        + count
+                                        + ","
+                                        + forward
+                                        + ","
+                                        + sample
+                                        + ","
+                                        + timer.Elapsed.TotalMilliseconds.ToString("R", System.Globalization.CultureInfo.InvariantCulture)
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            production.Verify();
+            driver.Verify();
+            output.Add("# status=complete; five discarded warmups and thirty samples per condition; no assets or native windows created");
         }
 
         [UnityTest]
@@ -282,9 +384,20 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 yield return null;
                 Assert.That(view.List.itemsSource.Count, Is.EqualTo(2));
                 Assert.That(view.Adjacent(dataset[dataset.Length - 2], true), Is.EqualTo(last), "Navigation starts from hidden identity");
+                Assert.That(view.Adjacent(dataset[dataset.Length - 2], false), Is.EqualTo(last), "Backward hidden navigation wraps");
+                Assert.That(view.Adjacent(last, true), Is.EqualTo(last), "A single visible type wraps to itself");
+                Assert.That(view.Adjacent(last, false), Is.EqualTo(last));
+                if (ReferenceEquals(dataset, datasets[0]))
+                {
+                    view.Filter("MeasuredType0");
+                    Assert.That(view.Adjacent(dataset[999], true), Is.EqualTo(dataset[0]), "Forward skips the hidden tail and wraps");
+                    Assert.That(view.Adjacent(dataset[0], false), Is.EqualTo(dataset[999]), "Backward skips the hidden tail and wraps");
+                }
                 view.Filter("missing type");
                 yield return null;
                 Assert.That(view.List.itemsSource.Count, Is.Zero);
+                Assert.That(view.Adjacent(last, true) == null);
+                Assert.That(view.Adjacent(last, false) == null);
                 view.Filter(null);
                 view.List.ScrollToItem(0);
                 yield return null;

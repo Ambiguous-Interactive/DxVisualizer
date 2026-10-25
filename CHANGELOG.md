@@ -8,8 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Add viewport-bounded catalog rows for large type collections. Keep filtering, collapse, keyboard navigation and saved ordering while scrolling. Change selection without
-  recreating visible rows or losing action focus (#324, #312).
+- Add viewport-bounded catalog rows for large type collections while keeping filtering, collapse, keyboard navigation and saved ordering. Change selection and navigate filtered
+  types without recreating rows or losing action focus (#324, #312).
 - Add atomic GUID selection import and copied export for headless editor tools, sharing browser selection intent and exact type identities (#315).
 - Add paged C# and JSON discovery of browser-eligible types with exact identities, without opening a window or loading assets (#315, #316).
 - Add shared C# and JSON previews and cooperative create, clone, rename, move and delete operations (#315, #316).

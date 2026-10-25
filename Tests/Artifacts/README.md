@@ -3,6 +3,7 @@
 This directory preserves recorded test evidence. It is excluded from the documentation site and the UPM/npm package. Raw JSON reports and their Unity metadata moved here from
 `docs/` without changing their bytes or GUIDs. Historical commit links still locate the original reports.
 
+- [Filtered catalog navigation](catalog-navigation-2026-10-25.md): paired hidden-tail navigation timings and exact identity regressions.
 - [Cooperative selected-object loading](object-loading-budget-2026-10-25.md): elapsed asset-attempt budgets, generation/suspension coverage and a complete ordinary-SO 1k
   observation.
 - [Catalog selection observations](catalog-selection-2026-10-24.md): stable realized rows, focused actions, pause/resume availability and isolated selection timing.
