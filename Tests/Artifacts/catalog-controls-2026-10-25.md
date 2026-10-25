@@ -40,6 +40,10 @@ The hosted keyboard regression fails on original code at header Down and passes 
 jump, filtered Home/End and unchanged selection. Existing coverage checks both persistence stores, six shipped themes, collapse, canonical ordering, stale pointer release and exact
 identities while recycling. These scripted checks do not replace exploratory add/find/clone/rename/move/delete task times or error counts.
 
+![Final hosted synthetic catalog in Dx](catalog-controls-Dx-2026-10-25.png)
+
+The capture comes from the completed final benchmark. It records the hosted catalog layout, not a physical keyboard gesture or a focus-navigation latency measurement.
+
 ## Limits
 
 The rooted 4 KiB allocation control reports zero, so per-thread allocation is unavailable. Whole-editor frame allocation and process/native heap fields do not isolate binding or
