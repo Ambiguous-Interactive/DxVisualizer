@@ -22,6 +22,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         public EditorInputBinding moveLast = new(KeyCode.End, actionModifier: true);
         public EditorInputBinding actions = new(KeyCode.F10, EventModifiers.Shift);
         public EditorInputBinding alternateActions = new(KeyCode.Menu);
+        public EventModifiers rangeSelectionModifiers = EventModifiers.Shift;
         public EditorInputBinding toggleSelection = new(KeyCode.Space, actionModifier: true);
 
         [SerializeField]
