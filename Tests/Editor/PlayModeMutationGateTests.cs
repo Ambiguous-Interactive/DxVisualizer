@@ -455,6 +455,44 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             }
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void ShouldSelectLoadedObjectsWhenResumingInterruptedInitialSlice(bool hasPreviousType)
+        {
+            string folder = CreateFixtureFolder();
+            object previousInstance = ReadSharedInstance();
+            using TestCleanupScope cleanup = new();
+            cleanup.Defer(() =>
+            {
+                AssetDatabase.DeleteAsset(folder);
+                AssetDatabase.Refresh();
+            });
+            cleanup.Defer(() => AssetGuidTypeIndex.Shared.Cancel());
+            cleanup.Defer(() => RestoreSharedInstance(previousInstance));
+            DataVisualizerWindow window = ScriptableObject.CreateInstance<DataVisualizerWindow>();
+            cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(window));
+            ScriptableObject fixtureAsset = CreateFixtureAsset(folder, "First.asset");
+            ScriptableObject previous = hasPreviousType ? ScriptableObject.CreateInstance<OtherEditorOnlyCreationData>() : null;
+            if (previous != null)
+            {
+                cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(previous));
+            }
+            string guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(fixtureAsset));
+            ReadPrivateField<EditorAssetSelection>(window, "processorSelection").SetType(typeof(TestDataObject));
+            SetPrivateField(window, "_asyncLoadTargetType", typeof(TestDataObject));
+            SetPrivateField(window, "_isLoadingObjectsAsync", true);
+            SetPrivateField(window, "_selectedObject", previous);
+            // Model suspension after insertion but before the initial slice selects its inspector.
+            InvokePrivate(window, "InsertObjectByAsyncDisplayOrder", fixtureAsset, guid);
+            ReadPrivateField<Queue<string>>(window, "_pendingObjectGuids").Enqueue(guid);
+            SuspendForPlayMode(window);
+            ResumeFromPlayMode(window);
+            InvokePrivate(window, "ContinueLoadingObjects", typeof(TestDataObject), ReadPrivateField<int>(window, "_asyncLoadGeneration"));
+            Assert.That(ReadPrivateField<ScriptableObject>(window, "_selectedObject"), Is.SameAs(fixtureAsset));
+            Assert.That(ReadPrivateField<List<ScriptableObject>>(window, "_selectedObjects"), Is.EqualTo(new[] { fixtureAsset }));
+            Assert.That(ReadPrivateField<bool>(window, "_isLoadingObjectsAsync"), Is.False);
+        }
+
         [Test]
         public void ShouldRestoreSettingsToggleAndGateRebuiltControlsWhilePaused()
         {
