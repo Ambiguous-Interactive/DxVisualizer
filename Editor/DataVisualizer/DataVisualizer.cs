@@ -7867,7 +7867,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         private void MoveObjectToTop(ScriptableObject dataObject)
         {
-            if (IsAssetOperationEditingBlocked || dataObject == null)
+            if (IsAssetOperationEditingBlocked || dataObject == null || !_selectedObjects.Contains(dataObject))
             {
                 return;
             }
@@ -7895,7 +7895,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         private void MoveObjectToBottom(ScriptableObject dataObject)
         {
-            if (IsAssetOperationEditingBlocked || dataObject == null)
+            if (IsAssetOperationEditingBlocked || dataObject == null || !_selectedObjects.Contains(dataObject))
             {
                 return;
             }
@@ -8100,34 +8100,21 @@ namespace WallstopStudios.DataVisualizer.Editor
                 _inspectorCurrentLabelsContainer.AddToClassList("label-pill-container");
                 _inspectorLabelsSection.Add(_inspectorCurrentLabelsContainer);
 
-                VisualElement addLabelRow = new()
-                {
-                    style =
-                    {
-                        flexDirection = FlexDirection.Row,
-                        alignItems = Align.Center,
-                        position = Position.Relative,
-                    },
-                };
-                _inspectorNewLabelInput = new TextField
-                {
-                    name = "inspector-new-label-input",
-                    style =
-                    {
-                        flexGrow = 1,
-                        flexShrink = 1,
-                        marginTop = 6,
-                        marginRight = 6,
-                        marginLeft = 6,
-                    },
-                };
+                VisualElement addLabelRow = new() { name = "inspector-label-entry" };
+                addLabelRow.AddToClassList(StyleConstants.InspectorLabelEntryClass);
+                _inspectorNewLabelInput = new TextField { name = "inspector-new-label-input", tooltip = "Enter an asset label" };
                 _inspectorNewLabelInput.RegisterValueChangedCallback(evt => UpdateLabelSuggestions(evt.newValue));
                 _inspectorNewLabelInput.RegisterCallback<FocusInEvent>(_ => OnNewLabelInputFocus());
                 _inspectorNewLabelInput.RegisterCallback<KeyDownEvent>(HandleNewLabelInputKeyDown);
                 _inspectorNewLabelInput.RegisterCallback<FocusOutEvent>(OnNewLabelInputBlur);
 
                 addLabelRow.Add(_inspectorNewLabelInput);
-                Button addLabelButton = new(AddLabelToSelectedAsset) { text = "Add" };
+                Button addLabelButton = new(AddLabelToSelectedAsset)
+                {
+                    name = "inspector-add-label-button",
+                    text = "Add",
+                    tooltip = "Add the entered label to this asset",
+                };
                 addLabelButton.AddToClassList(StyleConstants.ClickableClass);
                 addLabelButton.AddToClassList("add-label-button");
                 addLabelRow.Add(addLabelButton);

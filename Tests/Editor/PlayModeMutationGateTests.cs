@@ -213,6 +213,25 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 Assert.That(saved[key == KeyCode.Home ? 0 : saved.Count - 1], Is.EqualTo(guid));
                 Assert.That(ReadPrivateField<ScriptableObject>(window, "_selectedObject"), Is.SameAs(selected));
             }
+            all.Remove(selected);
+            ScriptableObject[] members = all.ToArray();
+            string[] savedBeforeStaleCallback = ((List<string>)InvokePrivate(window, "GetObjectOrderForType", typeof(TestDataObject))).ToArray();
+            SetPrivateField(window, "_isLoadingObjectsAsync", true);
+            SetPrivateField(window, "_asyncLoadTargetType", typeof(TestDataObject));
+            Dictionary<string, int> canonical = ReadPrivateField<Dictionary<string, int>>(window, "_asyncDisplayOrderByGuid");
+            canonical.Clear();
+            canonical["pending-guid"] = 0;
+            foreach (string method in new[] { "MoveObjectToTop", "MoveObjectToBottom" })
+            {
+                InvokePrivate(window, method, selected);
+                Assert.That(all, Is.EqualTo(members), "Stale actions cannot add objects to the active type.");
+                Assert.That(visible.Contains(selected), Is.False);
+                Assert.That(canonical.Count, Is.EqualTo(1), "Stale actions cannot mutate pending canonical order.");
+                Assert.That(canonical["pending-guid"], Is.Zero);
+                Assert.That((List<string>)InvokePrivate(window, "GetObjectOrderForType", typeof(TestDataObject)), Is.EqualTo(savedBeforeStaleCallback));
+            }
+            SetPrivateField(window, "_isLoadingObjectsAsync", false);
+            all.Add(selected);
             SetPrivateField(window, "_suspendedForPlayMode", true);
             using KeyDownEvent blocked = KeyDownEvent.GetPooled(
                 new Event

@@ -1316,17 +1316,39 @@
     opacity: 0.5;
 }
 
+.dataviz-root .inspector-label-entry {
+    flex-direction: row;
+    align-items: stretch;
+    height: 28px;
+    margin: 6px;
+}
+
+.dataviz-root .inspector-label-entry > TextField {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    height: 100%;
+    margin: 0 6px 0 0;
+}
+
+.dataviz-root .inspector-label-entry .unity-base-text-field__input {
+    height: 100%;
+    margin: 0;
+    padding: 0 6px;
+}
+
 .dataviz-root .add-label-button {
-    min-height: 24px;
+    height: 100%;
+    min-width: 64px;
+    flex-shrink: 0;
     font-size: var(--dataviz-font-size);
     -unity-font-style: bold;
     color: var(--dataviz-on-positive);
     background-color: var(--dataviz-positive);
     border-width: 0;
-    margin: 6px 8px 2px 0;
+    margin: 0;
     border-radius: 4px;
-    padding: 0 24px;
-    align-self: center;
+    padding: 0 12px;
 }
 
 .dataviz-root .add-label-button:hover,
