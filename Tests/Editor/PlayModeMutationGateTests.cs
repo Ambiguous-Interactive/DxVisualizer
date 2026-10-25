@@ -124,6 +124,73 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.Fail("Asset changes did not settle after the Play transition.");
         }
 
+        [TestCase(false, false)]
+        [TestCase(false, true)]
+        [TestCase(true, false)]
+        [TestCase(true, true)]
+        public void ShouldOrderSelectedAssetsByShortcutWithoutRevealingFilteredRows(bool projectState, bool commandKey)
+        {
+            using TestCleanupScope cleanup = new();
+            string folder = CreateFixtureFolder();
+            cleanup.Defer(() => AssetDatabase.DeleteAsset(folder));
+            object previousInstance = ReadSharedInstance();
+            cleanup.Defer(() => RestoreSharedInstance(previousInstance));
+            DataVisualizerSettings settings = ScriptableObject.CreateInstance<DataVisualizerSettings>();
+            cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(settings));
+            string output = "Temp/OrderShortcut-" + Guid.NewGuid().ToString("N");
+            cleanup.Defer(() => System.IO.Directory.Delete(output, recursive: true));
+            using PerfWindowStateScope state = new(settings, new DataVisualizerUserState(), output);
+            state.Settings.persistStateInSettingsAsset = projectState;
+            DataVisualizerWindow window = ScriptableObject.CreateInstance<DataVisualizerWindow>();
+            using TestCleanupScope windowCleanup = new();
+            windowCleanup.Defer(() => UnityEngine.Object.DestroyImmediate(window));
+            SetPrivateField(window, "_settings", state.Settings);
+            SetPrivateField(window, "_userState", state.UserState);
+            SetPrivateField(window, "_userStateFilePath", state.FilePath);
+            ScriptableObject first = CreateFixtureAsset(folder, "First.asset");
+            ScriptableObject selected = CreateFixtureAsset(folder, "Selected.asset");
+            ScriptableObject last = CreateFixtureAsset(folder, "Last.asset");
+            List<ScriptableObject> all = ReadPrivateField<List<ScriptableObject>>(window, "_selectedObjects");
+            List<ScriptableObject> visible = ReadPrivateField<List<ScriptableObject>>(window, "_filteredObjects");
+            SetPrivateField(window, "_objectListView", null);
+            all.Clear();
+            all.AddRange(new[] { first, selected, last });
+            visible.Clear();
+            visible.AddRange(new[] { first, last });
+            SetPrivateField(window, "_selectedObject", selected);
+            EventModifiers modifier = commandKey ? EventModifiers.Command : EventModifiers.Control;
+            foreach (KeyCode key in new[] { KeyCode.Home, KeyCode.End })
+            {
+                using KeyDownEvent evt = KeyDownEvent.GetPooled(
+                    new Event
+                    {
+                        type = EventType.KeyDown,
+                        keyCode = key,
+                        modifiers = modifier,
+                    }
+                );
+                Assert.That((bool)InvokePrivate(window, "HandleObjectActionShortcut", evt));
+                Assert.That(all[key == KeyCode.Home ? 0 : all.Count - 1], Is.SameAs(selected));
+                Assert.That(visible.Contains(selected), Is.False, "Ordering must not reveal a label-filtered asset.");
+                List<string> saved = (List<string>)InvokePrivate(window, "GetObjectOrderForType", typeof(TestDataObject));
+                string guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(selected));
+                Assert.That(saved[key == KeyCode.Home ? 0 : saved.Count - 1], Is.EqualTo(guid));
+                Assert.That(ReadPrivateField<ScriptableObject>(window, "_selectedObject"), Is.SameAs(selected));
+            }
+            SetPrivateField(window, "_suspendedForPlayMode", true);
+            using KeyDownEvent blocked = KeyDownEvent.GetPooled(
+                new Event
+                {
+                    type = EventType.KeyDown,
+                    keyCode = KeyCode.Home,
+                    modifiers = modifier,
+                }
+            );
+            Assert.That((bool)InvokePrivate(window, "HandleObjectActionShortcut", blocked), Is.False);
+            InvokePrivate(window, "MoveObjectToTop", selected);
+            Assert.That(all[all.Count - 1], Is.SameAs(selected), "Direct menu callbacks must also respect suspension.");
+        }
+
         [UnityTest]
         public IEnumerator ShouldRefreshOnlyChangedRealizedAssetRows()
         {

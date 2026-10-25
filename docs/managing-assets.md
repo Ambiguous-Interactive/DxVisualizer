@@ -9,12 +9,12 @@ This page covers the operations that change assets on disk, and the processors t
 
 **Clone**, **Rename**, **Move**, and **Delete** are in the **Actions** menu on each object row. They act on that row's object without selecting it first. Tab to **Actions** and
 press Enter or Space to open the menu. Arrow keys choose a command; Escape closes the menu. With the object list focused, **Ctrl/Cmd+D**, **F2**, and **Delete** act on the selected
-asset. **Shift+F10** or the **Menu** key opens all four Actions for the selected asset, including Move. This also works when its row has scrolled out of view; row buttons still act
-on their own object. On Mac keyboards, the Delete key sends Backspace and also opens confirmation. Delete still asks for confirmation. These shortcuts do not apply inside text
-fields.
+asset. **Ctrl/Cmd+Home** and **Ctrl/Cmd+End** move it to the top or bottom of the saved order. **Shift+F10** or the **Menu** key opens Actions for the selected asset, including
+Move. This also works when its row has scrolled out of view; row buttons still act on their own object. On Mac keyboards, the Delete key sends Backspace and also opens
+confirmation. Delete still asks for confirmation. These shortcuts do not apply inside text fields.
 
-![Actions menu buttons beside the object names in the object list](images/data-visualizer-instance-actions.webp) _Open **Actions** on a row for Clone, Rename, Move, or Delete.
-Regenerated from the live window by the docs capture pipeline._
+![Actions menu buttons beside the object names in the object list](images/data-visualizer-instance-actions.webp) _Open **Actions** on a row for asset commands. Regenerated from the
+live window by the docs capture pipeline._
 
 ## Create
 
