@@ -531,7 +531,9 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 yield return null;
                 Assert.That(focusedControl, Is.SameAs(collapse));
                 Type selectedBeforeFocus = controller.SelectedType;
-                using (KeyDownEvent down = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.DownArrow }))
+                KeyCode headerNext = ReferenceEquals(dataset, datasets[0]) ? KeyCode.DownArrow : KeyCode.Home;
+                view.Input.NextTypeKey = headerNext;
+                using (KeyDownEvent down = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = headerNext }))
                 {
                     collapse.SendEvent(down);
                 }
@@ -542,7 +544,21 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 }
                 Assert.That(focusedControl?.userData, Is.EqualTo(firstVisibleType), "Header arrows focus the first visible child.");
                 Assert.That(controller.SelectedType, Is.EqualTo(selectedBeforeFocus), "Focus navigation preserves selection.");
-                using (KeyDownEvent end = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.End }))
+                if (!ReferenceEquals(dataset, datasets[0]))
+                {
+                    view.Input.NextTypeKey = KeyCode.End;
+                    Type expectedNext = view.Adjacent(firstVisibleType.Type, true);
+                    using (KeyDownEvent next = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.End }))
+                    {
+                        focusedControl.SendEvent(next);
+                    }
+                    Assert.That(controller.SelectedType, Is.EqualTo(expectedNext), "Existing type navigation takes precedence over boundary keys.");
+                    selectedBeforeFocus = expectedNext;
+                    view.Input.FirstRowKey = KeyCode.H;
+                    view.Input.LastRowKey = KeyCode.J;
+                }
+                view.Input.NextTypeKey = KeyCode.DownArrow;
+                using (KeyDownEvent end = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = view.Input.LastRowKey }))
                 {
                     focusedControl.SendEvent(end);
                 }
@@ -560,7 +576,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 yield return null;
                 collapse = view.Query<Button>("catalog-collapse").ToList().Find(button => button.style.display.value == DisplayStyle.Flex);
                 collapse.Focus();
-                using (KeyDownEvent end = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.End }))
+                using (KeyDownEvent end = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = view.Input.LastRowKey }))
                 {
                     collapse.SendEvent(end);
                 }
@@ -570,7 +586,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                     yield return null;
                 }
                 Assert.That(focusedControl?.userData, Is.EqualTo(filteredEnd), "End focuses the final filtered identity.");
-                using (KeyDownEvent home = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.Home }))
+                using (KeyDownEvent home = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = view.Input.FirstRowKey }))
                 {
                     focusedControl.SendEvent(home);
                 }

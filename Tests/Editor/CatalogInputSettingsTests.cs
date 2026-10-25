@@ -5,6 +5,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
     using System.Reflection;
     using NUnit.Framework;
     using UnityEngine;
+    using UnityEngine.UIElements;
     using WallstopStudios.DataVisualizer.Editor;
     using WallstopStudios.DataVisualizer.Editor.UI;
     using CollisionA = WallstopStudios.DataVisualizer.Tests.Editor.TypeIdentityCollision.First.Data;
@@ -35,6 +36,52 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Dictionary<string, int> order = new();
             NamespaceController controller = new(managed, order);
             Assert.Throws<ArgumentNullException>(() => new VirtualizedTypeCatalogView(owner, controller, managed, order));
+        }
+
+        [Test]
+        public void ShouldDescribeCurrentInjectedCatalogKeys()
+        {
+            using TestCleanupScope cleanup = new();
+            FieldInfo instance = typeof(DataVisualizerWindow).GetField("Instance", BindingFlags.Static | BindingFlags.NonPublic);
+            object previous = instance.GetValue(null);
+            cleanup.Defer(() => instance.SetValue(null, previous));
+            DataVisualizerWindow owner = ScriptableObject.CreateInstance<DataVisualizerWindow>();
+            cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(owner));
+            Dictionary<string, List<Type>> managed = new();
+            Dictionary<string, int> order = new();
+            CatalogInputSettings input = new()
+            {
+                FirstRowKey = KeyCode.H,
+                LastRowKey = KeyCode.J,
+                NextTypeKey = KeyCode.N,
+            };
+            VirtualizedTypeCatalogView view = new(owner, new NamespaceController(managed, order), managed, order, input);
+            LayoutTestWindow host = ScriptableObject.CreateInstance<LayoutTestWindow>();
+            cleanup.Defer(() => EditorSurfaceCapture.CloseWindow(host));
+            host.rootVisualElement.Add(view);
+            EditorSurfaceCapture.ShowPopup(host);
+            using (TooltipEvent tooltip = TooltipEvent.GetPooled())
+            {
+                tooltip.target = view;
+                view.SendEvent(tooltip);
+                Assert.That(tooltip.tooltip, Does.Contain("H/J"));
+                Assert.That(tooltip.tooltip, Does.Contain("UpArrow/N"));
+            }
+            input.FirstRowKey = KeyCode.K;
+            using (TooltipEvent tooltip = TooltipEvent.GetPooled())
+            {
+                tooltip.target = view;
+                view.SendEvent(tooltip);
+                Assert.That(tooltip.tooltip, Does.Contain("K/J"), "Tooltips follow mutable input settings.");
+            }
+            Button action = new() { tooltip = "Keep the action hint" };
+            view.Add(action);
+            using (TooltipEvent tooltip = TooltipEvent.GetPooled())
+            {
+                tooltip.target = action;
+                action.SendEvent(tooltip);
+                Assert.That(tooltip.tooltip, Is.EqualTo("Keep the action hint"));
+            }
         }
 
         [Test]
