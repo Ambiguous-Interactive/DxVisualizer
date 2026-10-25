@@ -190,17 +190,41 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             {
                 return null;
             }
-            int step = forward ? 1 : -1;
-            int count = types.Count;
-            for (int offset = 1; offset <= count; offset++)
+            string key = NamespaceController.GetNamespaceKey(current);
+            int visible = _rows.IndexOf(new CatalogEntry(key, null)) + 1;
+            if (visible == 0)
             {
-                Type candidate = types[(index + step * offset + count) % count];
-                if (0 <= Find(candidate))
+                return null;
+            }
+            Type first = null;
+            Type last = null;
+            Type previous = null;
+            Type next = null;
+            bool passedCurrent = false;
+            foreach (Type candidate in types)
+            {
+                bool isCurrent = candidate == current;
+                passedCurrent = passedCurrent || isCurrent;
+                if (_rows.Count <= visible || _rows[visible].Type != candidate || !string.Equals(_rows[visible].NamespaceKey, key, StringComparison.Ordinal))
                 {
-                    return candidate;
+                    continue;
+                }
+                visible++;
+                first ??= candidate;
+                last = candidate;
+                if (!isCurrent)
+                {
+                    if (passedCurrent)
+                    {
+                        next ??= candidate;
+                    }
+                    else
+                    {
+                        previous = candidate;
+                    }
                 }
             }
-            return null;
+            return forward ? next ?? first : previous ?? last;
         }
 
         /// <summary>Rebuilds rows only when the complete ordered catalog changes.</summary>
