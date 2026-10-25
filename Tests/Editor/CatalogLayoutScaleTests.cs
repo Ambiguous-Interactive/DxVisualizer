@@ -212,8 +212,26 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                             Assert.That(rows.Count, Is.EqualTo(count));
                         }
                         ScrollView activeScroll = virtualized ? controller.VirtualizedView.List.Q<ScrollView>() : scroll;
+                        Action<VisualElement, int> scrollBinding = virtualized ? controller.VirtualizedView.List.bindItem : null;
+                        int scrollBoundRows = 0;
+                        long scrollBindingTicks = 0;
+                        if (virtualized)
+                        {
+                            controller.VirtualizedView.List.bindItem = (row, index) =>
+                            {
+                                long started = Stopwatch.GetTimestamp();
+                                scrollBinding(row, index);
+                                scrollBindingTicks += Stopwatch.GetTimestamp() - started;
+                                scrollBoundRows++;
+                            };
+                            yield return null;
+                            EditorSurfaceCapture.SettleLayout(host);
+                            scrollBoundRows = 0;
+                            scrollBindingTicks = 0;
+                        }
                         Stopwatch scrolling = Stopwatch.StartNew();
                         activeScroll.scrollOffset = new Vector2(0, activeScroll.verticalScroller.highValue);
+                        double scrollCallMilliseconds = scrolling.Elapsed.TotalMilliseconds;
                         int visible = 0;
                         double realizationDeadline = EditorApplication.timeSinceStartup + 5;
                         do
@@ -231,6 +249,13 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                             }
                         } while (visible == 0 && EditorApplication.timeSinceStartup < realizationDeadline);
                         double scrollMilliseconds = scrolling.Elapsed.TotalMilliseconds;
+                        double scrollBindingMilliseconds = virtualized ? scrollBindingTicks * 1000.0 / Stopwatch.Frequency : -1;
+                        int measuredScrollBoundRows = virtualized ? scrollBoundRows : -1;
+                        if (virtualized)
+                        {
+                            Assert.That(measuredScrollBoundRows, Is.Positive, "Every virtualized scroll must bind new identities");
+                            controller.VirtualizedView.List.bindItem = scrollBinding;
+                        }
                         Assert.That(activeScroll.scrollOffset.y, Is.Positive, "Every scroll observation must move the viewport");
                         Assert.That(visible, Is.Positive);
                         double selectionMilliseconds = -1;
@@ -282,6 +307,9 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                             constructionAllocatedBytes = allocated,
                             editorFrameAllocatedBytesAfterConstruction = editorFrameAllocatedBytes,
                             observedScrollMilliseconds = scrollMilliseconds,
+                            scrollCallMilliseconds = scrollCallMilliseconds,
+                            scrollBindingMilliseconds = scrollBindingMilliseconds,
+                            scrollBoundRows = measuredScrollBoundRows,
                             selectionMilliseconds = selectionMilliseconds,
                             observedSelectionMilliseconds = observedSelectionMilliseconds,
                             selectionCreatedRows = selectionCreatedRows,
@@ -439,6 +467,9 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             public long constructionAllocatedBytes;
             public long editorFrameAllocatedBytesAfterConstruction;
             public double observedScrollMilliseconds;
+            public double scrollCallMilliseconds;
+            public double scrollBindingMilliseconds;
+            public int scrollBoundRows;
             public double selectionMilliseconds;
             public double observedSelectionMilliseconds;
             public int selectionCreatedRows;
