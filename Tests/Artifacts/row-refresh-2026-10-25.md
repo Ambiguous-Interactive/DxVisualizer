@@ -22,7 +22,7 @@ signature. Reflection setup, fixture construction and production identity checks
 
 Each condition has five warm-ups and 30 measured ten-call batches, for 90 retained samples per run. A 30-second sampling guard is checked before each batch. Production compiler
 source/module and assembly checks pass before and after sampling. The owner and two transient objects are disposed; editor-window wrapper counts return to seven in both runs. No
-window is shown and no Unity asset is created or loaded.
+window is shown and no fixture asset is created. Owner setup can resolve the existing editor configuration outside the timed batches.
 
 | Synthetic entries | Baseline median / p95, ten calls (ms) | Final median / p95, ten calls (ms) |
 | ----------------- | ------------------------------------- | ---------------------------------- |
