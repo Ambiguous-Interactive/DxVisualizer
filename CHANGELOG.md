@@ -9,10 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Add editable input profiles for browser keys, modifiers, focus and pointer gestures. Apply profile changes to open controls and their shortcut hints (#312).
-- Add Page Up/Down focus navigation to large catalogs, with viewport-sized jumps and unchanged selection (#324, #312).
+- Add Page Up/Down focus navigation to large catalogs, with viewport-sized jumps and unchanged selection. Enter rows with boundary/page keys after filtering clears focus (#324,
+  #312).
 - Add Move to top/bottom to asset Actions and Ctrl/Cmd+Home/End shortcuts for the selected asset, including offscreen rows (#312).
-- Add viewport-bounded catalog rows for large type collections while keeping filtering, collapse, keyboard navigation and saved ordering. Filter, collapse, change selection and
-  navigate types without recreating controls or losing action focus; scrolling cancels stale pointer gestures (#324, #312).
+- Add viewport-bounded catalog rows while preserving grouping, filtering, selection and saved order. Reuse controls, keep action focus, cancel stale drags, and show complete title
+  hints with exact identities (#324, #312).
 - Add atomic GUID selection import and copied export for headless editor tools, sharing browser selection intent and exact type identities (#315).
 - Add paged C# and JSON discovery of browser-eligible types with exact identities, without opening a window or loading assets (#315, #316).
 - Add shared C# and JSON previews and cooperative create, clone, rename, move and delete operations (#315, #316).
