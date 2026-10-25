@@ -523,7 +523,19 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             Button up = new(() => Move((CatalogEntry)row.userData, true)) { name = "go-up-button", text = "↑" };
             Button down = new(() => Move((CatalogEntry)row.userData, false)) { name = "go-down-button", text = "↓" };
             row.MoveUpButton = up;
+            up.RegisterCallback<TooltipEvent>(evt =>
+            {
+                evt.tooltip = "Move " + row.TitleLabel.text + " to top";
+                evt.rect = up.worldBound;
+                evt.StopImmediatePropagation();
+            });
             row.MoveDownButton = down;
+            down.RegisterCallback<TooltipEvent>(evt =>
+            {
+                evt.tooltip = "Move " + row.TitleLabel.text + " to bottom";
+                evt.rect = down.worldBound;
+                evt.StopImmediatePropagation();
+            });
             row.Add(up);
             row.Add(down);
             Label label = new() { name = "catalog-label" };
@@ -532,6 +544,12 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             row.Add(label);
             Button remove = new(() => Remove((CatalogEntry)row.userData, row)) { name = "catalog-remove", text = "X" };
             row.RemoveButton = remove;
+            remove.RegisterCallback<TooltipEvent>(evt =>
+            {
+                evt.tooltip = "Remove " + row.TitleLabel.text + " from DxVisualizer";
+                evt.rect = remove.worldBound;
+                evt.StopImmediatePropagation();
+            });
             remove.AddToClassList(StyleConstants.DeleteButtonClass);
             row.Add(remove);
             foreach (Button button in new[] { collapse, up, down, remove })
@@ -696,11 +714,6 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             Button collapse = row.CollapseButton;
             collapse.style.display = header ? DisplayStyle.Flex : DisplayStyle.None;
             collapse.text = _collapsed.Contains(entry.NamespaceKey) ? StyleConstants.ArrowCollapsed : StyleConstants.ArrowExpanded;
-            collapse.tooltip = $"Collapse or expand {title} ({Input.SelectKey}/{Input.ToggleKey}; {Input.CollapseKey}/{Input.ExpandKey})";
-            Button up = row.MoveUpButton;
-            Button down = row.MoveDownButton;
-            up.tooltip = "Move " + title + " to top";
-            down.tooltip = "Move " + title + " to bottom";
             row.CanMoveUp = header ? !string.Equals(entry.NamespaceKey, _catalogRows[0].NamespaceKey, StringComparison.Ordinal) : entry.Type != types[0];
             row.CanMoveDown = header
                 ? !string.Equals(entry.NamespaceKey, _catalogRows[_catalogRows.Count - 1].NamespaceKey, StringComparison.Ordinal)
@@ -725,7 +738,6 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             remove.style.display = header
                 ? (1 < removable ? DisplayStyle.Flex : DisplayStyle.None)
                 : (NamespaceController.IsTypeRemovable(entry.Type) ? DisplayStyle.Flex : DisplayStyle.None);
-            remove.tooltip = "Remove " + title + " from DxVisualizer";
         }
 
         private void Activate(CatalogEntry entry)
