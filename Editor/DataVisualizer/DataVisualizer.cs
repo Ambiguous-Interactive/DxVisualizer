@@ -2260,15 +2260,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                 return true;
             }
 
-            foreach (List<Type> types in _scriptableObjectTypes.Values)
-            {
-                if (types.Contains(type))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return type != null && _scriptableObjectTypes.TryGetValue(NamespaceController.GetNamespaceKey(type), out List<Type> types) && types.Contains(type);
         }
 
         private void HandleAssetObjectChanges(ref ObjectChangeEventStream stream)
