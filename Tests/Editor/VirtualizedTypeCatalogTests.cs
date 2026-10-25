@@ -136,6 +136,58 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                     view.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass).ToList(),
                     "Unchanged catalog refresh preserves rows"
                 );
+                view.Select(dataset[0]);
+                yield return null;
+                EditorSurfaceCapture.SettleLayout(host);
+                VisualElement firstSelectedRow = view.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass)
+                    .ToList()
+                    .Find(row => row.userData is CatalogEntry entry && entry.Type == dataset[0]);
+                Assert.That(firstSelectedRow != null);
+                firstSelectedRow.Focus();
+                List<VisualElement> selectionRows = view.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass).ToList();
+                int selectionBindings = 0;
+                Action<VisualElement, int> bindRow = view.List.bindItem;
+                view.List.bindItem = (row, index) =>
+                {
+                    selectionBindings++;
+                    bindRow(row, index);
+                };
+                selectionBindings = 0;
+                view.Select(dataset[1]);
+                CollectionAssert.AreEqual(
+                    selectionRows,
+                    view.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass).ToList(),
+                    "Expanded selection must keep realized rows alive"
+                );
+                Assert.That(selectionBindings, Is.Zero, "Selection changes styling without rebinding content");
+                Assert.That(firstSelectedRow.ClassListContains(StyleConstants.SelectedClass), Is.False);
+                VisualElement nextSelectedRow = selectionRows.Find(row => row.userData is CatalogEntry entry && entry.Type == dataset[1]);
+                Assert.That(nextSelectedRow.ClassListContains(StyleConstants.SelectedClass), Is.True);
+                for (int frame = 0; frame < 20 && focusedControl != nextSelectedRow; frame++)
+                {
+                    yield return null;
+                }
+                Assert.That(focusedControl, Is.SameAs(nextSelectedRow), "Navigation moves focus to the selected row");
+                Button selectedAction = nextSelectedRow.Q<Button>("go-down-button");
+                selectedAction.Focus();
+                view.Select(dataset[1]);
+                yield return null;
+                Assert.That(focusedControl, Is.SameAs(selectedAction), "Refresh preserves focused actions");
+                Assert.That(selectionBindings, Is.Zero);
+                cleanup.Defer(() => owner.HandlePlayModeStateChanged(PlayModeStateChange.EnteredEditMode));
+                owner.HandlePlayModeStateChanged(PlayModeStateChange.ExitingEditMode);
+                view.List.RefreshItems();
+                Assert.That(selectedAction.enabledSelf, Is.False, "Rows recycled while paused disable ordering");
+                owner.HandlePlayModeStateChanged(PlayModeStateChange.EnteredEditMode);
+                selectionBindings = 0;
+                view.Select(dataset[1], false);
+                Assert.That(selectedAction.enabledSelf, Is.True, "Selection refresh restores ordering after resume");
+                Assert.That(firstSelectedRow.Q<Button>("go-up-button").enabledSelf, Is.False, "The first type still cannot move up");
+                Assert.That(selectionBindings, Is.Zero, "Action availability does not require content rebinding");
+                view.List.bindItem = bindRow;
+                host.rootVisualElement.focusable = true;
+                host.rootVisualElement.Focus();
+                view.Select(null, false);
                 string firstKey = NamespaceController.GetNamespaceKey(dataset[0]);
                 List<Type> firstGroup = managed[firstKey];
                 Type groupLast = firstGroup[firstGroup.Count - 1];
@@ -263,6 +315,8 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 Assert.That(view.Adjacent(dataset[0], true) == null, "Collapsed groups do not navigate");
                 VirtualizedTypeCatalogView reopened = new(owner, controller, managed, order);
                 Assert.That(reopened.List.itemsSource.Count, Is.EqualTo(view.List.itemsSource.Count), "Reopen restores collapse in both stores");
+                reopened.Select(dataset[0]);
+                Assert.That(reopened.List.itemsSource.Count, Is.EqualTo(2000 + managed.Count), "Reveal expands the selected namespace");
                 string lastKey = NamespaceController.GetNamespaceKey(dataset[dataset.Length - 1]);
                 if (firstKey != lastKey)
                 {
@@ -314,6 +368,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                     .ToList()
                     .Find(row => row.userData is CatalogEntry entry && entry.Type == firstCollision);
                 Assert.That(collisionRow != null);
+                collisionRow.Focus();
                 using (KeyDownEvent down = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.N }))
                 {
                     down.target = collisionRow;
@@ -321,6 +376,12 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 }
                 yield return null;
                 Assert.That(controller.SelectedType, Is.EqualTo(secondCollision), "Equal short names preserve exact selection");
+                for (int frame = 0; frame < 20 && !(focusedControl?.userData is CatalogEntry focused && focused.Type == secondCollision); frame++)
+                {
+                    yield return null;
+                }
+                Assert.That(focusedControl?.userData, Is.EqualTo(new CatalogEntry(NamespaceController.GetNamespaceKey(secondCollision), secondCollision)));
+
                 view.Filter("OrderCollisionData");
                 yield return null;
                 Assert.That(view.List.itemsSource.Count, Is.EqualTo(3));

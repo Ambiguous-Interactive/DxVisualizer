@@ -233,6 +233,45 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                         double scrollMilliseconds = scrolling.Elapsed.TotalMilliseconds;
                         Assert.That(activeScroll.scrollOffset.y, Is.Positive, "Every scroll observation must move the viewport");
                         Assert.That(visible, Is.Positive);
+                        double selectionMilliseconds = -1;
+                        double observedSelectionMilliseconds = -1;
+                        int selectionCreatedRows = -1;
+                        int selectionBoundRows = -1;
+                        if (virtualized)
+                        {
+                            VirtualizedTypeCatalogView view = controller.VirtualizedView;
+                            view.Select(types[distribution][count - 2]);
+                            yield return null;
+                            EditorSurfaceCapture.SettleLayout(host);
+                            Func<VisualElement> makeRow = view.List.makeItem;
+                            Action<VisualElement, int> bindRow = view.List.bindItem;
+                            int createdRows = 0;
+                            int boundRows = 0;
+                            view.List.makeItem = () =>
+                            {
+                                createdRows++;
+                                return makeRow();
+                            };
+                            view.List.bindItem = (row, index) =>
+                            {
+                                boundRows++;
+                                bindRow(row, index);
+                            };
+                            yield return null;
+                            EditorSurfaceCapture.SettleLayout(host);
+                            createdRows = 0;
+                            boundRows = 0;
+                            Stopwatch selectionClock = Stopwatch.StartNew();
+                            view.Select(types[distribution][count - 1]);
+                            selectionMilliseconds = selectionClock.Elapsed.TotalMilliseconds;
+                            yield return null;
+                            EditorSurfaceCapture.SettleLayout(host);
+                            observedSelectionMilliseconds = selectionClock.Elapsed.TotalMilliseconds;
+                            selectionCreatedRows = createdRows;
+                            selectionBoundRows = boundRows;
+                            view.List.makeItem = makeRow;
+                            view.List.bindItem = bindRow;
+                        }
                         if (0 <= repetition)
                         {
                             report.samples.Add(
@@ -246,6 +285,10 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                                     constructionAllocatedBytes = allocated,
                                     editorFrameAllocatedBytesAfterConstruction = editorFrameAllocatedBytes,
                                     observedScrollMilliseconds = scrollMilliseconds,
+                                    selectionMilliseconds = selectionMilliseconds,
+                                    observedSelectionMilliseconds = observedSelectionMilliseconds,
+                                    selectionCreatedRows = selectionCreatedRows,
+                                    selectionBoundRows = selectionBoundRows,
                                     scrollOffset = activeScroll.scrollOffset.y,
                                     virtualized = virtualized,
                                     viewportWidth = activeScroll.contentViewport.worldBound.width,
@@ -335,6 +378,10 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             public long constructionAllocatedBytes;
             public long editorFrameAllocatedBytesAfterConstruction;
             public double observedScrollMilliseconds;
+            public double selectionMilliseconds;
+            public double observedSelectionMilliseconds;
+            public int selectionCreatedRows;
+            public int selectionBoundRows;
             public float scrollOffset;
             public int realizedElements;
             public bool virtualized;

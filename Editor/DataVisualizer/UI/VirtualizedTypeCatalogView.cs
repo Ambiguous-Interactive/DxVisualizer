@@ -134,25 +134,44 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         public void Select(Type type, bool reveal = true)
         {
-            if (_selected != type && _focusedEntry.HasValue && type != null)
+            bool changed = _selected != type;
+            bool moveFocus = changed && _focusedEntry.HasValue && type != null;
+            if (moveFocus)
             {
                 _focusedEntry = new CatalogEntry(NamespaceController.GetNamespaceKey(type), type);
                 _focusedControl = null;
             }
             _selected = type;
+            bool expanded = reveal && type != null && _collapsed.Remove(NamespaceController.GetNamespaceKey(type));
+            if (expanded)
+            {
+                Refresh();
+            }
+            else
+            {
+                if (changed)
+                {
+                    ++_generation;
+                }
+                foreach (CatalogRow row in List.Query<CatalogRow>().Build())
+                {
+                    if (row.userData is CatalogEntry entry)
+                    {
+                        UpdateRowPresentation(row, entry);
+                    }
+                }
+                if (reveal && moveFocus)
+                {
+                    RestoreCatalogFocus(_focusedEntry, _focusedControl, _generation);
+                }
+            }
             if (reveal && type != null)
             {
-                _collapsed.Remove(NamespaceController.GetNamespaceKey(type));
-                Refresh();
                 int index = Find(type);
                 if (0 <= index)
                 {
                     List.ScrollToItem(index);
                 }
-            }
-            else
-            {
-                List.RefreshItems();
             }
         }
 
@@ -436,15 +455,25 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             return null;
         }
 
+        private void UpdateRowPresentation(CatalogRow row, CatalogEntry entry)
+        {
+            row.EnableInClassList(StyleConstants.SelectedClass, IsSelected(entry));
+            bool canEdit = !_owner.IsAssetEditingSuspended;
+            row.MoveUpButton.SetEnabled(canEdit && row.CanMoveUp);
+            row.MoveDownButton.SetEnabled(canEdit && row.CanMoveDown);
+        }
+
         private VisualElement MakeRow()
         {
-            VisualElement row = new() { focusable = true };
+            CatalogRow row = new() { focusable = true };
             row.AddToClassList(StyleConstants.VirtualCatalogRowClass);
             Button collapse = new(() => Toggle((CatalogEntry)row.userData)) { name = "catalog-collapse" };
             collapse.AddToClassList(StyleConstants.NamespaceIndicatorClass);
             row.Add(collapse);
             Button up = new(() => Move((CatalogEntry)row.userData, true)) { name = "go-up-button", text = "↑" };
             Button down = new(() => Move((CatalogEntry)row.userData, false)) { name = "go-down-button", text = "↓" };
+            row.MoveUpButton = up;
+            row.MoveDownButton = down;
             row.Add(up);
             row.Add(down);
             Label label = new() { name = "catalog-label" };
@@ -569,7 +598,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         private void BindRow(VisualElement slot, int index)
         {
-            VisualElement row = slot[0];
+            CatalogRow row = (CatalogRow)slot[0];
             CatalogEntry entry = _rows[index];
             if (!_managed.TryGetValue(entry.NamespaceKey, out List<Type> types))
             {
@@ -583,7 +612,6 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             row.name = header ? "namespace-header-" + entry.NamespaceKey : "type-item-" + entry.Type.Name;
             row.EnableInClassList(StyleConstants.TypeItemClass, !header);
             row.EnableInClassList(StyleConstants.NamespaceHeaderClass, header);
-            row.EnableInClassList(StyleConstants.SelectedClass, IsSelected(entry));
             Label label = row.Q<Label>("catalog-label");
             label.text = title;
             label.tooltip = header ? entry.NamespaceKey : entry.Type.FullName;
@@ -598,8 +626,9 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             down.tooltip = "Move " + title + " to bottom";
             int position = header ? NamespacePosition(entry.NamespaceKey) : types.IndexOf(entry.Type);
             int count = header ? _managed.Count : types.Count;
-            up.SetEnabled(!_owner.IsAssetEditingSuspended && position != 0);
-            down.SetEnabled(!_owner.IsAssetEditingSuspended && position != count - 1);
+            row.CanMoveUp = position != 0;
+            row.CanMoveDown = position != count - 1;
+            UpdateRowPresentation(row, entry);
             Button remove = row.Q<Button>("catalog-remove");
             int removable = 0;
             if (header)
@@ -695,6 +724,14 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                     ? new CatalogEntry(NamespaceController.GetOrderedNamespaceEntries(_managed, _order)[top ? 0 : _managed.Count - 1].Key, null)
                     : new CatalogEntry(entry.NamespaceKey, types[top ? 0 : types.Count - 1]);
             Drop(entry, destination, !top);
+        }
+
+        private sealed class CatalogRow : VisualElement
+        {
+            public Button MoveUpButton { get; set; }
+            public Button MoveDownButton { get; set; }
+            public bool CanMoveUp { get; set; }
+            public bool CanMoveDown { get; set; }
         }
     }
 }
