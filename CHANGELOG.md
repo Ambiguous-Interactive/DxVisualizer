@@ -42,8 +42,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Simplify label filtering with Match all and Match any, keyboard-selectable pills, clear controls, and a readable Advanced expression. Keep missing active labels and show neutral
   counts (#314).
 - Keep the inspector readable with pane controls and single-pane navigation in narrow windows. Restore preferred pane widths when space returns (#313).
-- Clarify Add types and search controls. Group row commands in Actions menus and add selected-asset keyboard shortcuts. Skip hidden catalog entries with arrow keys and collapse
-  namespaces by keyboard (#312).
+- Clarify Add types and search controls, group row commands in Actions, and add selected-asset shortcuts including Shift+F10 and Menu. Skip hidden catalog entries with arrows and
+  collapse namespaces by keyboard (#312).
 - Reduce the vertical gap between object rows by at least half (#292).
 - Point new installs and documentation links to Ambiguous-Interactive/DxVisualizer. Update site bookmarks to <https://ambiguous-interactive.github.io/DxVisualizer/>; the old Pages
   site does not redirect. Existing Git installs keep working (#151).
