@@ -60,6 +60,19 @@ compilation. If a test needs an internal helper, make the helper `public` in the
 editor assembly (precedent: `ObjectIdExtensions`, `LabelFilterEvaluator`). Never
 use reflection in tests to reach internals.
 
+## Input Regression Coverage
+
+- Use an isolated input profile/defaults; never let the host user's remapped keys
+  determine a fixture's behavior. Restore any temporary profile assignment.
+- Exercise the real hosted control with both the configured gesture and the old
+  physical gesture. A matcher-only test misses native control handlers that run
+  first or still act after a custom handler consumes UI Toolkit propagation.
+- Check remapped modifiers, disabled bindings, profile replacement, selection
+  preservation and relay cleanup. Give pointer tests an explicit window rectangle
+  and assert that the target intersects its viewport before sending events.
+- Wait for settled compilation and verify source/module identity before treating a
+  run as evidence. Do not start tests during a pending domain reload.
+
 ## Coverage Priorities
 
 Ordering, filtering, and cloning paths must have coverage before a release; add

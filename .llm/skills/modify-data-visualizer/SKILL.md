@@ -37,6 +37,33 @@ metadata:
   for one-line notes and tool directives, and retain `///` for XML documentation.
   Write comments in Simplified Technical English: short, plain sentences, no filler.
 
+## Input Routing
+
+- Every package-owned navigation/action key, modifier and pointer gesture uses
+  `DataVisualizer.Input`, backed by the Settings input-profile asset. Standalone
+  controls accept `Func<DataVisualizerInputSettings>` and own independent defaults;
+  never create a mutable static default or cache a replaced profile.
+- Defaults belong in `CatalogInputSettings`/`DataVisualizerInputSettings`.
+  `NativeInputRouter` alone translates to Unity control gestures. Do not add
+  physical key/button literals to handlers. Native OS menus and text editing keep
+  their platform behavior.
+- Test remaps through the hosted control, not just the binding matcher: new keys
+  work, old keys stop working, None is unbound, and modifiers are exact. Keep
+  catalog selection/navigation precedence when bindings overlap.
+- Intercept native controls from their owning ancestor before native callbacks.
+  Consume the backing IMGUI event as well as UI Toolkit propagation when relaying
+  a gesture; otherwise an old native key can still move selection. Key-relay guards
+  are owner-local and disposed through a named scope. Pointer dispatch may queue:
+  retain forwarded-event identity until its callback runs, then remove it. Clear
+  pending identities on every owner removal path; a call-scoped flag is too short.
+  Capture row identity and panel with a queued pointer and cancel its dispatch if
+  the target is recycled, destroyed or moved to another panel before delivery.
+- Use Unity's public focus ring for configured focus traversal. Native key relays
+  supply the matching character as well as the key code; test both directions from
+  a text input so focus keys cannot enter text or leave backward traversal broken.
+- Read shortcut hints from current bindings when the tooltip/menu opens. Replacing
+  or editing a profile must not need row recreation.
+
 ## Persistence Safety
 
 - User state is JSON (`DataVisualizerUserState.json`) or a settings asset depending
@@ -45,6 +72,10 @@ metadata:
 - Renaming serialized fields or JSON keys requires `[FormerlySerializedAs]` or an
   explicit migration; never orphan saved keys silently.
 - EditorPrefs keys share the `PrefsPrefix` const; reuse the prefix for new keys.
+
+- When adding a persisted settings field, update `PersistenceContractTests` deliberately
+  and preserve defaults for old assets. Input profiles are a project configuration
+  reference; they do not become per-user selection state.
 
 ## Asset Discovery
 
@@ -91,6 +122,10 @@ metadata:
   persist the loaded view.
 - Keep `_asyncDisplayOrderByGuid` and `_selectedObjectOrderIndex` synchronized after
   every canonical-order mutation; pending batches use those indexes for insertion.
+- Check active-list membership before a delayed row action changes canonical order,
+  persisted state or focus. Reorder and clone callbacks can outlive type/filter
+  changes. Explicit create/clone insertion must keep other active types out of the
+  saved order. Exercise stale callbacks during partial loading and both stores.
 - GUID order is stable and persisted. Never use swap-back removal in these lists.
   A move performs one `RemoveAt` plus one insertion; do not replace it with
   `RemoveAll`, which adds a predicate scan and discards the original index.

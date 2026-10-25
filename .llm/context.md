@@ -139,6 +139,10 @@ lands there as annotated, stdlib-first Python; `uvx pyright` validates types loc
     `Assert.That(value == null)` / `Assert.That(value != null)`. The C# source lint enforces the assertion and constraint forms; the `?.`/`??`/bool shapes are review-enforced
     (#117).
 
+36. Resolve package-owned keys, modifiers, pointer buttons and drag thresholds through the owning window's input profile (`DataVisualizer.Input`). Define binding literals only in
+    `CatalogInputSettings`, `DataVisualizerInputSettings`, or the documented `NativeInputRouter` compatibility boundary. New controls accept an owner-supplied input provider; hints
+    read current bindings. See [input routing](./skills/modify-data-visualizer/SKILL.md#input-routing) before adding or changing interaction handlers.
+
 ### Skills Discipline
 
 - Skills live at `.llm/skills/<kebab-name>/SKILL.md` (standard Agent Skills format); see [manage-skills](./skills/manage-skills/SKILL.md) before creating or editing one.

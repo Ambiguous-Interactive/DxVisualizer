@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "description": "Reviewed current label controls, addable type matches, and populated representative inspector values.",
+  "description": "Reviewed current label controls, editable input profile setting, addable type matches, and representative inspector values.",
   "captures": {
     "layout": [
       1180,
@@ -23,8 +23,8 @@
       303
     ],
     "settings": [
-      340,
-      183
+      505,
+      207
     ]
   },
   "provenance": {
@@ -44,6 +44,16 @@
         "revision": "c1cc417232ef34e4cf2c3f89362644867cca4445",
         "capturedAt": "2026-10-20",
         "reviewScope": "Quick search: eight owned results and the Show all results action. Existing platform, theme and DPI context applies."
+      },
+      "layout": {
+        "revision": "1a456d56710c136a3c229baf2ea2585912cb9843",
+        "capturedAt": "2026-10-25",
+        "reviewScope": "Aligned 28-point label field and Add button; inspected at 1180 and 760 points across the default dark UI. Six-theme geometry assertions also pass."
+      },
+      "settings": {
+        "revision": "1a456d56710c136a3c229baf2ea2585912cb9843",
+        "capturedAt": "2026-10-25",
+        "reviewScope": "Input profile field, persistence controls, theme and data folder; inspected at 1180 and minimum 360-point window widths. Existing Windows dark skin and DPI context applies."
       }
     }
   },

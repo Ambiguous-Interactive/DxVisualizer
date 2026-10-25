@@ -58,6 +58,20 @@ See the full template:
 - Every user-visible string class gets a USS class constant; avoid inline style
   assignments except for computed geometry.
 
+## Input and Form Controls
+
+- Follow [input routing](../modify-data-visualizer/SKILL.md#input-routing) for every
+  package-owned gesture, including buttons, native lists and popover controls.
+  Pass the owning input provider into reused controls and derive hints from it.
+- Put a form field and its action in one USS row with a shared height and spacing.
+  Size the TextField's editable input child as well as its outer element; matching
+  the outer bounds alone can leave the visible input as a short strip.
+- Check editable and action bounds in a hosted panel at normal and compact widths
+  across shipped themes, then inspect the captured UI before updating docs images.
+- For refreshed docs captures, update dimensions and per-shot provenance in
+  `docs/images/capture-manifest.json`, then run `uv run scripts/export_docs_webp.py`.
+  Keep the PNG sources and pixel-verified lossless WebP copies together.
+
 ## Testing
 
 UI layout logic that can be extracted (measurements, ordering, filtering) belongs in

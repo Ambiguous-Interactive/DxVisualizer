@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Add editable input profiles for browser keys, modifiers, focus and pointer gestures. Apply profile changes to open controls and their shortcut hints (#312).
 - Add Page Up/Down focus navigation to large catalogs, with viewport-sized jumps and unchanged selection (#324, #312).
 - Add Move to top/bottom to asset Actions and Ctrl/Cmd+Home/End shortcuts for the selected asset, including offscreen rows (#312).
 - Add viewport-bounded catalog rows for large type collections while keeping filtering, collapse, keyboard navigation and saved ordering. Filter, collapse, change selection and
@@ -35,6 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Align asset-label entry and its Add button with consistent height and spacing across themes (#312).
 - Yield selected-type asset loading between short work slices. Prioritize saved selection and keep custom order while remaining objects load (#309).
 - Speed up custom namespace ordering and catalog scrolling while preserving saved positions and stable ties (#324).
 - Keep repeated searches responsive during partial indexing by reusing prepared result order and search data across window rebuilds. Load assets only when activating search results
