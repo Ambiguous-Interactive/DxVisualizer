@@ -4,7 +4,7 @@ The [baseline](catalog-controls-baseline-2026-10-25.json) and [final](catalog-co
 6000.5.2f1 Windows process, dark editor skin, one pixel per point. The existing driver creates synthetic CLR identities, not Unity assets or imported scripts. Each
 size/distribution has five discarded warm-ups and 30 retained repetitions. The ten-minute watchdog and 512 MiB additional retained-managed-heap guard remain unchanged.
 
-The baseline uses main at `05c1bcf`. The final production tree is `789f850`: it adds catalog keyboard focus navigation and retains direct references to each realized row's
+The baseline uses main at `05c1bcf`. The final measured production tree is `789f850`: it adds catalog keyboard focus navigation and retains direct references to each realized row's
 controls. Binding no longer queries the visual tree for the title, collapse, ordering and remove controls. References belong to realized rows, not logical entries; callback targets
 still read the current row identity.
 
@@ -43,6 +43,17 @@ identities while recycling. These scripted checks do not replace exploratory add
 ![Final hosted synthetic catalog in Dx](catalog-controls-Dx-2026-10-25.png)
 
 The capture comes from the completed final benchmark. It records the hosted catalog layout, not a physical keyboard gesture or a focus-navigation latency measurement.
+
+## Keyboard review follow-up
+
+The review repair in PR #456 adds injectable boundary keys, preserves existing selection/navigation binding precedence and generates current-key tooltips without replacing action
+hints. The remapped-header regression fails before repair and passes afterward, together with seven input tests. Hosted coverage now exercises custom Home/End navigation and custom
+boundary keys. Tooltip event handling uses the public [Unity 2021.3 callback API](https://docs.unity3d.com/2021.3/Documentation/Manual/UIE-Tooltip-Events.html); this is source/API
+verification, not execution on that editor version.
+
+The repaired renderer SHA-256 is `12dcdbef7ae280222a1088f0c4c12ee6c4282af72697bde30de1f920ffccab11`. The scroll experiment and capture above precede that repair. They remain
+evidence for their recorded source identities; they are not measurements of the repaired head. Row binding is unchanged, but keyboard dispatch and tooltip callback registration
+have changed. No new timing or construction-cost claim is inferred.
 
 ## Limits
 
