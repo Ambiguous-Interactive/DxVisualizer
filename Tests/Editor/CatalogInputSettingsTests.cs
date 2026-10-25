@@ -54,6 +54,8 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 FirstRowKey = KeyCode.H,
                 LastRowKey = KeyCode.J,
                 NextTypeKey = KeyCode.N,
+                PreviousPageKey = KeyCode.P,
+                NextPageKey = KeyCode.Q,
             };
             VirtualizedTypeCatalogView view = new(owner, new NamespaceController(managed, order), managed, order, input);
             LayoutTestWindow host = ScriptableObject.CreateInstance<LayoutTestWindow>();
@@ -65,6 +67,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 tooltip.target = view;
                 view.SendEvent(tooltip);
                 Assert.That(tooltip.tooltip, Does.Contain("H/J"));
+                Assert.That(tooltip.tooltip, Does.Contain("P/Q"));
                 Assert.That(tooltip.tooltip, Does.Contain("UpArrow/N"));
             }
             input.FirstRowKey = KeyCode.K;

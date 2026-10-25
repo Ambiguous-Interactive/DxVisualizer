@@ -569,6 +569,34 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 }
                 Assert.That(focusedControl?.userData, Is.EqualTo(visibleEnd), "End realizes and focuses a distant identity.");
                 Assert.That(focusedControl.panel != null, "Focus belongs to an attached recycled row.");
+                if (!ReferenceEquals(dataset, datasets[0]))
+                {
+                    view.Input.PreviousPageKey = KeyCode.P;
+                    view.Input.NextPageKey = KeyCode.N;
+                }
+                int pageRows = Math.Max(1, Mathf.FloorToInt(view.List.Q<ScrollView>().contentViewport.layout.height / view.List.fixedItemHeight));
+                CatalogEntry previousPage = (CatalogEntry)view.List.itemsSource[Math.Max(0, view.List.itemsSource.Count - 1 - pageRows)];
+                using (KeyDownEvent page = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = view.Input.PreviousPageKey }))
+                {
+                    focusedControl.SendEvent(page);
+                }
+                for (int frame = 0; frame < 20 && !Equals(focusedControl?.userData, previousPage); frame++)
+                {
+                    yield return null;
+                }
+                Assert.That(focusedControl?.userData, Is.EqualTo(previousPage), "Page Up focuses a viewport-sized jump across recycled rows.");
+                Assert.That(controller.SelectedType, Is.EqualTo(selectedBeforeFocus), "Page navigation preserves selection.");
+                foreach (int attempt in new[] { 0, 1 })
+                {
+                    using KeyDownEvent page = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = view.Input.NextPageKey });
+                    focusedControl.SendEvent(page);
+                    for (int frame = 0; frame < 20 && !Equals(focusedControl?.userData, visibleEnd); frame++)
+                    {
+                        yield return null;
+                    }
+                    Assert.That(focusedControl?.userData, Is.EqualTo(visibleEnd), "Page Down reaches and clamps to the final visible row.");
+                }
+
                 view.Filter("MeasuredType000");
                 yield return null;
                 yield return null;
@@ -597,6 +625,27 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 }
                 Assert.That(focusedControl?.userData, Is.EqualTo(filteredHome), "Home focuses the first visible namespace.");
                 Assert.That(controller.SelectedType, Is.EqualTo(selectedBeforeFocus));
+                int filteredPageIndex = Math.Min(view.List.itemsSource.Count - 1, pageRows);
+                CatalogEntry filteredPage = (CatalogEntry)view.List.itemsSource[filteredPageIndex];
+                using (KeyDownEvent page = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = view.Input.NextPageKey }))
+                {
+                    focusedControl.SendEvent(page);
+                }
+                for (int frame = 0; frame < 20 && !Equals(focusedControl?.userData, filteredPage); frame++)
+                {
+                    yield return null;
+                }
+                Assert.That(focusedControl?.userData, Is.EqualTo(filteredPage), "Page navigation uses filtered identities.");
+                using (KeyDownEvent page = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = view.Input.PreviousPageKey }))
+                {
+                    focusedControl.SendEvent(page);
+                }
+                for (int frame = 0; frame < 20 && !Equals(focusedControl?.userData, filteredHome); frame++)
+                {
+                    yield return null;
+                }
+                Assert.That(focusedControl?.userData, Is.EqualTo(filteredHome), "Page Up clamps to the first visible row.");
+
                 view.Filter(null);
                 view.List.ScrollToItem(0);
                 yield return null;
