@@ -130,6 +130,12 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(row.Q<Button>("go-down-button").ClassListContains("go-button-disabled"), Is.EqualTo(!canMoveDown));
         }
 
+        private static void SendLabelToggleKey(VisualElement toggle, KeyCode key)
+        {
+            using KeyDownEvent evt = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = key });
+            toggle.SendEvent(evt);
+        }
+
         [Test]
         public void ShouldMatchRefreshTypesByExactIdentityInTheirCanonicalNamespace()
         {
@@ -300,6 +306,141 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That((bool)InvokePrivate(window, "HandleObjectActionShortcut", blocked), Is.False);
             InvokePrivate(window, "MoveObjectToTop", selected);
             Assert.That(all[all.Count - 1], Is.SameAs(selected), "Direct menu callbacks must also respect suspension.");
+        }
+
+        [UnityTest]
+        public IEnumerator ShouldToggleLabelFiltersWithConfiguredKeyboardAndPointer()
+        {
+            foreach (bool projectState in new[] { false, true })
+            {
+                using TestCleanupScope cleanup = new();
+                object previousInstance = ReadSharedInstance();
+                cleanup.Defer(() => RestoreSharedInstance(previousInstance));
+                cleanup.Defer(() => AssetGuidTypeIndex.Shared.Cancel());
+                DataVisualizerSettings settings = ScriptableObject.CreateInstance<DataVisualizerSettings>();
+                cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(settings));
+                string output = "Temp/LabelToggle-" + Guid.NewGuid().ToString("N");
+                cleanup.Defer(() => System.IO.Directory.Delete(output, recursive: true));
+                using PerfWindowStateScope state = new(settings, new DataVisualizerUserState(), output);
+                state.Settings.persistStateInSettingsAsset = projectState;
+                Type type = typeof(TestDataObject);
+                state.UserState.managedTypeNames.Add(type.FullName);
+                state.Settings.HydrateFrom(state.UserState);
+                DataVisualizerWindow window = ScriptableObject.CreateInstance<DataVisualizerWindow>();
+                using TestCleanupScope windowCleanup = new();
+                windowCleanup.Defer(() => EditorSurfaceCapture.CloseWindow(window));
+                SetPrivateField(window, "_settings", state.Settings);
+                SetPrivateField(window, "_userState", state.UserState);
+                SetPrivateField(window, "_userStateFilePath", state.FilePath);
+                EditorSurfaceCapture.ShowPopup(window);
+                SetPrivateField(window, "_settings", state.Settings);
+                SetPrivateField(window, "_userState", state.UserState);
+                SetPrivateField(window, "_userStateFilePath", state.FilePath);
+                window.position = new Rect(40, 40, 1180, 780);
+                window.CreateGUI();
+                InvokePrivate(window, "LoadInitialContent");
+                ReadPrivateField<NamespaceController>(window, "_namespaceController").SelectType(window, type);
+                yield return WaitForRefresh(window);
+                TypeLabelFilterConfig config = (TypeLabelFilterConfig)InvokePrivate(window, "LoadOrCreateLabelFilterConfig", type);
+                Assert.That(config != null);
+                config.andLabels.Clear();
+                config.orLabels.Clear();
+                InvokePrivate(window, "ToggleLabelsCollapsed", true);
+                yield return null;
+                EditorSurfaceCapture.SettleLayout(window);
+                Button toggle = window.rootVisualElement.Q<Button>("label-filter-collapse-toggle");
+                Assert.That(toggle != null, "Label controls need a native focusable button.");
+                Assert.That(toggle.focusable);
+                Assert.That(toggle.worldBound.height, Is.Positive);
+                DataVisualizerThemeSelection selection = new();
+                cleanup.Defer(() => selection.Apply(null, null));
+                foreach (string themeName in new[] { "Dx", "Classic", "Nord", "Dracula", "Compact", "Minimal" })
+                {
+                    selection.Apply(
+                        window.rootVisualElement,
+                        AssetDatabase.LoadAssetAtPath<DataVisualizerThemeSettings>(
+                            "Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/Styles/" + themeName + ".asset"
+                        )
+                    );
+                    yield return null;
+                    toggle.Focus();
+                    EditorSurfaceCapture.SettleLayout(window);
+                    Assert.That(toggle.worldBound.height, Is.EqualTo(22).Within(1), themeName);
+                    Assert.That(toggle.worldBound.width, Is.EqualTo(22).Within(1), themeName);
+                    Assert.That(toggle.resolvedStyle.paddingLeft, Is.Zero, themeName);
+                    Assert.That(toggle.resolvedStyle.borderLeftWidth, Is.Positive, themeName + " focus is visible");
+                }
+                toggle.Focus();
+                yield return null;
+                Assert.That(window.rootVisualElement.focusController.focusedElement, Is.SameAs(toggle));
+                SendLabelToggleKey(toggle, KeyCode.Return);
+                Assert.That(config.isCollapsed, Is.False, "The default submit key opens the label filter.");
+                DataVisualizerInputProfile profile = ScriptableObject.CreateInstance<DataVisualizerInputProfile>();
+                cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(profile));
+                state.Settings.inputProfile = profile;
+                profile.Bindings.Navigation.SelectKey = KeyCode.F6;
+                profile.Bindings.Navigation.AlternateSelectKey = KeyCode.None;
+                profile.Bindings.Navigation.ToggleKey = KeyCode.None;
+                using (TooltipEvent hint = TooltipEvent.GetPooled())
+                {
+                    hint.target = toggle;
+                    toggle.SendEvent(hint);
+                    Assert.That(hint.tooltip, Does.Contain("F6"));
+                }
+                SendLabelToggleKey(toggle, KeyCode.Return);
+                Assert.That(config.isCollapsed, Is.False, "The old native submit key must stop working.");
+                SendLabelToggleKey(toggle, KeyCode.F6);
+                Assert.That(config.isCollapsed);
+                profile.Bindings.Navigation.SelectKey = KeyCode.None;
+                SendLabelToggleKey(toggle, KeyCode.F6);
+                Assert.That(config.isCollapsed, "An unbound submit key must stop working.");
+                DataVisualizerInputProfile replacement = ScriptableObject.CreateInstance<DataVisualizerInputProfile>();
+                cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(replacement));
+                replacement.Bindings.Navigation.SelectKey = KeyCode.F7;
+                replacement.Bindings.Navigation.AlternateSelectKey = KeyCode.None;
+                replacement.Bindings.Navigation.ToggleKey = KeyCode.None;
+                replacement.Bindings.Navigation.PointerButton = 1;
+                state.Settings.inputProfile = replacement;
+                SendLabelToggleKey(toggle, KeyCode.F7);
+                Assert.That(config.isCollapsed, Is.False, "Profile replacement takes effect on the existing button.");
+                foreach (int button in new[] { 0, 1 })
+                {
+                    using (
+                        PointerDownEvent down = PointerDownEvent.GetPooled(
+                            new Event
+                            {
+                                type = EventType.MouseDown,
+                                button = button,
+                                mousePosition = toggle.worldBound.center,
+                            }
+                        )
+                    )
+                    {
+                        toggle.SendEvent(down);
+                    }
+                    yield return null;
+                    using (
+                        PointerUpEvent up = PointerUpEvent.GetPooled(
+                            new Event
+                            {
+                                type = EventType.MouseUp,
+                                button = button,
+                                mousePosition = toggle.worldBound.center,
+                            }
+                        )
+                    )
+                    {
+                        toggle.SendEvent(up);
+                    }
+                    yield return null;
+                    Assert.That(config.isCollapsed, Is.EqualTo(button == 1), "Only the configured pointer button toggles the section.");
+                }
+                config.andLabels.Add("Keep visible");
+                InvokePrivate(window, "UpdateLabelAreaAndFilter");
+                Assert.That(toggle.enabledInHierarchy, Is.False, "An active filter cannot be hidden.");
+                Assert.That(window.rootVisualElement.Q<LabelFilterEditor>().style.display.value, Is.EqualTo(DisplayStyle.Flex));
+                Assert.That(toggle.tooltip, Does.Contain("Clear"));
+            }
         }
 
         [UnityTest]
