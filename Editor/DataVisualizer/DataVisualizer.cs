@@ -82,7 +82,7 @@ namespace WallstopStudios.DataVisualizer.Editor
         private const float MinWindowHeight = 480f;
         private const int SplitterWidthSaveDebounceMilliseconds = 250;
         private const int AsyncLoadBatchSize = 100;
-        private const int AsyncLoadPriorityBatchSize = 100;
+        private const double ObjectLoadBudgetMilliseconds = 4;
 
         /*
             Keep the fixed-height object ListView slots close to the card height to reduce
@@ -100,6 +100,12 @@ namespace WallstopStudios.DataVisualizer.Editor
             Set to true to see detailed loading performance logs in Unity Console
         */
         private static readonly bool EnableAsyncLoadDebugLog = false;
+
+        private static readonly Action<string, (DataVisualizer Owner, Type Type, int Generation)> ProcessObjectGuid = static (guid, state) =>
+            state.Owner.LoadObjectGuid(guid, state.Type, state.Generation);
+
+        private static readonly Func<(DataVisualizer Owner, Type Type, int Generation), bool> CanContinueObjectLoad = static state =>
+            !state.Owner.IsAssetEditingSuspended && state.Generation == state.Owner._asyncLoadGeneration && state.Type == state.Owner._asyncLoadTargetType;
 
         private static readonly Color[] PredefinedLabelColors =
         {
@@ -654,22 +660,6 @@ namespace WallstopStudios.DataVisualizer.Editor
             }
 
             return FindFirstTypeByOrdinalNamespaceKey(typesByNamespace);
-        }
-
-        /*
-            Removes and returns up to batchSize items from the front of the queue. A Queue keeps this
-            O(batchSize) instead of the O(n) element shift List.RemoveRange(0, batchSize) incurs each
-            batch (which compounds to O(n^2) over a full drain on large projects).
-        */
-        private static List<string> DequeueBatch(Queue<string> queue, int batchSize)
-        {
-            List<string> batch = new(batchSize);
-            for (int i = 0; i < batchSize && 0 < queue.Count; i++)
-            {
-                batch.Add(queue.Dequeue());
-            }
-
-            return batch;
         }
 
         /*
@@ -6698,35 +6688,6 @@ namespace WallstopStudios.DataVisualizer.Editor
                 }
             }
 
-            // Load priority batch first (custom ordered items)
-            int priorityBatchSize = Mathf.Min(AsyncLoadPriorityBatchSize, orderedPriorityGuids.Count);
-            List<string> priorityBatch = orderedPriorityGuids.GetRange(0, priorityBatchSize);
-
-            if (EnableAsyncLoadDebugLog)
-            {
-                string savedObjInfo = "";
-                if (!string.IsNullOrWhiteSpace(savedObjectGuid))
-                {
-                    bool savedInBatch = priorityBatch.Contains(savedObjectGuid);
-                    savedObjInfo = savedInBatch ? $" (saved object {savedObjectGuid} is in priority batch)" : $" (WARNING: saved object {savedObjectGuid} NOT in priority batch!)";
-                }
-                Debug.Log(
-                    $"[DataVisualizer] Loading priority batch: {priorityBatchSize} objects{savedObjInfo} (Total: {allGuids.Length}, Remaining: {allGuids.Length - priorityBatchSize})"
-                );
-            }
-
-            /*
-                LoadObjectBatch updates the indicator with the real loaded count, so there's no
-                pre-load UpdateLoadingIndicator here (it briefly showed progress before anything loaded).
-            */
-            LoadObjectBatch(type, priorityBatch, true);
-
-            // Queue remaining priority items
-            for (int i = priorityBatchSize; i < orderedPriorityGuids.Count; i++)
-            {
-                _pendingObjectGuids.Enqueue(orderedPriorityGuids[i]);
-            }
-
             /*
                 Order the remaining GUIDs by the canonical display order already computed above rather
                 than re-deriving asset paths and sorting again (that duplicate work is noticeable on
@@ -6751,42 +6712,23 @@ namespace WallstopStudios.DataVisualizer.Editor
                 }
             );
 
-            List<string> remainingSorted = new(pendingRemaining.Length);
+            _asyncLoadTask?.Pause();
+            _pendingObjectGuids.Clear();
+            foreach (string guid in orderedPriorityGuids)
+            {
+                _pendingObjectGuids.Enqueue(guid);
+            }
             foreach (var entry in pendingRemaining)
             {
-                remainingSorted.Add(entry.guid);
+                _pendingObjectGuids.Enqueue(entry.guid);
             }
-
-            // Load first batch of remaining items if we have space
-            if (priorityBatchSize < AsyncLoadPriorityBatchSize)
+            LoadObjectBatch(type);
+            if (!CanContinueObjectLoad((this, type, loadGeneration)))
             {
-                int remainingInPriorityBatch = AsyncLoadPriorityBatchSize - priorityBatchSize;
-                int firstRemainingBatch = Mathf.Min(remainingInPriorityBatch, remainingSorted.Count);
-                List<string> firstRemainingBatchGuids = remainingSorted.GetRange(0, firstRemainingBatch);
-                LoadObjectBatch(type, firstRemainingBatchGuids, true);
-
-                for (int i = firstRemainingBatch; i < remainingSorted.Count; i++)
-                {
-                    _pendingObjectGuids.Enqueue(remainingSorted[i]);
-                }
-            }
-            else
-            {
-                foreach (string guid in remainingSorted)
-                {
-                    _pendingObjectGuids.Enqueue(guid);
-                }
+                return;
             }
 
-            /*
-                Now that the priority batch AND the first remainder batch are loaded, select the
-                saved/first object synchronously (still in this frame, so a type switch goes straight
-                from the old inspector to the new one with no stale UI or "loading"/"select an object"
-                flash). Running it here rather than right after the (possibly empty) priority batch means
-                a fresh type with no saved selection and no custom order still auto-selects its first
-                real asset instead of showing a populated list with a blank inspector. Remaining objects
-                keep streaming in asynchronously below.
-            */
+            // The saved GUID is attempted first; paint its inspector before the next scheduled slice.
             if (!priorityLoad)
             {
                 BuildObjectsView();
@@ -6831,6 +6773,11 @@ namespace WallstopStudios.DataVisualizer.Editor
                 }
             }
 
+            if (!CanContinueObjectLoad((this, type, loadGeneration)))
+            {
+                return;
+            }
+
             // Continue loading remaining batches
             if (0 < _pendingObjectGuids.Count)
             {
@@ -6838,7 +6785,8 @@ namespace WallstopStudios.DataVisualizer.Editor
                 {
                     Debug.Log($"[DataVisualizer] Queued {_pendingObjectGuids.Count} objects for background loading");
                 }
-                ContinueLoadingObjects(type, loadGeneration);
+                _asyncLoadTask = rootVisualElement.schedule.Execute(() => ContinueLoadingObjects(type, loadGeneration));
+                _asyncLoadTask.ExecuteLater(10);
             }
             else
             {
@@ -8888,67 +8836,61 @@ namespace WallstopStudios.DataVisualizer.Editor
             }
         }
 
-        private void LoadObjectBatch(Type type, List<string> guids, bool updateView = false)
+        private void LoadObjectBatch(Type type, bool updateView = false)
         {
-            var batchStartTime = System.Diagnostics.Stopwatch.StartNew();
-            List<(string guid, ScriptableObject asset)> loadedObjects = new();
-
-            foreach (string guid in guids)
+            int generation = _asyncLoadGeneration;
+            int processed = BudgetedQueue.Process(
+                _pendingObjectGuids,
+                (Owner: this, Type: type, Generation: generation),
+                AsyncLoadBatchSize,
+                ObjectLoadBudgetMilliseconds,
+                ProcessObjectGuid,
+                CanContinueObjectLoad
+            );
+            if (!CanContinueObjectLoad((this, type, generation)))
             {
-                string path = AssetDatabase.GUIDToAssetPath(guid);
-                if (string.IsNullOrWhiteSpace(path))
-                {
-                    continue;
-                }
-
-                ScriptableObject asset = AssetDatabase.LoadMainAssetAtPath(path) as ScriptableObject;
-                if (asset != null && asset.GetType() == type)
-                {
-                    _assetChanges?.Track(path, guid);
-                    if (!_assetObjectCache.RememberLoaded(guid, asset))
-                    {
-                        _assetObjectCache.Upsert(guid, asset, _isSearchCachePopulated);
-                    }
-                    loadedObjects.Add((guid, asset));
-                }
+                return;
             }
-
-            /*
-                Insert into _selectedObjects at each asset's canonical position (custom order first,
-                then by path) so user ordering survives batched loading. The position index is cached
-                per object so comparisons stay O(1) with no per-comparison AssetDatabase calls.
-                NOTE: intentionally does NOT touch _filteredObjects — ApplyLabelFilter() rebuilds that
-                from _selectedObjects when BuildObjectsView() runs, so active filters stay correct.
-            */
-            foreach ((string guid, ScriptableObject obj) in loadedObjects)
-            {
-                InsertObjectByAsyncDisplayOrder(obj, guid);
-            }
-
-            batchStartTime.Stop();
             if (EnableAsyncLoadDebugLog)
             {
-                Debug.Log($"[DataVisualizer] Loaded batch: {loadedObjects.Count} objects in {batchStartTime.ElapsedMilliseconds}ms (Total loaded: {_selectedObjects.Count})");
+                Debug.Log($"[DataVisualizer] Attempted {processed} objects (Total loaded: {_selectedObjects.Count})");
             }
-
-            /*
-                Skipped = GUIDs in this batch that resolved to a missing/mismatched-type asset. Track
-                them so the indicator total below reflects only loadable assets.
-            */
-            _asyncLoadSkippedCount += guids.Count - loadedObjects.Count;
-
-            /*
-                Update loading indicator if async loading is in progress. Uses the count
-                captured when the load started instead of rescanning the whole project per batch.
-            */
             if (_isLoadingObjectsAsync && _asyncLoadTargetType != null)
             {
                 UpdateLoadingIndicator(_selectedObjects.Count, _asyncLoadTotalCount - _asyncLoadSkippedCount);
             }
-
             if (updateView)
             {
                 BuildObjectsView();
+            }
+        }
+
+        private void LoadObjectGuid(string guid, Type type, int generation)
+        {
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                _asyncLoadSkippedCount++;
+                return;
+            }
+            ScriptableObject asset = AssetDatabase.LoadMainAssetAtPath(path) as ScriptableObject;
+            if (!CanContinueObjectLoad((this, type, generation)))
+            {
+                return;
+            }
+            if (asset == null || asset.GetType() != type)
+            {
+                _asyncLoadSkippedCount++;
+                return;
+            }
+            _assetChanges?.Track(path, guid);
+            if (!_assetObjectCache.RememberLoaded(guid, asset))
+            {
+                _assetObjectCache.Upsert(guid, asset, _isSearchCachePopulated);
+            }
+            if (CanContinueObjectLoad((this, type, generation)))
+            {
+                InsertObjectByAsyncDisplayOrder(asset, guid);
             }
         }
 
@@ -8984,7 +8926,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         private void ContinueLoadingObjects(Type type, int loadGeneration)
         {
-            if (loadGeneration != _asyncLoadGeneration)
+            if (!CanContinueObjectLoad((this, type, loadGeneration)))
             {
                 return; // superseded by a newer load, which owns the async state
             }
@@ -8999,10 +8941,24 @@ namespace WallstopStudios.DataVisualizer.Editor
                 return;
             }
 
-            int batchSize = Mathf.Min(AsyncLoadBatchSize, _pendingObjectGuids.Count);
-            List<string> batch = DequeueBatch(_pendingObjectGuids, batchSize);
-
-            LoadObjectBatch(type, batch, true);
+            bool hadLoadedObjects = 0 < _selectedObjects.Count;
+            LoadObjectBatch(type, true);
+            if (!CanContinueObjectLoad((this, type, loadGeneration)))
+            {
+                return;
+            }
+            if (!hadLoadedObjects && (_selectedObject == null || _selectedObject.GetType() != type) && !processorSelection.HasSelectionIntent)
+            {
+                ScriptableObject firstObject = DetermineObjectToAutoSelect(type);
+                if (firstObject != null)
+                {
+                    SelectObjectAndNavigateKeepingSelection(firstObject, preserveProcessorSelection: false);
+                }
+            }
+            if (!CanContinueObjectLoad((this, type, loadGeneration)))
+            {
+                return;
+            }
 
             if (0 < _pendingObjectGuids.Count)
             {
