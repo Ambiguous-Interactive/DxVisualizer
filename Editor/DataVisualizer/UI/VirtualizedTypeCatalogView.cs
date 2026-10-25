@@ -510,6 +510,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             CatalogRow row = new() { focusable = true };
             row.AddToClassList(StyleConstants.VirtualCatalogRowClass);
             Button collapse = new(() => Toggle((CatalogEntry)row.userData)) { name = "catalog-collapse" };
+            row.CollapseButton = collapse;
             collapse.AddToClassList(StyleConstants.NamespaceIndicatorClass);
             row.Add(collapse);
             Button up = new(() => Move((CatalogEntry)row.userData, true)) { name = "go-up-button", text = "↑" };
@@ -519,9 +520,11 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             row.Add(up);
             row.Add(down);
             Label label = new() { name = "catalog-label" };
+            row.TitleLabel = label;
             label.AddToClassList(StyleConstants.TypeLabelClass);
             row.Add(label);
             Button remove = new(() => Remove((CatalogEntry)row.userData, row)) { name = "catalog-remove", text = "X" };
+            row.RemoveButton = remove;
             remove.AddToClassList(StyleConstants.DeleteButtonClass);
             row.Add(remove);
             foreach (Button button in new[] { collapse, up, down, remove })
@@ -666,16 +669,16 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             row.name = header ? "namespace-header-" + entry.NamespaceKey : "type-item-" + entry.Type.Name;
             row.EnableInClassList(StyleConstants.TypeItemClass, !header);
             row.EnableInClassList(StyleConstants.NamespaceHeaderClass, header);
-            Label label = row.Q<Label>("catalog-label");
+            Label label = row.TitleLabel;
             label.text = title;
             label.tooltip = header ? entry.NamespaceKey : entry.Type.FullName;
             label.EnableInClassList(StyleConstants.BoldClass, header);
-            Button collapse = row.Q<Button>("catalog-collapse");
+            Button collapse = row.CollapseButton;
             collapse.style.display = header ? DisplayStyle.Flex : DisplayStyle.None;
             collapse.text = _collapsed.Contains(entry.NamespaceKey) ? StyleConstants.ArrowCollapsed : StyleConstants.ArrowExpanded;
             collapse.tooltip = $"Collapse or expand {title} ({Input.SelectKey}/{Input.ToggleKey}; {Input.CollapseKey}/{Input.ExpandKey})";
-            Button up = row.Q<Button>("go-up-button");
-            Button down = row.Q<Button>("go-down-button");
+            Button up = row.MoveUpButton;
+            Button down = row.MoveDownButton;
             up.tooltip = "Move " + title + " to top";
             down.tooltip = "Move " + title + " to bottom";
             row.CanMoveUp = header ? !string.Equals(entry.NamespaceKey, _catalogRows[0].NamespaceKey, StringComparison.Ordinal) : entry.Type != types[0];
@@ -683,7 +686,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                 ? !string.Equals(entry.NamespaceKey, _catalogRows[_catalogRows.Count - 1].NamespaceKey, StringComparison.Ordinal)
                 : entry.Type != types[types.Count - 1];
             UpdateRowPresentation(row, entry);
-            Button remove = row.Q<Button>("catalog-remove");
+            Button remove = row.RemoveButton;
             int removable = 0;
             if (header)
             {
@@ -786,6 +789,9 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         private sealed class CatalogRow : VisualElement
         {
+            public Button CollapseButton { get; set; }
+            public Label TitleLabel { get; set; }
+            public Button RemoveButton { get; set; }
             public Button MoveUpButton { get; set; }
             public Button MoveDownButton { get; set; }
             public bool CanMoveUp { get; set; }
