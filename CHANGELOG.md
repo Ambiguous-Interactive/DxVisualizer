@@ -43,8 +43,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   without retaining every indexed asset (#309, #310).
 - Search available asset text while indexing continues. Speed up Unicode queries, keep final ordering responsive, and refresh open searches as records arrive or change. Keep
   completed results stable when indexing adds no new search data (#310).
-- Simplify label filtering with Match all and Match any, keyboard-selectable pills, clear controls, and a readable Advanced expression. Keep missing active labels and show neutral
-  counts (#314).
+- Simplify label filtering with Match all and Match any, keyboard-selectable pills, clear controls, and a readable Advanced expression. Keep missing active labels, neutral counts
+  and keyboard focus during label refreshes (#314, #308, #312).
 - Keep the inspector readable with pane controls and single-pane navigation in narrow windows. Restore preferred pane widths when space returns (#313).
 - Clarify Add types and search controls, group row commands in Actions, and add selected-asset shortcuts including Shift+F10 and Menu. Skip hidden catalog entries with arrows and
   collapse namespaces by keyboard. Use Home/End to focus catalog boundaries (#312).

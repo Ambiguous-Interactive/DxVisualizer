@@ -125,7 +125,6 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         private void ToggleLabel(string label)
         {
-            bool restoreFocus = panel?.focusController?.focusedElement is Button focused && string.Equals(focused.userData as string, label, StringComparison.Ordinal);
             List<string> selected = _mode.value == AnyMode ? _config.orLabels : _config.andLabels;
             if (selected.RemoveAll(candidate => string.Equals(candidate, label, StringComparison.Ordinal)) == 0)
             {
@@ -133,17 +132,6 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             }
             _changed();
             Render();
-            if (restoreFocus)
-            {
-                foreach (VisualElement element in _pills.Children())
-                {
-                    if (string.Equals(element.userData as string, label, StringComparison.Ordinal))
-                    {
-                        element.Focus();
-                        break;
-                    }
-                }
-            }
         }
 
         private string Expression()
@@ -165,37 +153,64 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             _mode.SetEnabled(_config != null);
             _clear.SetEnabled(_config != null && (0 < _config.andLabels.Count || 0 < _config.orLabels.Count));
             _summary.text = Expression();
-            _pills.Clear();
             if (advanced || _config == null)
             {
+                _pills.Clear();
                 return;
             }
             List<string> labels = new(_available.Count);
-            for (int index = 0; index < _available.Count; index++)
+            for (int availableIndex = 0; availableIndex < _available.Count; availableIndex++)
             {
-                labels.Add(_available[index]);
+                labels.Add(_available[availableIndex]);
             }
-            List<string> selected = _mode.value == AnyMode ? _config.orLabels : _config.andLabels;
+            HashSet<string> selected = new(_mode.value == AnyMode ? _config.orLabels : _config.andLabels, StringComparer.Ordinal);
             foreach (string label in selected)
             {
-                if (!labels.Contains(label))
-                {
-                    labels.Add(label);
-                }
+                labels.Add(label);
             }
             labels.Sort(StringComparer.Ordinal);
+            int index = 0;
+            string previous = null;
             foreach (string label in labels)
             {
-                bool active = selected.Contains(label);
-                Button pill = new(() => ToggleLabel(label))
+                if (0 < index && string.Equals(previous, label, StringComparison.Ordinal))
                 {
-                    text = active ? label + " ×" : label + " +",
-                    tooltip = (active ? "Remove " : "Add ") + label,
-                    userData = label,
-                };
+                    continue;
+                }
+                previous = label;
+                while (index < _pills.childCount && StringComparer.Ordinal.Compare(_pills[index].userData as string, label) < 0)
+                {
+                    RemovePill(index);
+                }
+                Button pill;
+                if (index < _pills.childCount && string.Equals(_pills[index].userData as string, label, StringComparison.Ordinal))
+                {
+                    pill = (Button)_pills[index];
+                }
+                else
+                {
+                    pill = new Button(() => ToggleLabel(label)) { userData = label };
+                    _pills.Insert(index, pill);
+                }
+                bool active = selected.Contains(label);
+                pill.text = active ? label + " ×" : label + " +";
+                pill.tooltip = (active ? "Remove " : "Add ") + label;
                 pill.EnableInClassList(StyleConstants.SelectedClass, active);
-                _pills.Add(pill);
+                index++;
             }
+            while (index < _pills.childCount)
+            {
+                RemovePill(index);
+            }
+        }
+
+        private void RemovePill(int index)
+        {
+            if (ReferenceEquals(panel?.focusController?.focusedElement, _pills[index]))
+            {
+                _mode.Focus();
+            }
+            _pills.RemoveAt(index);
         }
     }
 }
