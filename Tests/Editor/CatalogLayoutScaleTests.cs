@@ -272,36 +272,87 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                             view.List.makeItem = makeRow;
                             view.List.bindItem = bindRow;
                         }
+                        CatalogSample sample = new()
+                        {
+                            types = count,
+                            namespaces = managed.Count,
+                            distribution = distribution == 0 ? "one-large-namespace" : "ten-types-per-namespace",
+                            repetition = repetition,
+                            constructionMilliseconds = constructionMilliseconds,
+                            constructionAllocatedBytes = allocated,
+                            editorFrameAllocatedBytesAfterConstruction = editorFrameAllocatedBytes,
+                            observedScrollMilliseconds = scrollMilliseconds,
+                            selectionMilliseconds = selectionMilliseconds,
+                            observedSelectionMilliseconds = observedSelectionMilliseconds,
+                            selectionCreatedRows = selectionCreatedRows,
+                            selectionBoundRows = selectionBoundRows,
+                            scrollOffset = activeScroll.scrollOffset.y,
+                            virtualized = virtualized,
+                            viewportWidth = activeScroll.contentViewport.worldBound.width,
+                            viewportHeight = activeScroll.contentViewport.worldBound.height,
+                            realizedCatalogRows = catalogRoot.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass).ToList().Count,
+                            realizedElementsAfterScroll = catalogRoot.Query<VisualElement>().ToList().Count,
+                            realizedElements = elements,
+                            realizedTypeRows = rows.Count,
+                            viewportTypeRows = visible,
+                            managedBytes = GC.GetTotalMemory(false),
+                            unityAllocatedBytes = UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong(),
+                        };
+                        if (virtualized)
+                        {
+                            VirtualizedTypeCatalogView view = controller.VirtualizedView;
+                            Stopwatch interaction = Stopwatch.StartNew();
+                            bool filtered = view.Filter(types[distribution][count - 1].Name);
+                            sample.filterCallMilliseconds = interaction.Elapsed.TotalMilliseconds;
+                            Assert.That(filtered);
+                            yield return null;
+                            EditorSurfaceCapture.SettleLayout(host);
+                            sample.filterObservedMilliseconds = interaction.Elapsed.TotalMilliseconds;
+                            sample.filteredLogicalRows = view.List.itemsSource.Count;
+                            Assert.That(sample.filteredLogicalRows, Is.EqualTo(2));
+                            interaction.Restart();
+                            bool cleared = view.Filter(null);
+                            sample.clearFilterCallMilliseconds = interaction.Elapsed.TotalMilliseconds;
+                            Assert.That(cleared);
+                            yield return null;
+                            EditorSurfaceCapture.SettleLayout(host);
+                            sample.clearFilterObservedMilliseconds = interaction.Elapsed.TotalMilliseconds;
+                            Assert.That(view.List.itemsSource.Count, Is.EqualTo(count + managed.Count));
+                            view.List.ScrollToItem(0);
+                            yield return null;
+                            EditorSurfaceCapture.SettleLayout(host);
+                            VisualElement header = view.Query<VisualElement>(className: StyleConstants.NamespaceHeaderClass).First();
+                            Assert.That(header != null);
+                            Assert.That(header.userData, Is.EqualTo(view.List.itemsSource[0]));
+                            using (KeyDownEvent collapse = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = view.Input.CollapseKey }))
+                            {
+                                collapse.target = header;
+                                interaction.Restart();
+                                header.SendEvent(collapse);
+                                sample.collapseCallMilliseconds = interaction.Elapsed.TotalMilliseconds;
+                            }
+                            yield return null;
+                            EditorSurfaceCapture.SettleLayout(host);
+                            sample.collapseObservedMilliseconds = interaction.Elapsed.TotalMilliseconds;
+                            sample.collapsedLogicalRows = view.List.itemsSource.Count;
+                            int removed = distribution == 0 ? count : 10;
+                            Assert.That(sample.collapsedLogicalRows, Is.EqualTo(count + managed.Count - removed));
+                            header = view.Query<VisualElement>(className: StyleConstants.NamespaceHeaderClass).First();
+                            using (KeyDownEvent expand = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = view.Input.ExpandKey }))
+                            {
+                                expand.target = header;
+                                interaction.Restart();
+                                header.SendEvent(expand);
+                                sample.expandCallMilliseconds = interaction.Elapsed.TotalMilliseconds;
+                            }
+                            yield return null;
+                            EditorSurfaceCapture.SettleLayout(host);
+                            sample.expandObservedMilliseconds = interaction.Elapsed.TotalMilliseconds;
+                            Assert.That(view.List.itemsSource.Count, Is.EqualTo(count + managed.Count));
+                        }
                         if (0 <= repetition)
                         {
-                            report.samples.Add(
-                                new CatalogSample
-                                {
-                                    types = count,
-                                    namespaces = managed.Count,
-                                    distribution = distribution == 0 ? "one-large-namespace" : "ten-types-per-namespace",
-                                    repetition = repetition,
-                                    constructionMilliseconds = constructionMilliseconds,
-                                    constructionAllocatedBytes = allocated,
-                                    editorFrameAllocatedBytesAfterConstruction = editorFrameAllocatedBytes,
-                                    observedScrollMilliseconds = scrollMilliseconds,
-                                    selectionMilliseconds = selectionMilliseconds,
-                                    observedSelectionMilliseconds = observedSelectionMilliseconds,
-                                    selectionCreatedRows = selectionCreatedRows,
-                                    selectionBoundRows = selectionBoundRows,
-                                    scrollOffset = activeScroll.scrollOffset.y,
-                                    virtualized = virtualized,
-                                    viewportWidth = activeScroll.contentViewport.worldBound.width,
-                                    viewportHeight = activeScroll.contentViewport.worldBound.height,
-                                    realizedCatalogRows = catalogRoot.Query<VisualElement>(className: StyleConstants.VirtualCatalogRowClass).ToList().Count,
-                                    realizedElementsAfterScroll = catalogRoot.Query<VisualElement>().ToList().Count,
-                                    realizedElements = elements,
-                                    realizedTypeRows = rows.Count,
-                                    viewportTypeRows = visible,
-                                    managedBytes = GC.GetTotalMemory(false),
-                                    unityAllocatedBytes = UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong(),
-                                }
-                            );
+                            report.samples.Add(sample);
                         }
                     }
                     if (count == 2000 && distribution == 1)
@@ -374,6 +425,16 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             public int namespaces;
             public string distribution;
             public int repetition;
+            public double filterCallMilliseconds = -1;
+            public double filterObservedMilliseconds = -1;
+            public double clearFilterCallMilliseconds = -1;
+            public double clearFilterObservedMilliseconds = -1;
+            public double collapseCallMilliseconds = -1;
+            public double collapseObservedMilliseconds = -1;
+            public double expandCallMilliseconds = -1;
+            public double expandObservedMilliseconds = -1;
+            public int filteredLogicalRows = -1;
+            public int collapsedLogicalRows = -1;
             public double constructionMilliseconds;
             public long constructionAllocatedBytes;
             public long editorFrameAllocatedBytesAfterConstruction;
