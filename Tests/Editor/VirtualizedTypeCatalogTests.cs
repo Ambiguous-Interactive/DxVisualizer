@@ -252,7 +252,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 EditorSurfaceCapture.SettleLayout(host);
                 Assert.That(recycledRow.userData, Is.Not.EqualTo(recycledIdentity), "The probe must reuse the focused control for another identity.");
                 CatalogEntry rebound = (CatalogEntry)recycledRow.userData;
-                string reboundTitle = rebound.Type == null ? rebound.NamespaceKey : NamespaceController.GetTypeDisplayName(rebound.Type);
+                string reboundTitle = rebound.Type == null ? rebound.NamespaceKey : rebound.Type.Name;
                 foreach (
                     var hint in new[]
                     {
