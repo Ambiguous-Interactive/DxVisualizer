@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Add Page Up/Down focus navigation to large catalogs, with viewport-sized jumps and unchanged selection (#324, #312).
 - Add Move to top/bottom to asset Actions and Ctrl/Cmd+Home/End shortcuts for the selected asset, including offscreen rows (#312).
 - Add viewport-bounded catalog rows for large type collections while keeping filtering, collapse, keyboard navigation and saved ordering. Filter, collapse, change selection and
   navigate types without recreating controls or losing action focus; scrolling cancels stale pointer gestures (#324, #312).

@@ -16,6 +16,8 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         public KeyCode NextTypeKey { get; set; } = KeyCode.DownArrow;
         public KeyCode FirstRowKey { get; set; } = KeyCode.Home;
         public KeyCode LastRowKey { get; set; } = KeyCode.End;
+        public KeyCode PreviousPageKey { get; set; } = KeyCode.PageUp;
+        public KeyCode NextPageKey { get; set; } = KeyCode.PageDown;
         public KeyCode CollapseKey { get; set; } = KeyCode.LeftArrow;
         public KeyCode ExpandKey { get; set; } = KeyCode.RightArrow;
         public KeyCode CancelDragKey { get; set; } = KeyCode.Escape;

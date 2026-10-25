@@ -56,7 +56,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             RegisterCallback<TooltipEvent>(evt =>
             {
                 evt.tooltip =
-                    $"{Input.FirstRowKey}/{Input.LastRowKey}: focus first/last visible row. Namespace {Input.PreviousTypeKey}/{Input.NextTypeKey}: move focus. {Input.SelectKey}/{Input.ToggleKey}: select or toggle.";
+                    $"{Input.FirstRowKey}/{Input.LastRowKey}: focus first/last visible row. {Input.PreviousPageKey}/{Input.NextPageKey}: focus one page away. Namespace {Input.PreviousTypeKey}/{Input.NextTypeKey}: move focus. {Input.SelectKey}/{Input.ToggleKey}: select or toggle.";
                 evt.rect = worldBound;
                 evt.StopPropagation();
             });
@@ -576,6 +576,14 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                 else if (evt.keyCode == Input.FirstRowKey || evt.keyCode == Input.LastRowKey)
                 {
                     FocusVisibleRow(evt.keyCode == Input.FirstRowKey ? 0 : _rows.Count - 1);
+                }
+                else if (evt.keyCode == Input.PreviousPageKey || evt.keyCode == Input.NextPageKey)
+                {
+                    float viewportHeight = List.Q<ScrollView>()?.contentViewport.layout.height ?? 0;
+                    int pageRows = float.IsNaN(viewportHeight) || float.IsInfinity(viewportHeight) ? 1 : Math.Max(1, Mathf.FloorToInt(viewportHeight / List.fixedItemHeight));
+                    int index = _rows.IndexOf(entry);
+                    int destination = evt.keyCode == Input.NextPageKey ? Math.Min(_rows.Count - 1, index + pageRows) : Math.Max(0, index - pageRows);
+                    FocusVisibleRow(destination);
                 }
                 else
                 {
