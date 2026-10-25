@@ -3,6 +3,8 @@
 This directory preserves recorded test evidence. It is excluded from the documentation site and the UPM/npm package. Raw JSON reports and their Unity metadata moved here from
 `docs/` without changing their bytes or GUIDs. Historical commit links still locate the original reports.
 
+- [Cooperative selected-object loading](object-loading-budget-2026-10-25.md): elapsed asset-attempt budgets, generation/suspension coverage and a complete ordinary-SO 1k
+  observation.
 - [Catalog selection observations](catalog-selection-2026-10-24.md): stable realized rows, focused actions, pause/resume availability and isolated selection timing.
 - [Virtualized catalog observations](catalog-virtualization-2026-10-24.md): bounded realization, active scrolling, source proof, six themes and excluded host-layout attempt.
 - [Catalog and browsing observations](catalog-and-browsing-2026-10-24.md): namespace ordering, catalog realization/scrolling and separate browsing distributions.
