@@ -4220,6 +4220,13 @@ namespace WallstopStudios.DataVisualizer.Editor
                 return false;
             }
 
+            bool contextMenuRequested = evt.keyCode == KeyCode.Menu || (evt.keyCode == KeyCode.F10 && evt.shiftKey);
+            if (contextMenuRequested && !evt.altKey && !evt.ctrlKey && !evt.commandKey)
+            {
+                ShowObjectActionsMenu(_selectedObject, anchor, row?.Q<Label>("object-item-label"));
+                return true;
+            }
+
             if (evt.keyCode == KeyCode.F2)
             {
                 OpenRenamePopover(row?.Q<Label>("object-item-label"), anchor, _selectedObject);
@@ -5190,7 +5197,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             }
         }
 
-        private void ShowObjectActionsMenu(ScriptableObject dataObject, Button anchor, Label titleLabel)
+        private void ShowObjectActionsMenu(ScriptableObject dataObject, VisualElement anchor, Label titleLabel)
         {
             if (_suspendedForPlayMode || dataObject == null)
             {
@@ -6351,7 +6358,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             {
                 name = "object-actions-button",
                 text = "Actions",
-                tooltip = "Clone, Rename (F2), Move, or Delete this asset",
+                tooltip = "Clone (Ctrl/Cmd+D), Rename (F2), Move, or Delete this asset. Shift+F10 opens Actions for the selected asset.",
             };
             ProtectObjectRowAction(actionsButton);
             actionsButton.AddToClassList(StyleConstants.ObjectActionsButtonClass);
