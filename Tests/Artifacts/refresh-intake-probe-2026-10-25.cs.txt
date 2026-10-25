@@ -1,0 +1,33 @@
+var identityType = typeof(WallstopStudios.DataVisualizer.Tests.Editor.CatalogLayoutScaleTests).Assembly.GetType("WallstopStudios.DataVisualizer.Tests.Editor.BenchmarkCodeIdentity");
+var identity = System.Activator.CreateInstance(identityType, new object[] { typeof(WallstopStudios.DataVisualizer.Editor.Utilities.AssetChangeRefreshService).Assembly, "Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/Utilities/AssetChangeRefreshService.cs" });
+identityType.GetMethod("Verify").Invoke(identity, null);
+var samples = new System.Collections.Generic.List<object>();
+foreach (int tracked in new[] { 1000, 10000, 100000 })
+{
+    int resolved = 0;
+    int published = 0;
+    using var service = new WallstopStudios.DataVisualizer.Editor.Utilities.AssetChangeRefreshService(
+        type => true, (guid, path, type) => published++,
+        (path, known) => { resolved++; return (known, path, typeof(UnityEngine.ScriptableObject)); });
+    for (int i = 0; i < tracked; i++)
+    {
+        service.Track("Assets/IntakeProbe/" + i + ".asset", i.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+    for (int repetition = -5; repetition < 30; repetition++)
+    {
+        if (!service.EnqueueGuid("1")) { throw new System.InvalidOperationException("Seed enqueue failed"); }
+        int added = 0;
+        long before = System.Diagnostics.Stopwatch.GetTimestamp();
+        for (int i = 0; i < 1000; i++) { if (service.EnqueueGuid("1")) { added++; } }
+        double milliseconds = (System.Diagnostics.Stopwatch.GetTimestamp() - before) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        if (added != 0 || service.PendingCount != 1) { throw new System.InvalidOperationException("Duplicate notification was not coalesced"); }
+        service.ProcessSlice(1000);
+        if (service.PendingCount != 0) { throw new System.InvalidOperationException("Pending work remains"); }
+        if (0 <= repetition) { samples.Add(new { tracked, repetition, calls = 1000, milliseconds }); }
+    }
+    if (resolved != 35 || published != 35) { throw new System.InvalidOperationException("Only the changed identity must resolve and publish"); }
+}
+identityType.GetMethod("Verify").Invoke(identity, null);
+return new { unity = UnityEngine.Application.unityVersion, platform = UnityEngine.SystemInfo.operatingSystem,
+    source = identityType.GetProperty("SourceSha256").GetValue(identity), module = identityType.GetProperty("LoadedModuleId").GetValue(identity),
+    scope = "Synthetic known-GUID duplicate notification intake, 1000 coalesced calls per sample; no real assets or window refresh measured", samples };

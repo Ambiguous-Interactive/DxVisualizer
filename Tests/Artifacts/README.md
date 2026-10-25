@@ -89,6 +89,9 @@ SHA-256, compiler checksum/algorithm, loaded module ID and assembly SHA-256. Che
 `provenanceVerified=false` or a nonempty `provenanceFailure` invalidates a report; `complete=false` remains incomplete. This proves driver identity, not the identity of every
 production dependency. Historical schemas do not provide these checks and remain observations at their documented revisions.
 
+The [input and catalog cost follow-up](input-and-catalog-costs-2026-10-25.md) retains duplicate-notification intake and mixed catalog-hint observations with their source identities
+and limits.
+
 ## Browsing measurements
 
 `PerfBaseline.RunBaseline(..., includeSearchMeasurements: false)` measures opening readiness, selection, label filtering, scrolling and type switching without running query
