@@ -66,7 +66,9 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             Add(Results);
             SearchField.RegisterValueChangedCallback(evt => SetFilter(evt.newValue));
             RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
-
+            RegisterCallback<DetachFromPanelEvent>(_ => _nativeInput.ClearPending());
+            RegisterCallback<PointerDownEvent>(evt => _nativeInput.HandleButtonPointer(evt, Input.Navigation.PointerButton), TrickleDown.TrickleDown);
+            RegisterCallback<PointerUpEvent>(evt => _nativeInput.HandleButtonPointer(evt, Input.Navigation.PointerButton), TrickleDown.TrickleDown);
             SetFilter(string.Empty);
             for (int i = 0; i < _filteredItems.Count; ++i)
             {

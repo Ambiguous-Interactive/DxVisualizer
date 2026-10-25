@@ -1786,6 +1786,8 @@ namespace WallstopStudios.DataVisualizer.Editor
                 LoadScriptableObjectTypes() is now deferred to CreateGUI
             */
             rootVisualElement.RegisterCallback<KeyDownEvent>(HandleGlobalKeyDown, TrickleDown.TrickleDown);
+            rootVisualElement.RegisterCallback<PointerDownEvent>(HandleButtonPointer, TrickleDown.TrickleDown);
+            rootVisualElement.RegisterCallback<PointerUpEvent>(HandleButtonPointer, TrickleDown.TrickleDown);
             rootVisualElement.RegisterCallback<GeometryChangedEvent>(HandleWindowGeometryChanged);
         }
 
@@ -1799,6 +1801,8 @@ namespace WallstopStudios.DataVisualizer.Editor
             }
 
             rootVisualElement.UnregisterCallback<KeyDownEvent>(HandleGlobalKeyDown, TrickleDown.TrickleDown);
+            rootVisualElement.UnregisterCallback<PointerDownEvent>(HandleButtonPointer, TrickleDown.TrickleDown);
+            rootVisualElement.UnregisterCallback<PointerUpEvent>(HandleButtonPointer, TrickleDown.TrickleDown);
             rootVisualElement.UnregisterCallback<GeometryChangedEvent>(HandleWindowGeometryChanged);
             Cleanup();
         }
@@ -2001,6 +2005,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             CloseAssetTool();
             _objectSelectionInput?.Dispose();
             _objectSelectionInput = null;
+            _nativeInput.ClearPending();
             ObjectChangeEvents.changesPublished -= HandleAssetObjectChanges;
             _assetChanges?.Dispose();
             _assetChanges = null;
@@ -4070,6 +4075,11 @@ namespace WallstopStudios.DataVisualizer.Editor
 
             _activePopover = null;
             _popoverContext = null;
+        }
+
+        private void HandleButtonPointer(EventBase evt)
+        {
+            _nativeInput.HandleButtonPointer(evt, Input.Navigation.PointerButton);
         }
 
         private void HandleGlobalKeyDown(KeyDownEvent evt)

@@ -68,7 +68,14 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             host.rootVisualElement.RegisterCallback<KeyDownEvent>(evt => route += " root:" + evt.keyCode + ":" + list.selectedIndex, TrickleDown.TrickleDown);
             using ObjectListSelectionInput owner = new(list, host.rootVisualElement, () => input);
             list.RegisterCallback<KeyDownEvent>(evt => route += " list:" + evt.keyCode + ":" + list.selectedIndex, TrickleDown.TrickleDown);
-
+            host.rootVisualElement.RegisterCallback<PointerDownEvent>(
+                evt => route += " pointer:" + evt.button + ":" + evt.modifiers + ":" + evt.position + ":primary=" + evt.isPrimary + ":routing=" + owner.IsRouting,
+                TrickleDown.TrickleDown
+            );
+            list.RegisterCallback<PointerDownEvent>(
+                evt => route += " listPointer:" + evt.button + ":" + evt.modifiers + ":" + evt.localPosition + ":" + list.selectedIndex,
+                TrickleDown.TrickleDown
+            );
             yield return null;
             EditorSurfaceCapture.SettleLayout(host);
             list.SetSelection(0);
@@ -84,6 +91,36 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             }
             Assert.That(list.selectedIndex, Is.EqualTo(1), route);
             Assert.That(owner.IsRouting, Is.False, "Dispatch restores the relay guard.");
+            input.Navigation.PointerButton = 1;
+            input.toggleSelection = new EditorInputBinding(KeyCode.Space, EventModifiers.Alt);
+            list.selectionType = SelectionType.Multiple;
+            list.SetSelection(0);
+            VisualElement second = list.Query<Label>().ToList().Find(label => label.text == "1");
+            Assert.That(second != null);
+            Assert.That(second.worldBound.Overlaps(list.Q<ScrollView>().contentViewport.worldBound), Is.True, "Pointer targets must be visible in the hosted viewport.");
+            foreach (EventType type in new[] { EventType.MouseDown, EventType.MouseUp })
+            {
+                Event mouse = new()
+                {
+                    type = type,
+                    button = 1,
+                    modifiers = EventModifiers.Alt,
+                    clickCount = 1,
+                    mousePosition = second.worldBound.center,
+                };
+                if (type == EventType.MouseDown)
+                {
+                    using PointerDownEvent down = PointerDownEvent.GetPooled(mouse);
+                    second.SendEvent(down);
+                }
+                else
+                {
+                    using PointerUpEvent up = PointerUpEvent.GetPooled(mouse);
+                    second.SendEvent(up);
+                }
+                yield return null;
+            }
+            Assert.That(list.selectedIndices, Is.EquivalentTo(new[] { 0, 1 }), "Configured primary/additive gestures reach native list selection. " + route);
         }
 
         [TestCase(EventModifiers.Control, true)]

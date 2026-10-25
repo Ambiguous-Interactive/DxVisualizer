@@ -43,6 +43,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         public void Dispose()
         {
             SetInputState(false);
+            _native.ClearPending();
             _root.UnregisterCallback<PointerDownEvent>(BeginPointer, TrickleDown.TrickleDown);
             _root.UnregisterCallback<PointerUpEvent>(BeginPointer, TrickleDown.TrickleDown);
             _root.UnregisterCallback<KeyDownEvent>(BeginKey, TrickleDown.TrickleDown);
@@ -52,7 +53,8 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         private void BeginPointer(EventBase evt)
         {
-            if (evt.target is not VisualElement target || (target != _list && !_list.Contains(target)))
+            bool forwarded = _native.AcceptForwarded(evt);
+            if ((!forwarded && IsRouting) || evt.target is not VisualElement target || (target != _list && !_list.Contains(target)))
             {
                 return;
             }
@@ -66,7 +68,18 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                     break;
                 }
             }
-            SetInputState(pointer.button == Input.Navigation.PointerButton && !IsButton(evt.target) && (Input.toggleSelection.MatchesModifiers(pointer.modifiers) || !rowTarget));
+            SetInputState(
+                !IsButton(evt.target)
+                    && (
+                        forwarded
+                            ? pointer.actionKey || !rowTarget
+                            : pointer.button == Input.Navigation.PointerButton && (Input.toggleSelection.MatchesModifiers(pointer.modifiers) || !rowTarget)
+                    )
+            );
+            if (!forwarded && !IsButton(evt.target))
+            {
+                _native.HandleListPointer(evt, Input);
+            }
         }
 
         private void BeginKey(EventBase evt)

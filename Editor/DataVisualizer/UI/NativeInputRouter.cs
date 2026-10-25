@@ -1,5 +1,6 @@
 namespace WallstopStudios.DataVisualizer.Editor.UI
 {
+    using System.Collections.Generic;
     using Extensions;
     using UnityEngine;
     using UnityEngine.UIElements;
@@ -9,7 +10,9 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
     public sealed class NativeInputRouter
     {
         public bool IsRouting { get; private set; }
+        public int PendingCount => _forwarded.Count;
 
+        private readonly HashSet<EventBase> _forwarded = new();
         private readonly ReusableDisposalScope<NativeInputRouter> _scope = new(static router => router.IsRouting = false);
 
         private static void Consume(EventBase evt)
@@ -17,6 +20,15 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             evt.imguiEvent?.Use();
             evt.PreventDefaultCompat();
             evt.StopImmediatePropagation();
+        }
+
+        public bool AcceptForwarded(EventBase evt) => _forwarded.Remove(evt);
+
+        public int ClearPending()
+        {
+            int count = _forwarded.Count;
+            _forwarded.Clear();
+            return count;
         }
 
         public bool HandleFocusOrButton(KeyDownEvent evt, DataVisualizerInputSettings input)
@@ -84,6 +96,82 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                 return true;
             }
             return false;
+        }
+
+        public bool HandleButtonPointer(EventBase evt, int button)
+        {
+            if (evt.target is VisualElement target && (target is Button || target.GetFirstAncestorOfType<Button>() != null))
+            {
+                return HandlePointer(evt, button);
+            }
+            return false;
+        }
+
+        public bool HandleListPointer(EventBase evt, DataVisualizerInputSettings input)
+        {
+            IPointerEvent pointer = (IPointerEvent)evt;
+            EventModifiers range = input.rangeSelectionModifiers;
+            bool extend = range != EventModifiers.None && (pointer.modifiers & range) == range;
+            EventModifiers remaining = extend ? pointer.modifiers & ~range : pointer.modifiers;
+            EventModifiers native = extend ? EventModifiers.Shift : EventModifiers.None;
+            if (input.toggleSelection.MatchesModifiers(remaining))
+            {
+                native |= Application.platform == RuntimePlatform.OSXEditor ? EventModifiers.Command : EventModifiers.Control;
+            }
+            return HandlePointer(evt, input.Navigation.PointerButton, native);
+        }
+
+        public bool HandlePointer(EventBase evt, int button, EventModifiers? modifiers = null)
+        {
+            if (AcceptForwarded(evt) || IsRouting)
+            {
+                return false;
+            }
+            IPointerEvent pointer = (IPointerEvent)evt;
+            EventModifiers nativeModifiers = modifiers ?? pointer.modifiers;
+            if (button == 0 && nativeModifiers == pointer.modifiers)
+            {
+                return false;
+            }
+            if (pointer.button != button)
+            {
+                if (pointer.button == 0)
+                {
+                    Consume(evt);
+                    return true;
+                }
+                return false;
+            }
+            if (evt.target is not VisualElement target)
+            {
+                return false;
+            }
+            using ReusableDisposalLease<NativeInputRouter> scope = _scope.Acquire(this);
+            IsRouting = true;
+            Event mouse = new()
+            {
+                type = evt is PointerDownEvent ? EventType.MouseDown : EventType.MouseUp,
+                button = 0,
+                mousePosition = pointer.position,
+                modifiers = nativeModifiers,
+                clickCount = pointer.clickCount,
+            };
+            if (evt is PointerDownEvent)
+            {
+                using PointerDownEvent forwarded = PointerDownEvent.GetPooled(mouse);
+                forwarded.target = target;
+                _forwarded.Add(forwarded);
+                target.SendEvent(forwarded);
+            }
+            else
+            {
+                using PointerUpEvent forwarded = PointerUpEvent.GetPooled(mouse);
+                forwarded.target = target;
+                _forwarded.Add(forwarded);
+                target.SendEvent(forwarded);
+            }
+            Consume(evt);
+            return true;
         }
 
         private bool RouteKey(EventBase evt, KeyCode key, EventModifiers modifiers)
