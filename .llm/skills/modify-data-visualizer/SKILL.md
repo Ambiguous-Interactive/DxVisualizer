@@ -75,7 +75,9 @@ metadata:
 
 - When adding a persisted settings field, update `PersistenceContractTests` deliberately
   and preserve defaults for old assets. Input profiles are a project configuration
-  reference; they do not become per-user selection state.
+  reference; they do not become per-user selection state. Route assignments through
+  `EditorConfigurationService`, including read-only checks, targeted saves and typed
+  failures; keep the JSON configuration API and schemas aligned with the UI.
 
 ## Asset Discovery
 

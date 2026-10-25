@@ -4,6 +4,7 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
     using System.IO;
     using Data;
     using Styles;
+    using UI;
     using UnityEditor;
     using UnityEngine;
 
@@ -13,6 +14,7 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
         public string DataFolderPath => Settings.DataFolderPath;
         public bool SelectActiveObject => Settings.selectActiveObject;
         public bool PersistStateInSettingsAsset => Settings.persistStateInSettingsAsset;
+        public string InputProfileGuid => Settings.inputProfile == null ? string.Empty : AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(Settings.inputProfile));
         public string ThemeGuid => PersistStateInSettingsAsset ? Settings.themeGuid : RequireUserState().themeGuid;
         public string UserStatePath => _userStatePath;
         public string SettingsPath => AssetDatabase.GetAssetPath(Settings);
@@ -136,24 +138,69 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
             }
         }
 
+        /// <summary>Validates a persistent input profile; empty restores defaults.</summary>
+        public static void ValidateInputProfileGuid(string guid)
+        {
+            if (guid == string.Empty)
+            {
+                return;
+            }
+            if (guid == null || !Guid.TryParseExact(guid, "N", out _))
+            {
+                throw new ArgumentException("Specify an input profile GUID or an empty string for defaults.", nameof(guid));
+            }
+            if (AssetGuidDiscovery.IsAssetDatabaseBusy())
+            {
+                throw new EditorConfigurationException("editor_busy", "Wait for compilation and asset updates before resolving input profiles.");
+            }
+            if (AssetDatabase.GetMainAssetTypeAtPath(AssetDatabase.GUIDToAssetPath(guid)) != typeof(DataVisualizerInputProfile))
+            {
+                throw new ArgumentException("The GUID must identify an input profile main asset.", nameof(guid));
+            }
+        }
+
         private static bool IsReadOnlyFile(string path)
         {
             return File.Exists(path) && (File.GetAttributes(path) & FileAttributes.ReadOnly) != 0;
         }
 
+        public bool SetInputProfileGuid(string guid)
+        {
+            ValidateInputProfileGuid(guid);
+            return ApplyValues(DataFolderPath, SelectActiveObject, inputProfileGuid: guid.ToLowerInvariant());
+        }
+
         /// <summary>Applies both preferences after validation; returns false for an unchanged request.</summary>
         public bool Apply(string dataFolderPath, bool selectActiveObject)
         {
+            return Apply(dataFolderPath, selectActiveObject, null);
+        }
+
+        public bool Apply(string dataFolderPath, bool selectActiveObject, string inputProfileGuid)
+        {
             ValidateDataFolder(dataFolderPath);
-            return ApplyValues(dataFolderPath, selectActiveObject);
+            if (inputProfileGuid != null)
+            {
+                ValidateInputProfileGuid(inputProfileGuid);
+            }
+            return ApplyValues(dataFolderPath, selectActiveObject, inputProfileGuid: inputProfileGuid?.ToLowerInvariant());
         }
 
         /// <summary>Applies all preferences in one synchronous unit. File/save failures may leave partial writes; no rollback is promised.</summary>
         public bool Apply(string dataFolderPath, bool selectActiveObject, bool persistStateInSettingsAsset, string themeGuid)
         {
+            return Apply(dataFolderPath, selectActiveObject, persistStateInSettingsAsset, themeGuid, null);
+        }
+
+        public bool Apply(string dataFolderPath, bool selectActiveObject, bool persistStateInSettingsAsset, string themeGuid, string inputProfileGuid)
+        {
             ValidateDataFolder(dataFolderPath);
             ValidateThemeGuid(themeGuid);
-            return ApplyValues(dataFolderPath, selectActiveObject, persistStateInSettingsAsset, themeGuid.ToLowerInvariant());
+            if (inputProfileGuid != null)
+            {
+                ValidateInputProfileGuid(inputProfileGuid);
+            }
+            return ApplyValues(dataFolderPath, selectActiveObject, persistStateInSettingsAsset, themeGuid.ToLowerInvariant(), inputProfileGuid?.ToLowerInvariant());
         }
 
         public bool SetPersistenceMode(bool persistStateInSettingsAsset)
@@ -183,7 +230,7 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
             return _userState ?? throw new ArgumentException("Supply an explicit user-state instance and file path for state configuration.");
         }
 
-        private bool ApplyValues(string path, bool selectActiveObject, bool? persistStateInSettingsAsset = null, string themeGuid = null)
+        private bool ApplyValues(string path, bool selectActiveObject, bool? persistStateInSettingsAsset = null, string themeGuid = null, string inputProfileGuid = null)
         {
             DataVisualizerSettings settings = Settings;
             if (EditorApplication.isPlayingOrWillChangePlaymode)
@@ -207,7 +254,8 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
             bool themeChanged = themeGuid != null && !string.Equals(previousTheme, themeGuid, StringComparison.Ordinal);
             bool folderChanged = !string.Equals(settings.DataFolderPath, path, StringComparison.Ordinal);
             bool selectionChanged = settings.selectActiveObject != selectActiveObject;
-            bool settingsChanged = folderChanged || selectionChanged || modeChanged || (themeChanged && mode);
+            bool profileChanged = inputProfileGuid != null && !string.Equals(InputProfileGuid, inputProfileGuid, StringComparison.Ordinal);
+            bool settingsChanged = folderChanged || selectionChanged || modeChanged || (themeChanged && mode) || profileChanged;
             bool userChanged = !mode && (modeChanged || themeChanged);
             if (
                 settingsChanged
@@ -268,6 +316,12 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
                 {
                     _userState.themeGuid = themeGuid;
                 }
+            }
+            if (profileChanged)
+            {
+                settings.inputProfile = string.IsNullOrEmpty(inputProfileGuid)
+                    ? null
+                    : AssetDatabase.LoadAssetAtPath<DataVisualizerInputProfile>(AssetDatabase.GUIDToAssetPath(inputProfileGuid));
             }
             settings.persistStateInSettingsAsset = mode;
             settings._dataFolderPath = path;

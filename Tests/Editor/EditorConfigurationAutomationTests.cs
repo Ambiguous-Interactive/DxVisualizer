@@ -6,6 +6,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
     using UnityEditor;
     using UnityEngine;
     using WallstopStudios.DataVisualizer.Editor.Data;
+    using WallstopStudios.DataVisualizer.Editor.UI;
     using WallstopStudios.DataVisualizer.Editor.Utilities;
 
     public sealed class EditorConfigurationAutomationTests
@@ -48,13 +49,19 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             DataVisualizerSettings settings = CreateSettings(cleanup);
             string path = AssetDatabase.GetAssetPath(settings);
             byte[] before = File.ReadAllBytes(path);
+            DataVisualizerInputProfile profile = ScriptableObject.CreateInstance<DataVisualizerInputProfile>();
+            string profilePath = Path.GetDirectoryName(path).Replace('\\', '/') + "/Profile.asset";
+            AssetDatabase.CreateAsset(profile, profilePath);
             EditorAutomationRequest request = Request(settings, "previewConfiguration");
+            request.inputProfileGuid = AssetDatabase.AssetPathToGUID(profilePath);
             EditorAutomationResponse preview = Execute(request);
             Assert.That(preview.code, Is.EqualTo("preview"));
             Assert.That(preview.items[0].guid, Is.EqualTo(request.settingsGuid));
             Assert.That(preview.items[0].path, Is.EqualTo(path));
             Assert.That(preview.items[0].dataFolderPath, Is.EqualTo("Assets"));
             Assert.That(preview.items[0].selectionMode, Is.EqualTo("select"));
+            Assert.That(preview.items[0].inputProfileGuid, Is.EqualTo(request.inputProfileGuid));
+            Assert.That(settings.inputProfile == null);
             Assert.That(preview.processedCount, Is.Zero);
             Assert.That(settings.selectActiveObject, Is.False);
             Assert.That(EditorUtility.IsDirty(settings), Is.False);
@@ -65,6 +72,8 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             EditorAutomationResponse applied = Execute(request);
             EditorConfigurationService direct = EditorConfigurationService.FromGuid(request.settingsGuid);
             Assert.That(applied.code, Is.EqualTo("applied"));
+            Assert.That(settings.inputProfile, Is.SameAs(profile));
+            Assert.That(applied.items[0].inputProfileGuid, Is.EqualTo(request.inputProfileGuid));
             Assert.That(applied.complete, Is.True);
             Assert.That(applied.processedCount, Is.EqualTo(1));
             Assert.That(applied.items[0].dataFolderPath, Is.EqualTo(direct.DataFolderPath));
@@ -88,6 +97,15 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(read.code, Is.EqualTo("ok"));
             Assert.That(read.items[0].dataFolderPath, Is.EqualTo(direct.DataFolderPath));
             Assert.That(read.items[0].selectionMode, Is.EqualTo("select"));
+            Assert.That(read.items[0].inputProfileGuid, Is.EqualTo(AssetDatabase.AssetPathToGUID(profilePath)));
+            request = Request(settings, "applyConfiguration");
+            request.confirmPaths = new[] { path };
+            Assert.That(Execute(request).code, Is.EqualTo("unchanged"), "Default C# requests preserve the assigned profile after JSON serialization.");
+            Assert.That(settings.inputProfile, Is.SameAs(profile));
+            request.inputProfileGuid = string.Empty;
+            Assert.That(Execute(request).code, Is.EqualTo("applied"));
+            Assert.That(settings.inputProfile == null);
+            Assert.That(Execute(request).code, Is.EqualTo("unchanged"));
         }
 
         [TestCase("missing-guid", "invalid_scope")]

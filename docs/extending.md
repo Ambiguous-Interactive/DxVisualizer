@@ -492,8 +492,9 @@ Configuration is one synchronous unit executed by `Start`, including apply. It c
 `previewConfiguration` first and start apply only after reviewing its settings target. `applied` and `unchanged` distinguish writes from idempotent requests. Settings changes do
 not alter the editor's current selection immediately. Apply rejects Play Mode/transitions, busy editor state, read-only settings and invalid folders without dialogs. Requests
 require offset zero; later response paging does not repeat the operation. `configuration_failed` with `outcome_unknown` means a write failed after mutation may have started: read
-current preferences and inspect disk before retrying. This contract covers only the two preferences documented above; persistence migration, theme and individual asset operations
-remain outside it. File execution validates its output path before starting configuration.
+current preferences and inspect disk before retrying. Set optional `inputProfileGuid` to a profile main-asset GUID, or an empty string for defaults; omission preserves the current
+profile. Read and preview return the stored or proposed GUID. This project preference uses the same settings-only save and read-only checks. This contract covers these project
+preferences; persistence migration, theme and individual asset operations remain outside it. File execution validates its output path before starting configuration.
 
 Inside an editor method, generate a query request using an exact type from your project, then keep the session alive across editor updates:
 

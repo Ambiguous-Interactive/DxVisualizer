@@ -101,6 +101,11 @@
           "themeGuid": {
             "type": ["string", "null"],
             "description": "Stored or proposed theme GUID; empty selects default. Null/empty outside full configuration."
+          },
+          "inputProfileGuid": {
+            "type": ["string", "null"],
+            "pattern": "^([0-9a-fA-F]{32})?$",
+            "description": "Configuration: exact input profile main-asset GUID; empty restores defaults, omitted preserves the current profile."
           }
         }
       }

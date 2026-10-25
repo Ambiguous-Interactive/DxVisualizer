@@ -20,6 +20,7 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
         public string userStatePath;
         public string persistenceMode;
         public string themeGuid;
+        public string inputProfileGuid = "keep";
         public string[] confirmPaths;
         public string text;
         public string[] andLabels;

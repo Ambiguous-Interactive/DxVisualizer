@@ -20,5 +20,6 @@ namespace WallstopStudios.DataVisualizer.Editor.Utilities
         public string userStatePath;
         public string persistenceMode;
         public string themeGuid;
+        public string inputProfileGuid;
     }
 }
