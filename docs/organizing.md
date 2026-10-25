@@ -40,6 +40,20 @@ and keep focus when the catalog changes. In large catalogs, Home and End focus t
 the viewport, keeping selection unchanged. On a namespace row, Up and Down move focus to the adjacent visible row. These focus shortcuts respect filtering and collapse without
 changing the selected type; press Enter or Space to activate the focused row.
 
+## Input profiles
+
+The documented gestures are defaults. To customize them, create an asset with **Assets → Create → Wallstop Studios → DxVisualizer → Input Profile**, then assign it in the browser's
+**Settings → Input profile** field (or on its DxVisualizer Settings asset). Edit the profile in Unity's Inspector and save the project. Open controls read changes immediately;
+clear the profile field to restore defaults.
+
+**Navigation** controls next/previous items, activation, toggling, collapse/expand, boundaries, pages, cancellation, primary pointer button and catalog drag distance. These
+bindings apply throughout catalogs, finders, themes and label suggestions. **Next/previous focus** replace Tab/Shift+Tab. Asset-action bindings include their key and exact
+modifiers; **Action modifier** accepts Control or Command across platforms. Choose **None** to unbind a key. Caps Lock and Num Lock do not change action matching.
+
+**Toggle selection** defines the keyboard toggle and the additive pointer modifiers; **Range selection modifiers** replace Shift for pointer range selection. Native list and button
+input is translated through the same profile. Focused catalog navigation keeps precedence when bindings overlap; asset-action shortcuts take precedence over list navigation. Native
+OS menus and text-editing commands keep their platform behavior.
+
 ## Pane widths
 
 The two splitters save preferred widths per user in Unity's editor preferences, independently of the persistence setting below. A new layout starts with 320 points for types and
@@ -81,9 +95,10 @@ editor preferences.
 
 The **Settings** popover opens from the **…** button in the header row.
 
-![Settings popover with persistence toggles and data folder field](images/data-visualizer-settings.webp) _Settings popover. Regenerated from the live window by the docs capture
-pipeline._
+![Settings popover with persistence toggles, input profile and data folder fields](images/data-visualizer-settings.webp) _Settings popover. Regenerated from the live window by the
+docs capture pipeline._
 
+- **Input profile** assigns the shared [input bindings](#input-profiles); clear it for defaults.
 - **Select Active Object** mirrors your DxVisualizer selection in Unity's own Inspector, for cross-referencing assets in other editor windows.
 - **Theme** picks the appearance. See [Themes](#themes).
 - **Data Folder** is where new assets are created. Click the path to ping the folder, or **Select** to browse. The target must be inside `Assets`. Clones are unaffected: they stay

@@ -3,6 +3,8 @@
 This page covers the operations that change assets on disk, and the processors that change many at once. Everything here is refused while the window is paused for Play Mode; see
 [While the editor is playing](organizing.md#while-the-editor-is-playing).
 
+The shortcuts below use the default bindings. [Input profiles](organizing.md#input-profiles) let you change them throughout the browser.
+
 ## Where an action lives
 
 **Create** is the **+** button in the object list header; it always acts on the selected type.
