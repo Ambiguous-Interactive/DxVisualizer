@@ -2402,7 +2402,18 @@ namespace WallstopStudios.DataVisualizer.Editor
                     }
                     _filteredObjects.Insert(low, current);
                 }
-                _assetRowsChanged = true;
+                if (!sameLoadedRow || matchedBefore != matchesNow)
+                {
+                    _assetRowsChanged = true;
+                }
+                else if (!_assetRowsChanged && matchesNow && _objectListView != null)
+                {
+                    VisualElement row = _objectListView.Q<VisualElement>($"object-item-row-{current.GetObjectIdString()}");
+                    if (row != null)
+                    {
+                        BindObjectRow(row, current, _filteredObjects.IndexOf(current));
+                    }
+                }
             }
 
             if (selected)
