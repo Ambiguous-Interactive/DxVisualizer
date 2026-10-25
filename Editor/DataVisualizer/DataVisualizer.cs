@@ -4164,6 +4164,12 @@ namespace WallstopStudios.DataVisualizer.Editor
                 }
             }
 
+            if (evt.target is VisualElement catalogTarget && _namespaceController.VirtualizedView?.Contains(catalogTarget) == true)
+            {
+                // Recycled catalog rows own their focus and configurable key bindings.
+                return;
+            }
+
             switch (evt.keyCode)
             {
                 case KeyCode.DownArrow:

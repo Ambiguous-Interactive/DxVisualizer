@@ -36,7 +36,8 @@ These controls keep the selected type. Collapse state persists per namespace; re
 Large catalogs keep their order and selection while scrolling and filtering. **Filter types** matches type display names; clearing the filter restores the full catalog.
 
 Focus a type row and press Enter or Space to select it. Up and Down select the next visible type in the same namespace. The collapse and reorder buttons also accept keyboard focus,
-and keep focus when the catalog changes.
+and keep focus when the catalog changes. In large catalogs, Home and End focus the first and last visible rows. On a namespace row, Up and Down move focus to the adjacent visible
+row. These focus shortcuts respect filtering and collapse without changing the selected type; press Enter or Space to activate the focused row.
 
 ## Pane widths
 

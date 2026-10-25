@@ -53,6 +53,13 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             _order = order ?? throw new ArgumentNullException(nameof(order));
             name = "virtualized-type-catalog";
             focusable = true;
+            RegisterCallback<TooltipEvent>(evt =>
+            {
+                evt.tooltip =
+                    $"{Input.FirstRowKey}/{Input.LastRowKey}: focus first/last visible row. Namespace {Input.PreviousTypeKey}/{Input.NextTypeKey}: move focus. {Input.SelectKey}/{Input.ToggleKey}: select or toggle.";
+                evt.rect = worldBound;
+                evt.StopPropagation();
+            });
             AddToClassList(StyleConstants.VirtualCatalogClass);
             foreach (string key in managed.Keys)
             {
@@ -427,6 +434,17 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             }
         }
 
+        private void FocusVisibleRow(int index)
+        {
+            if (index < 0 || _rows.Count <= index)
+            {
+                return;
+            }
+            _focusedEntry = _rows[index];
+            _focusedControl = null;
+            RestoreCatalogFocus(_focusedEntry, null, ++_generation);
+        }
+
         private bool MatchesFilter(Type type)
         {
             if (_terms.Count == 0)
@@ -528,6 +546,10 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                 {
                     row.ReleasePointer(_pressedPointerId);
                 }
+                else if (entry.IsNamespace && (evt.keyCode == Input.PreviousTypeKey || evt.keyCode == Input.NextTypeKey))
+                {
+                    FocusVisibleRow(_rows.IndexOf(entry) + (evt.keyCode == Input.NextTypeKey ? 1 : -1));
+                }
                 else if (entry.Type != null && (evt.keyCode == Input.PreviousTypeKey || evt.keyCode == Input.NextTypeKey))
                 {
                     Type next = Adjacent(entry.Type, evt.keyCode == Input.NextTypeKey);
@@ -547,6 +569,10 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                         return;
                     }
                     Activate(entry);
+                }
+                else if (evt.keyCode == Input.FirstRowKey || evt.keyCode == Input.LastRowKey)
+                {
+                    FocusVisibleRow(evt.keyCode == Input.FirstRowKey ? 0 : _rows.Count - 1);
                 }
                 else
                 {

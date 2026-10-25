@@ -3,7 +3,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
     using System;
     using UnityEngine;
 
-    /// <summary>Catalog row bindings. Unity buttons retain their platform activation behavior.</summary>
+    /// <summary>Catalog row bindings. Existing selection/navigation keys take precedence over boundary keys. Unity buttons retain their platform activation behavior.</summary>
     public sealed class CatalogInputSettings
     {
         // Six logical points ignore small pointer jitter before a drag starts.
@@ -14,6 +14,8 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         public KeyCode ToggleKey { get; set; } = KeyCode.Space;
         public KeyCode PreviousTypeKey { get; set; } = KeyCode.UpArrow;
         public KeyCode NextTypeKey { get; set; } = KeyCode.DownArrow;
+        public KeyCode FirstRowKey { get; set; } = KeyCode.Home;
+        public KeyCode LastRowKey { get; set; } = KeyCode.End;
         public KeyCode CollapseKey { get; set; } = KeyCode.LeftArrow;
         public KeyCode ExpandKey { get; set; } = KeyCode.RightArrow;
         public KeyCode CancelDragKey { get; set; } = KeyCode.Escape;
