@@ -251,6 +251,24 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 yield return null;
                 EditorSurfaceCapture.SettleLayout(host);
                 Assert.That(recycledRow.userData, Is.Not.EqualTo(recycledIdentity), "The probe must reuse the focused control for another identity.");
+                CatalogEntry rebound = (CatalogEntry)recycledRow.userData;
+                string reboundTitle = rebound.Type == null ? rebound.NamespaceKey : rebound.Type.Name;
+                foreach (
+                    var hint in new[]
+                    {
+                        (Name: "go-up-button", Text: "Move " + reboundTitle + " to top"),
+                        (Name: "go-down-button", Text: "Move " + reboundTitle + " to bottom"),
+                        (Name: "catalog-remove", Text: "Remove " + reboundTitle + " from DxVisualizer"),
+                    }
+                )
+                {
+                    Button action = recycledRow.Q<Button>(hint.Name);
+                    using TooltipEvent tooltip = TooltipEvent.GetPooled();
+                    tooltip.target = action;
+                    action.SendEvent(tooltip);
+                    Assert.That(tooltip.tooltip, Is.EqualTo(hint.Text), "Hints use the recycled row's current identity.");
+                    Assert.That(tooltip.rect, Is.EqualTo(action.worldBound));
+                }
                 Assert.That(recycledActionLostFocus, Is.True, "Recycling must remove focus before an action targets a different type.");
                 Assert.That(controller.SelectedType == null, "Scrolling must preserve selection.");
                 view.List.ScrollToItem(0);
