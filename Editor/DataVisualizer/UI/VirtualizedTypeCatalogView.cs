@@ -53,6 +53,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             _order = order ?? throw new ArgumentNullException(nameof(order));
             name = "virtualized-type-catalog";
             focusable = true;
+            tooltip = "Home/End: focus first/last visible row. Namespace Up/Down: move focus. Enter/Space: select or toggle.";
             AddToClassList(StyleConstants.VirtualCatalogClass);
             foreach (string key in managed.Keys)
             {
@@ -427,6 +428,17 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             }
         }
 
+        private void FocusVisibleRow(int index)
+        {
+            if (index < 0 || _rows.Count <= index)
+            {
+                return;
+            }
+            _focusedEntry = _rows[index];
+            _focusedControl = null;
+            RestoreCatalogFocus(_focusedEntry, null, ++_generation);
+        }
+
         private bool MatchesFilter(Type type)
         {
             if (_terms.Count == 0)
@@ -527,6 +539,14 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                 if (evt.keyCode == Input.CancelDragKey && _pressed.HasValue)
                 {
                     row.ReleasePointer(_pressedPointerId);
+                }
+                else if (evt.keyCode == KeyCode.Home || evt.keyCode == KeyCode.End)
+                {
+                    FocusVisibleRow(evt.keyCode == KeyCode.Home ? 0 : _rows.Count - 1);
+                }
+                else if (entry.IsNamespace && (evt.keyCode == Input.PreviousTypeKey || evt.keyCode == Input.NextTypeKey))
+                {
+                    FocusVisibleRow(_rows.IndexOf(entry) + (evt.keyCode == Input.NextTypeKey ? 1 : -1));
                 }
                 else if (entry.Type != null && (evt.keyCode == Input.PreviousTypeKey || evt.keyCode == Input.NextTypeKey))
                 {

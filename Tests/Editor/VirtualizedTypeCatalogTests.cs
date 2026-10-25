@@ -172,6 +172,10 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             host.position = new Rect(100, 100, 300, 500);
             DataVisualizerThemeSelection themeSelection = new();
             cleanup.Defer(() => themeSelection.Apply(null, null));
+            MethodInfo globalKey = typeof(DataVisualizerWindow).GetMethod("HandleGlobalKeyDown", members);
+            host.rootVisualElement.RegisterCallback<KeyDownEvent>(evt => globalKey.Invoke(owner, new object[] { evt }), TrickleDown.TrickleDown);
+            FieldInfo focusArea = typeof(DataVisualizerWindow).GetField("_lastActiveFocusArea", members);
+            focusArea.SetValue(owner, Enum.Parse(focusArea.FieldType, "TypeList"));
             Type[][] datasets = CatalogLayoutScaleTests.CreateTypes(localized: true);
             foreach (Type[] dataset in datasets)
             {
@@ -193,6 +197,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                     types.Add(type);
                 }
                 NamespaceController controller = new(managed, order);
+                typeof(DataVisualizerWindow).GetField("_namespaceController", members).SetValue(owner, controller);
                 VisualElement catalogRoot = null;
                 controller.Build(owner, ref catalogRoot);
                 VirtualizedTypeCatalogView view = controller.VirtualizedView;
@@ -525,6 +530,63 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 collapse.Focus();
                 yield return null;
                 Assert.That(focusedControl, Is.SameAs(collapse));
+                Type selectedBeforeFocus = controller.SelectedType;
+                using (KeyDownEvent down = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.DownArrow }))
+                {
+                    collapse.SendEvent(down);
+                }
+                CatalogEntry firstVisibleType = (CatalogEntry)view.List.itemsSource[1];
+                for (int frame = 0; frame < 20 && !Equals(focusedControl?.userData, firstVisibleType); frame++)
+                {
+                    yield return null;
+                }
+                Assert.That(focusedControl?.userData, Is.EqualTo(firstVisibleType), "Header arrows focus the first visible child.");
+                Assert.That(controller.SelectedType, Is.EqualTo(selectedBeforeFocus), "Focus navigation preserves selection.");
+                using (KeyDownEvent end = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.End }))
+                {
+                    focusedControl.SendEvent(end);
+                }
+                CatalogEntry visibleEnd = (CatalogEntry)view.List.itemsSource[view.List.itemsSource.Count - 1];
+                for (int frame = 0; frame < 20 && !Equals(focusedControl?.userData, visibleEnd); frame++)
+                {
+                    yield return null;
+                }
+                Assert.That(focusedControl?.userData, Is.EqualTo(visibleEnd), "End realizes and focuses a distant identity.");
+                Assert.That(focusedControl.panel != null, "Focus belongs to an attached recycled row.");
+                view.Filter("MeasuredType000");
+                yield return null;
+                yield return null;
+                view.List.ScrollToItem(0);
+                yield return null;
+                collapse = view.Query<Button>("catalog-collapse").ToList().Find(button => button.style.display.value == DisplayStyle.Flex);
+                collapse.Focus();
+                using (KeyDownEvent end = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.End }))
+                {
+                    collapse.SendEvent(end);
+                }
+                CatalogEntry filteredEnd = (CatalogEntry)view.List.itemsSource[view.List.itemsSource.Count - 1];
+                for (int frame = 0; frame < 20 && !Equals(focusedControl?.userData, filteredEnd); frame++)
+                {
+                    yield return null;
+                }
+                Assert.That(focusedControl?.userData, Is.EqualTo(filteredEnd), "End focuses the final filtered identity.");
+                using (KeyDownEvent home = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.Home }))
+                {
+                    focusedControl.SendEvent(home);
+                }
+                CatalogEntry filteredHome = (CatalogEntry)view.List.itemsSource[0];
+                for (int frame = 0; frame < 20 && !Equals(focusedControl?.userData, filteredHome); frame++)
+                {
+                    yield return null;
+                }
+                Assert.That(focusedControl?.userData, Is.EqualTo(filteredHome), "Home focuses the first visible namespace.");
+                Assert.That(controller.SelectedType, Is.EqualTo(selectedBeforeFocus));
+                view.Filter(null);
+                view.List.ScrollToItem(0);
+                yield return null;
+                yield return null;
+                collapse = view.Query<Button>("catalog-collapse").ToList().Find(button => button.style.display.value == DisplayStyle.Flex);
+                collapse.Focus();
                 using (KeyDownEvent left = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.LeftArrow }))
                 {
                     left.target = collapse;

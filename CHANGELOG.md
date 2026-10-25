@@ -43,7 +43,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   counts (#314).
 - Keep the inspector readable with pane controls and single-pane navigation in narrow windows. Restore preferred pane widths when space returns (#313).
 - Clarify Add types and search controls, group row commands in Actions, and add selected-asset shortcuts including Shift+F10 and Menu. Skip hidden catalog entries with arrows and
-  collapse namespaces by keyboard (#312).
+  collapse namespaces by keyboard. Use Home/End to focus catalog boundaries (#312).
 - Reduce the vertical gap between object rows by at least half (#292).
 - Point new installs and documentation links to Ambiguous-Interactive/DxVisualizer. Update site bookmarks to <https://ambiguous-interactive.github.io/DxVisualizer/>; the old Pages
   site does not redirect. Existing Git installs keep working (#151).
