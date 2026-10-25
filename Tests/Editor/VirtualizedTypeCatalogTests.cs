@@ -488,6 +488,16 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 Assert.That(view.Filter("  MEASUREDTYPE1999DATA  "), Is.False, "Equivalent trimmed input keeps rows intact");
                 yield return null;
                 Assert.That(view.List.itemsSource.Count, Is.EqualTo(2));
+                VisualElement filteredLast = view.Query<VisualElement>(className: StyleConstants.TypeItemClass).First();
+                Assert.That(filteredLast.Q<Button>("go-up-button").enabledSelf, Is.True, "A filtered last type can still move to the canonical top.");
+                Assert.That(
+                    filteredLast.Q<Button>("go-down-button").enabledSelf,
+                    Is.EqualTo(ReferenceEquals(dataset, datasets[0])),
+                    "Filtering preserves the earlier move of the first type to the canonical bottom."
+                );
+                VisualElement filteredNamespace = view.Query<VisualElement>(className: StyleConstants.NamespaceHeaderClass).First();
+                Assert.That(filteredNamespace.Q<Button>("go-up-button").enabledSelf, Is.EqualTo(1 < managed.Count), "Namespace boundaries use the complete catalog.");
+                Assert.That(filteredNamespace.Q<Button>("go-down-button").enabledSelf, Is.False, "The last namespace cannot move farther down.");
                 Assert.That(view.Adjacent(dataset[dataset.Length - 2], true), Is.EqualTo(last), "Navigation starts from hidden identity");
                 Assert.That(view.Adjacent(dataset[dataset.Length - 2], false), Is.EqualTo(last), "Backward hidden navigation wraps");
                 Assert.That(view.Adjacent(last, true), Is.EqualTo(last), "A single visible type wraps to itself");
