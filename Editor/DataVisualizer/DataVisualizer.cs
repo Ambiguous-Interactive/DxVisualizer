@@ -4175,6 +4175,17 @@ namespace WallstopStudios.DataVisualizer.Editor
                 }
             }
 
+            // Scope and grouping choices own their configured selection keys.
+            if (
+                evt.target is VisualElement choice
+                && choice.GetFirstAncestorOfType<HorizontalToggle>() != null
+                && evt.modifiers == EventModifiers.None
+                && Input.Navigation.IsSelectionKey(evt.keyCode)
+            )
+            {
+                return;
+            }
+
             if (
                 activePopover == null
                 && evt.target is VisualElement target

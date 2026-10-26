@@ -331,6 +331,9 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 Type type = typeof(TestDataObject);
                 state.UserState.managedTypeNames.Add(type.FullName);
                 state.Settings.HydrateFrom(state.UserState);
+                string folder = CreateFixtureFolder();
+                cleanup.Defer(() => AssetDatabase.DeleteAsset(folder));
+                CreateFixtureAsset(folder, "Input.asset");
                 DataVisualizerWindow window = ScriptableObject.CreateInstance<DataVisualizerWindow>();
                 using TestCleanupScope windowCleanup = new();
                 windowCleanup.Defer(() => EditorSurfaceCapture.CloseWindow(window));
@@ -378,6 +381,16 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 profile.Bindings.Navigation.AlternateSelectKey = KeyCode.None;
                 profile.Bindings.Navigation.ToggleKey = KeyCode.None;
                 state.Settings.inputProfile = profile;
+                Assert.That(ReadPrivateField<ScriptableObject>(window, "_selectedObject") != null, "A loaded asset must make the competing Rename shortcut available.");
+                profile.Bindings.Navigation.SelectKey = KeyCode.F2;
+                scope.LeftLabel.Focus();
+                SendLabelToggleKey(scope.LeftLabel, KeyCode.F2);
+                Assert.That(config.logic, Is.EqualTo(ProcessorLogic.All), "Configured choice selection takes precedence over the global Rename shortcut.");
+                Assert.That(ReadPrivateField<VisualElement>(window, "_activePopover") == null);
+                scope.RightLabel.Focus();
+                SendLabelToggleKey(scope.RightLabel, KeyCode.F2);
+                Assert.That(config.logic, Is.EqualTo(ProcessorLogic.Filtered));
+                profile.Bindings.Navigation.SelectKey = KeyCode.F6;
                 foreach (KeyCode key in new[] { KeyCode.Return, KeyCode.Space, KeyCode.KeypadEnter, KeyCode.F6 })
                 {
                     scope.LeftLabel.Focus();
