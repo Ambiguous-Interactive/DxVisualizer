@@ -1024,7 +1024,14 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 }
                 typeof(DataVisualizerWindow).GetField("_namespaceController", members).SetValue(owner, controller);
                 controller.Build(owner, ref catalogRoot);
+                Assert.That(SavedState(state).namespaceCollapseStates.Find(entry => entry.namespaceKey == firstKey).isCollapsed, Is.True);
+                view.Select(dataset[0]);
                 typeof(VirtualizedTypeCatalogView).GetMethod("SetCollapsed", members).Invoke(view, new object[] { firstKey, false });
+                Assert.That(
+                    SavedState(state).namespaceCollapseStates.Find(entry => entry.namespaceKey == firstKey).isCollapsed,
+                    Is.False,
+                    "Explicit expansion persists after selection temporarily reveals a collapsed namespace."
+                );
                 view.Input.NextTypeKey = KeyCode.N;
                 controller.SelectType(owner, firstCollision);
                 yield return null;
