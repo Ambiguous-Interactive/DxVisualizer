@@ -299,7 +299,7 @@ namespace WallstopStudios.DataVisualizer.Editor
         private Vector2 _popoverDragStartPos;
 
         private VisualElement _labelCollapseRow;
-        private Label _labelCollapseToggle;
+        private Button _labelCollapseToggle;
         private Label _labels;
         private HorizontalToggle _andOrToggle;
         private VisualElement _labelFilterSelectionRoot;
@@ -5864,23 +5864,27 @@ namespace WallstopStudios.DataVisualizer.Editor
 
             _labelCollapseRow = new VisualElement();
             _labelCollapseRow.AddToClassList("collapse-row");
-            _labelCollapseToggle = new Label();
+            _labelCollapseToggle = new Button(() =>
+            {
+                TypeLabelFilterConfig current = CurrentTypeLabelFilterConfig;
+                if (current != null)
+                {
+                    ToggleLabelsCollapsed(!current.isCollapsed);
+                }
+            })
+            {
+                name = "label-filter-collapse-toggle",
+            };
             _labelCollapseToggle.AddToClassList(StyleConstants.ClickableClass);
             _labelCollapseToggle.AddToClassList("collapse-toggle");
-            _labelCollapseToggle.RegisterCallback<PointerDownEvent>(evt =>
+            _labelCollapseToggle.RegisterCallback<TooltipEvent>(evt =>
             {
-                if (evt.button != Input.Navigation.PointerButton)
-                {
-                    return;
-                }
-                config = CurrentTypeLabelFilterConfig;
-                if (config == null)
-                {
-                    return;
-                }
-
-                ToggleLabelsCollapsed(!config.isCollapsed);
-                evt.StopPropagation();
+                CatalogInputSettings input = Input.Navigation;
+                evt.tooltip = CanCollapseLabels()
+                    ? $"{_labelCollapseToggle.tooltip} ({input.SelectKey}/{input.AlternateSelectKey}/{input.ToggleKey})"
+                    : _labelCollapseToggle.tooltip;
+                evt.rect = _labelCollapseToggle.worldBound;
+                evt.StopImmediatePropagation();
             });
             _labelCollapseRow.Add(_labelCollapseToggle);
 
@@ -6090,21 +6094,22 @@ namespace WallstopStudios.DataVisualizer.Editor
             if (_labelCollapseToggle != null)
             {
                 _labelCollapseToggle.EnableInClassList(StyleConstants.ClickableClass, CanCollapseLabels());
+                _labelCollapseToggle.SetEnabled(CanCollapseLabels());
 
                 bool isCollapsed = (CurrentTypeLabelFilterConfig?.isCollapsed ?? true) && CanCollapseLabels();
                 _labelCollapseToggle.text = isCollapsed ? StyleConstants.ArrowCollapsed : StyleConstants.ArrowExpanded;
 
                 if (isCollapsed)
                 {
-                    _labelCollapseToggle.tooltip = "Explore label filtering logic";
+                    _labelCollapseToggle.tooltip = "Show label filters";
                 }
                 else if (CanCollapseLabels())
                 {
-                    _labelCollapseToggle.tooltip = "Hide label filtering logic";
+                    _labelCollapseToggle.tooltip = "Hide label filters";
                 }
                 else
                 {
-                    _labelCollapseToggle.tooltip = "Can not un-collapse due to populated label configuration";
+                    _labelCollapseToggle.tooltip = "Clear the active label filter before hiding its controls";
                 }
             }
         }

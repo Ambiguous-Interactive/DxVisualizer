@@ -249,7 +249,8 @@
     --unity-cursor-color: var(--dataviz-text);
 }
 
-.dataviz-root .namespace-indicator:focus {
+.dataviz-root .namespace-indicator:focus,
+.dataviz-root .collapse-toggle:focus {
     border-width: 1px;
     border-color: var(--dataviz-selection);
 }
@@ -1368,6 +1369,15 @@
     padding-top: 6px;
     padding-bottom: 2px;
     -unity-font-style: bold;
+}
+
+.collapse-toggle.unity-button {
+    min-width: 22px;
+    padding: 0;
+    border-width: 1px;
+    border-color: transparent;
+    background-color: transparent;
+    -unity-text-align: middle-center;
 }
 
 .collapse-toggle {
