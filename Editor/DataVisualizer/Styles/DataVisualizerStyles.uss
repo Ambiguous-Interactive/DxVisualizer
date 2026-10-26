@@ -1304,7 +1304,7 @@
     align-self: flex-end;
 }
 
-.dataviz-root .action-button-toggle__button {
+.dataviz-root Button.action-button-toggle__button {
     width: 20px;
     height: 20px;
     min-width: 20px;
@@ -1320,7 +1320,7 @@
     background-image: none;
 }
 
-.dataviz-root .action-button-toggle__button--on {
+.dataviz-root Button.action-button-toggle__button--on {
     background-color: var(--dataviz-accent);
     border-color: var(--dataviz-accent);
     color: var(--dataviz-on-accent);
@@ -1337,6 +1337,10 @@
 
 .dataviz-root .action-button-toggle:disabled {
     opacity: 0.5;
+}
+
+.dataviz-root .action-button-toggle:disabled > .action-button-toggle__button {
+    opacity: 1;
 }
 
 .dataviz-root .inspector-label-entry {

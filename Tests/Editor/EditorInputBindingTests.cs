@@ -171,6 +171,34 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                     Assert.That(control.resolvedStyle.borderLeftWidth, Is.EqualTo(4), theme);
                     Assert.That(control.resolvedStyle.borderLeftColor, Is.Not.EqualTo(unfocusedBorder), theme + " focus has a visible border change.");
                 }
+                foreach (bool selected in new[] { false, true })
+                {
+                    toggle.SetValueWithoutNotify(selected);
+                    beforeSwitch.Focus();
+                    using (PointerMoveEvent leave = PointerMoveEvent.GetPooled(new Event { type = EventType.MouseMove, mousePosition = beforeSwitch.worldBound.center }))
+                    {
+                        leave.target = beforeSwitch;
+                        beforeSwitch.SendEvent(leave);
+                    }
+                    yield return new WaitForSecondsRealtime(0.3f);
+                    EditorSurfaceCapture.SettleLayout(host);
+                    Color fillBeforeHover = control.resolvedStyle.backgroundColor;
+                    using (PointerMoveEvent enter = PointerMoveEvent.GetPooled(new Event { type = EventType.MouseMove, mousePosition = control.worldBound.center }))
+                    {
+                        enter.target = control;
+                        control.SendEvent(enter);
+                    }
+                    yield return new WaitForSecondsRealtime(0.3f);
+                    EditorSurfaceCapture.SettleLayout(host);
+                    Assert.That(control.resolvedStyle.backgroundColor, Is.EqualTo(fillBeforeHover), "Hover must not change the switch's displayed value.");
+                    Assert.That(toggle.value, Is.EqualTo(selected));
+                }
+                toggle.SetEnabled(false);
+                yield return null;
+                EditorSurfaceCapture.SettleLayout(host);
+                Assert.That(toggle.resolvedStyle.opacity, Is.EqualTo(0.5f));
+                Assert.That(control.resolvedStyle.opacity, Is.EqualTo(1f), "Disabled opacity belongs to the wrapper only.");
+                toggle.SetEnabled(true);
             }
             toggle.SetEnabled(false);
             input.Navigation.SelectKey = KeyCode.J;
