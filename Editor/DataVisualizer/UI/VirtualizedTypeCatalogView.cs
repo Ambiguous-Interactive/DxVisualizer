@@ -788,16 +788,12 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         private void SetCollapsed(string key, bool collapsed)
         {
-            if (collapsed)
-            {
-                _collapsed.Add(key);
-            }
-            else
-            {
-                _collapsed.Remove(key);
-            }
+            bool changed = collapsed ? _collapsed.Add(key) : _collapsed.Remove(key);
             _owner.PersistSettings(settings => settings.SetNamespaceCollapsed(key, collapsed), state => state.SetNamespaceCollapsed(key, collapsed));
-            Refresh();
+            if (changed)
+            {
+                Refresh();
+            }
         }
 
         private void Remove(CatalogEntry entry, VisualElement anchor)
