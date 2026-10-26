@@ -83,11 +83,17 @@
 
 .dataviz-root .unity-base-field__label,
 .dataviz-root .unity-object-field-display,
+.dataviz-root .unity-object-field-display__label,
 .dataviz-root .unity-popup-field__text,
+.dataviz-root .unity-base-popup-field__text,
 .dataviz-root .unity-enum-field__text,
 .dataviz-root .unity-toggle__text,
 .dataviz-root .unity-foldout__text {
     color: var(--dataviz-text);
+}
+
+.dataviz-root .unity-object-field-display__label--value-null {
+    color: var(--dataviz-muted);
 }
 
 .dataviz-root .unity-base-text-field__input:hover,
@@ -108,9 +114,19 @@
 .dataviz-root .unity-base-field:disabled > .unity-base-field__label,
 .dataviz-root .unity-base-text-field:disabled > .unity-base-text-field__input,
 .dataviz-root .unity-object-field:disabled .unity-object-field-display,
+.dataviz-root .unity-object-field:disabled .unity-object-field-display__label,
 .dataviz-root .unity-popup-field:disabled .unity-popup-field__text,
+.dataviz-root .unity-base-popup-field:disabled .unity-base-popup-field__text,
 .dataviz-root .unity-enum-field:disabled .unity-enum-field__text {
     color: var(--dataviz-muted);
+}
+
+.dataviz-root .unity-base-popup-field__arrow {
+    -unity-background-image-tint-color: var(--dataviz-text);
+}
+
+.dataviz-root .unity-base-popup-field:disabled .unity-base-popup-field__arrow {
+    -unity-background-image-tint-color: var(--dataviz-muted);
 }
 
 .dataviz-root .unity-object-field__selector,
