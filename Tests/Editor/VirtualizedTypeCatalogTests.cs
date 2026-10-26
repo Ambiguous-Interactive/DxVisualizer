@@ -51,6 +51,111 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         }
 
         [Test]
+        public void ShouldReuseNamespaceRemovalEligibilityUntilCatalogChanges()
+        {
+            using TestCleanupScope cleanup = new();
+            FieldInfo instance = typeof(DataVisualizerWindow).GetField("Instance", BindingFlags.Static | BindingFlags.NonPublic);
+            object previous = instance.GetValue(null);
+            cleanup.Defer(() => instance.SetValue(null, previous));
+            DataVisualizerWindow owner = ScriptableObject.CreateInstance<DataVisualizerWindow>();
+            cleanup.Defer(() => Object.DestroyImmediate(owner));
+            CatalogTypeProbe probe = new(typeof(TestDataObject));
+            string key = NamespaceController.GetNamespaceKey(probe);
+            List<Type> types = new();
+            for (int index = 0; index < 2000; index++)
+            {
+                types.Add(probe);
+            }
+            Dictionary<string, List<Type>> managed = new() { { key, types } };
+            Dictionary<string, int> order = new();
+            VirtualizedTypeCatalogView view = new(owner, new NamespaceController(managed, order), managed, order);
+            VisualElement slot = view.List.makeItem();
+            probe.ResetChecks();
+            for (int repeat = 0; repeat < 10; repeat++)
+            {
+                view.List.bindItem(slot, 0);
+            }
+            Assert.That(slot.Q<Button>("catalog-remove").style.display.value, Is.EqualTo(DisplayStyle.None));
+            Assert.That(probe.AssignabilityChecks, Is.Zero, "Repeated header binding must not rescan every protected type.");
+            types.Add(typeof(EditorOnlyCreationSubasset));
+            Assert.That(view.Reconcile());
+            view.List.bindItem(slot, 0);
+            Assert.That(slot.Q<Button>("catalog-remove").style.display.value, Is.EqualTo(DisplayStyle.None), "One removable type does not need the namespace removal command.");
+            types.Add(typeof(OtherEditorOnlyCreationData));
+            Assert.That(view.Reconcile());
+            view.List.bindItem(slot, 0);
+            Assert.That(slot.Q<Button>("catalog-remove").style.display.value, Is.EqualTo(DisplayStyle.Flex));
+            types.Remove(typeof(EditorOnlyCreationSubasset));
+            Assert.That(view.Reconcile());
+            view.List.bindItem(slot, 0);
+            Assert.That(slot.Q<Button>("catalog-remove").style.display.value, Is.EqualTo(DisplayStyle.None), "Catalog changes invalidate the previous eligibility.");
+        }
+
+        [Test, Explicit("Unhosted namespace-header binding component; creates no assets")]
+        public void ShouldMeasureProtectedNamespaceHeaderBinding()
+        {
+            BenchmarkCodeIdentity renderer = new(
+                typeof(VirtualizedTypeCatalogView).Assembly,
+                "Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/UI/VirtualizedTypeCatalogView.cs"
+            );
+            BenchmarkCodeIdentity driver = new(
+                typeof(VirtualizedTypeCatalogTests).Assembly,
+                "Packages/com.wallstop-studios.data-visualizer/Tests/Editor/VirtualizedTypeCatalogTests.cs"
+            );
+            BenchmarkCodeIdentity probeCode = new(typeof(CatalogTypeProbe).Assembly, "Packages/com.wallstop-studios.data-visualizer/Tests/Editor/CatalogTypeProbe.cs");
+            renderer.Verify();
+            driver.Verify();
+            probeCode.Verify();
+            using TestCleanupScope cleanup = new();
+            FieldInfo instance = typeof(DataVisualizerWindow).GetField("Instance", BindingFlags.Static | BindingFlags.NonPublic);
+            object previous = instance.GetValue(null);
+            cleanup.Defer(() => instance.SetValue(null, previous));
+            DataVisualizerWindow owner = ScriptableObject.CreateInstance<DataVisualizerWindow>();
+            cleanup.Defer(() => Object.DestroyImmediate(owner));
+            List<string> output = new()
+            {
+                "# Unity=" + Application.unityVersion + "; OS=" + SystemInfo.operatingSystem + "; CPU=" + SystemInfo.processorType,
+                "# rendererSource=" + renderer.SourceSha256 + "; module=" + renderer.LoadedModuleId,
+                "# driverSource=" + driver.SourceSha256 + "; module=" + driver.LoadedModuleId,
+                "# probeSource=" + probeCode.SourceSha256,
+                "types,sample,tenBindingsMilliseconds,assignabilityChecks",
+            };
+            foreach (int count in new[] { 100, 1000, 2000 })
+            {
+                CatalogTypeProbe probe = new(typeof(TestDataObject));
+                List<Type> types = new();
+                for (int index = 0; index < count; index++)
+                {
+                    types.Add(probe);
+                }
+                string key = NamespaceController.GetNamespaceKey(probe);
+                Dictionary<string, List<Type>> managed = new() { { key, types } };
+                Dictionary<string, int> order = new();
+                VirtualizedTypeCatalogView view = new(owner, new NamespaceController(managed, order), managed, order);
+                VisualElement slot = view.List.makeItem();
+                for (int sample = -5; sample < 30; sample++)
+                {
+                    probe.ResetChecks();
+                    long start = System.Diagnostics.Stopwatch.GetTimestamp();
+                    for (int repeat = 0; repeat < 10; repeat++)
+                    {
+                        view.List.bindItem(slot, 0);
+                    }
+                    double milliseconds = (System.Diagnostics.Stopwatch.GetTimestamp() - start) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+                    if (0 <= sample)
+                    {
+                        output.Add(count + "," + sample + "," + milliseconds.ToString("R", System.Globalization.CultureInfo.InvariantCulture) + "," + probe.AssignabilityChecks);
+                    }
+                }
+            }
+            renderer.Verify();
+            driver.Verify();
+            probeCode.Verify();
+            output.Add("# status=complete; five warmups and thirty samples; repeated protected type references, unhosted header, no assets or allocation measurements");
+            File.WriteAllText("Temp/protected-header-binding.csv", string.Join("\n", output) + "\n");
+        }
+
+        [Test]
         public void ShouldStopCheckingCollapsedTypesAfterFindingAMatch()
         {
             using TestCleanupScope cleanup = new();
