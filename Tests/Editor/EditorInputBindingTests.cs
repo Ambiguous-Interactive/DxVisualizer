@@ -9,11 +9,180 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
     using UnityEngine.TestTools;
     using UnityEngine.UIElements;
     using WallstopStudios.DataVisualizer.Editor;
+    using WallstopStudios.DataVisualizer.Editor.Styles;
     using WallstopStudios.DataVisualizer.Editor.UI;
     using DataVisualizerWindow = WallstopStudios.DataVisualizer.Editor.DataVisualizer;
 
     public sealed class EditorInputBindingTests
     {
+        [UnityTest]
+        public IEnumerator ShouldOperateSettingsSwitchWithConfiguredInput()
+        {
+            using TestCleanupScope cleanup = new();
+            LayoutTestWindow host = ScriptableObject.CreateInstance<LayoutTestWindow>();
+            cleanup.Defer(() => EditorSurfaceCapture.CloseWindow(host));
+            host.position = new Rect(80, 80, 420, 240);
+            host.rootVisualElement.AddToClassList("dataviz-root");
+            host.rootVisualElement.styleSheets.Add(
+                UnityEditor.AssetDatabase.LoadAssetAtPath<StyleSheet>("Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/Styles/DataVisualizerStyles.uss")
+            );
+            DataVisualizerInputSettings input = new();
+            NativeInputRouter router = new();
+            cleanup.Defer(() => router.ClearPending());
+            host.rootVisualElement.RegisterCallback<KeyDownEvent>(evt => router.HandleFocusOrButton(evt, input), TrickleDown.TrickleDown);
+            host.rootVisualElement.RegisterCallback<PointerDownEvent>(evt => router.HandleButtonPointer(evt, input.Navigation.PointerButton), TrickleDown.TrickleDown);
+            host.rootVisualElement.RegisterCallback<PointerUpEvent>(evt => router.HandleButtonPointer(evt, input.Navigation.PointerButton), TrickleDown.TrickleDown);
+            int changes = 0;
+            int actions = 0;
+            Button beforeSwitch = new() { text = "Before switch" };
+            host.rootVisualElement.Add(beforeSwitch);
+            ActionButtonToggle toggle = new("Keep selection", _ => actions++, getInput: () => input);
+            toggle.RegisterValueChangedCallback(_ => changes++);
+            host.rootVisualElement.Add(toggle);
+            EditorSurfaceCapture.ShowPopup(host);
+            yield return null;
+            EditorSurfaceCapture.SettleLayout(host);
+            VisualElement control = toggle.Q(className: ActionButtonToggle.ButtonClassName);
+            Assert.That(control.focusable, Is.True, "Settings switches must participate in keyboard focus.");
+            beforeSwitch.Focus();
+            using (KeyDownEvent next = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = input.nextFocus.key }))
+            {
+                beforeSwitch.SendEvent(next);
+            }
+            yield return null;
+            Assert.That(host.rootVisualElement.focusController.focusedElement, Is.SameAs(control), "Focus traversal reaches the Settings switch.");
+            foreach (KeyCode key in new[] { KeyCode.Return, KeyCode.Space })
+            {
+                bool before = toggle.value;
+                using KeyDownEvent activate = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = key });
+                control.SendEvent(activate);
+                Assert.That(toggle.value, Is.EqualTo(!before));
+            }
+            Assert.That(changes, Is.EqualTo(2));
+            Assert.That(actions, Is.EqualTo(2));
+            input.Navigation.SelectKey = KeyCode.K;
+            input.Navigation.AlternateSelectKey = KeyCode.None;
+            input.Navigation.ToggleKey = KeyCode.None;
+            foreach (KeyCode key in new[] { KeyCode.Return, KeyCode.Space, KeyCode.K })
+            {
+                bool before = toggle.value;
+                using KeyDownEvent activate = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = key });
+                control.SendEvent(activate);
+                Assert.That(toggle.value, Is.EqualTo(key == KeyCode.K ? !before : before), key.ToString());
+            }
+            input = new DataVisualizerInputSettings();
+            input.Navigation.SelectKey = KeyCode.J;
+            input.Navigation.AlternateSelectKey = KeyCode.None;
+            input.Navigation.ToggleKey = KeyCode.None;
+            input.Navigation.PointerButton = 1;
+            input.nextFocus = new EditorInputBinding(KeyCode.F6);
+            beforeSwitch.Focus();
+            using (KeyDownEvent oldFocus = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.Tab }))
+            {
+                beforeSwitch.SendEvent(oldFocus);
+            }
+            Assert.That(host.rootVisualElement.focusController.focusedElement, Is.SameAs(beforeSwitch));
+            using (KeyDownEvent next = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.F6 }))
+            {
+                beforeSwitch.SendEvent(next);
+            }
+            Assert.That(host.rootVisualElement.focusController.focusedElement, Is.SameAs(control));
+            toggle.Label = "Updated selection";
+            using (TooltipEvent hint = TooltipEvent.GetPooled())
+            {
+                hint.target = control;
+                control.SendEvent(hint);
+                Assert.That(hint.tooltip, Does.Contain("Updated selection"));
+                Assert.That(hint.tooltip, Does.Contain("J/None"));
+            }
+            foreach (KeyCode key in new[] { KeyCode.K, KeyCode.J })
+            {
+                bool before = toggle.value;
+                using KeyDownEvent activate = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = key });
+                control.SendEvent(activate);
+                Assert.That(toggle.value, Is.EqualTo(key == KeyCode.J ? !before : before), "Profile replacement applies without rebuilding the switch.");
+            }
+            input.Navigation.SelectKey = KeyCode.None;
+            using (KeyDownEvent disabled = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.J }))
+            {
+                bool before = toggle.value;
+                control.SendEvent(disabled);
+                Assert.That(toggle.value, Is.EqualTo(before), "None disables activation.");
+            }
+            foreach (int button in new[] { 0, 1 })
+            {
+                bool before = toggle.value;
+                foreach (EventType type in new[] { EventType.MouseDown, EventType.MouseUp })
+                {
+                    Event mouse = new()
+                    {
+                        type = type,
+                        button = button,
+                        mousePosition = control.worldBound.center,
+                        clickCount = 1,
+                    };
+                    if (type == EventType.MouseDown)
+                    {
+                        using PointerDownEvent down = PointerDownEvent.GetPooled(mouse);
+                        control.SendEvent(down);
+                    }
+                    else
+                    {
+                        using PointerUpEvent up = PointerUpEvent.GetPooled(mouse);
+                        control.SendEvent(up);
+                    }
+                    yield return null;
+                }
+                yield return null;
+                Assert.That(toggle.value, Is.EqualTo(button == 1 ? !before : before), "Only the configured pointer button changes the switch.");
+            }
+            int notified = changes;
+            int invoked = actions;
+            toggle.SetValueWithoutNotify(!toggle.value);
+            Assert.That(changes, Is.EqualTo(notified));
+            Assert.That(actions, Is.EqualTo(invoked));
+            DataVisualizerThemeSelection themeSelection = new();
+            cleanup.Defer(() => themeSelection.Apply(null, null));
+            foreach (string theme in new[] { "Dx", "Classic", "Nord", "Dracula", "Compact", "Minimal" })
+            {
+                themeSelection.Apply(
+                    host.rootVisualElement,
+                    UnityEditor.AssetDatabase.LoadAssetAtPath<WallstopStudios.DataVisualizer.Editor.Styles.DataVisualizerThemeSettings>(
+                        "Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/Styles/" + theme + ".asset"
+                    )
+                );
+                foreach (float width in new[] { 420f, 300f })
+                {
+                    host.position = new Rect(80, 80, width, 240);
+                    beforeSwitch.Focus();
+                    using (PointerMoveEvent leave = PointerMoveEvent.GetPooled(new Event { type = EventType.MouseMove, mousePosition = beforeSwitch.worldBound.center }))
+                    {
+                        leave.target = beforeSwitch;
+                        beforeSwitch.SendEvent(leave);
+                    }
+                    yield return new WaitForSecondsRealtime(0.3f);
+                    EditorSurfaceCapture.SettleLayout(host);
+                    Color unfocusedBorder = control.resolvedStyle.borderLeftColor;
+                    control.Focus();
+                    yield return new WaitForSecondsRealtime(0.3f);
+                    EditorSurfaceCapture.SettleLayout(host);
+                    Assert.That(control.worldBound.width, Is.EqualTo(20).Within(1), theme);
+                    Assert.That(control.worldBound.height, Is.EqualTo(20).Within(1), theme);
+                    Assert.That(control.resolvedStyle.borderLeftWidth, Is.EqualTo(4), theme);
+                    Assert.That(control.resolvedStyle.borderLeftColor, Is.Not.EqualTo(unfocusedBorder), theme + " focus has a visible border change.");
+                }
+            }
+            toggle.SetEnabled(false);
+            input.Navigation.SelectKey = KeyCode.J;
+            using (KeyDownEvent disabled = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.J }))
+            {
+                bool before = toggle.value;
+                control.SendEvent(disabled);
+                Assert.That(toggle.value, Is.EqualTo(before));
+            }
+            Assert.That(actions, Is.EqualTo(changes), "Each user action sends one change and invokes its callback once.");
+        }
+
         [UnityTest]
         public IEnumerator ShouldKeepPrintableBindingsInTextFields()
         {

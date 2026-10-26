@@ -1307,6 +1307,11 @@
 .dataviz-root .action-button-toggle__button {
     width: 20px;
     height: 20px;
+    min-width: 20px;
+    min-height: 20px;
+    margin: 0;
+    padding: 0;
+    flex-shrink: 0;
     border-radius: 50%;
     background-color: var(--dataviz-input);
     border-color: var(--dataviz-muted);
@@ -1321,6 +1326,7 @@
     color: var(--dataviz-on-accent);
 }
 
+.dataviz-root .action-button-toggle__button:focus,
 .dataviz-root .action-button-toggle__button:hover {
     border-color: var(--dataviz-text);
 }
