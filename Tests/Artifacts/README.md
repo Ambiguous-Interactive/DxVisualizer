@@ -104,3 +104,5 @@ The [catalog keyboard-entry follow-up](catalog-entry-2026-10-25.md) retains root
 limits.
 
 The [changed-row binding follow-up](row-refresh-2026-10-25.md) retains a bounded component probe and hosted ordering/filtering regressions, with explicit synthetic-list limits.
+
+[Editor-skin checks](editor-skins-2026-10-26.md) retain matched native light/dark catalog observations, field-readability captures and allocation limitations.

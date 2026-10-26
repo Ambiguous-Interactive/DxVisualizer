@@ -264,6 +264,81 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         }
 
         [UnityTest]
+        public IEnumerator ShouldUseThemeColorsForNativeFieldValues()
+        {
+            using TestCleanupScope cleanup = new();
+            DataVisualizerThemeSettings value = ScriptableObject.CreateInstance<DataVisualizerThemeSettings>();
+            cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(value));
+            value.name = "Une référence avec un nom long";
+            EditorSurfaceCaptureHostWindow window = ScriptableObject.CreateInstance<EditorSurfaceCaptureHostWindow>();
+            cleanup.Defer(() => EditorSurfaceCapture.CloseWindow(window));
+            EditorSurfaceCapture.ShowPopup(window);
+            window.position = new Rect(80, 80, 360, 300);
+            VisualElement root = window.rootVisualElement;
+            root.AddToClassList("dataviz-root");
+            const string styles = "Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/Styles/";
+            root.styleSheets.Add(AssetDatabase.LoadAssetAtPath<StyleSheet>(styles + "DataVisualizerStyles.uss"));
+            DropdownField popup = new(new List<string> { "Match all labels", "Match any label" }, 0);
+            UnityEditor.UIElements.ObjectField reference = new() { objectType = typeof(DataVisualizerThemeSettings), value = value };
+            Label muted = new("Disabled value");
+            muted.AddToClassList("dataviz-muted");
+            root.Add(popup);
+            root.Add(reference);
+            root.Add(muted);
+            DataVisualizerThemeSelection selection = new();
+            cleanup.Defer(() => selection.Apply(null, null));
+            foreach (string theme in new[] { "Dx", "Classic", "Nord", "Dracula", "Compact", "Minimal" })
+            {
+                selection.Apply(root, AssetDatabase.LoadAssetAtPath<DataVisualizerThemeSettings>(styles + theme + ".asset"));
+                popup.SetEnabled(true);
+                reference.SetEnabled(true);
+                yield return null;
+                EditorSurfaceCapture.SettleLayout(window);
+                TextElement popupText = popup.Q<TextElement>(className: DropdownField.textUssClassName);
+                VisualElement popupArrow = popup.Q(className: DropdownField.arrowUssClassName);
+                VisualElement objectDisplay = reference.Q(className: UnityEditor.UIElements.ObjectField.objectUssClassName);
+                TextElement objectText = objectDisplay as TextElement ?? objectDisplay.Q<TextElement>();
+                Assert.That(popupText != null && objectText != null, theme);
+                double activeDeadline = EditorApplication.timeSinceStartup + 2;
+                while (
+                    (
+                        !popupText.resolvedStyle.color.Equals(root.resolvedStyle.color)
+                        || !objectText.resolvedStyle.color.Equals(root.resolvedStyle.color)
+                        || !popupArrow.resolvedStyle.unityBackgroundImageTintColor.Equals(root.resolvedStyle.color)
+                    )
+                    && EditorApplication.timeSinceStartup < activeDeadline
+                )
+                {
+                    yield return null;
+                    EditorSurfaceCapture.SettleLayout(window);
+                }
+                Assert.That(popupText.resolvedStyle.color, Is.EqualTo(root.resolvedStyle.color), theme + " dropdown text follows the theme.");
+                Assert.That(popupArrow.resolvedStyle.unityBackgroundImageTintColor, Is.EqualTo(root.resolvedStyle.color), theme + " dropdown arrow follows the theme.");
+                Assert.That(objectText.resolvedStyle.color, Is.EqualTo(root.resolvedStyle.color), theme + " object text follows the theme.");
+                popup.SetEnabled(false);
+                reference.SetEnabled(false);
+                yield return null;
+                EditorSurfaceCapture.SettleLayout(window);
+                double disabledDeadline = EditorApplication.timeSinceStartup + 2;
+                while (
+                    (
+                        !popupText.resolvedStyle.color.Equals(muted.resolvedStyle.color)
+                        || !objectText.resolvedStyle.color.Equals(muted.resolvedStyle.color)
+                        || !popupArrow.resolvedStyle.unityBackgroundImageTintColor.Equals(muted.resolvedStyle.color)
+                    )
+                    && EditorApplication.timeSinceStartup < disabledDeadline
+                )
+                {
+                    yield return null;
+                    EditorSurfaceCapture.SettleLayout(window);
+                }
+                Assert.That(popupText.resolvedStyle.color, Is.EqualTo(muted.resolvedStyle.color), theme + " disabled dropdown text stays readable.");
+                Assert.That(popupArrow.resolvedStyle.unityBackgroundImageTintColor, Is.EqualTo(muted.resolvedStyle.color), theme + " disabled arrow follows the theme.");
+                Assert.That(objectText.resolvedStyle.color, Is.EqualTo(muted.resolvedStyle.color), theme + " disabled object text stays readable.");
+            }
+        }
+
+        [UnityTest]
         public IEnumerator ShouldFitSimpleControlsInNarrowPanesAcrossThemes()
         {
             using TestCleanupScope cleanup = new();
