@@ -1940,14 +1940,21 @@ namespace WallstopStudios.DataVisualizer.Editor
                 return;
             }
 
+            /*
+                The first layout can arrive after OnEnable's deadline on a busy editor.
+                Start settling from that observed layout, not from the enable callback.
+            */
+            if (!_hasObservedInitialWindowGeometry)
+            {
+                _windowSettleDeadline = EditorApplication.timeSinceStartup + WindowGeometrySettleSeconds;
+            }
+            _hasObservedInitialWindowGeometry = true;
+
             if (MonitorUtility.IsSameSize(position.size, _temporaryClampedWindowSize) && EditorPrefs.HasKey(PrefsTemporaryWindowClampSizeKey))
             {
-                _hasObservedInitialWindowGeometry = true;
                 ApplyWindowMinimumSize(true);
                 return;
             }
-
-            _hasObservedInitialWindowGeometry = true;
 
             /*
                 While the settle window is open, every geometry change is system settling (Unity's

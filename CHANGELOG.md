@@ -29,6 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Fix delayed window layout replacing the preferred size with a monitor-clamped size. Keep later user resizes saved (#493).
 - Fix dropdown and object-reference text in light editor skins. Keep field values and popup arrows readable across themes (#312).
 - Fix catalog reorder and remove buttons changing the selected type or starting a drag (#312).
 - Fix catalog arrow moves resetting after reopening the window. Preserve namespace and type order in user and project state (#324).

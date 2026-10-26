@@ -234,6 +234,14 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
 
                 yield return null;
                 DataVisualizerWindow restoredWindow = ScriptableObject.CreateInstance<DataVisualizerWindow>();
+                if (waitForScheduledCompletion)
+                {
+                    /*
+                        A busy editor can deliver the restored window's first layout after the
+                        two-second enable-time settle window. It is still system geometry.
+                    */
+                    yield return new WaitForSecondsRealtime(3f);
+                }
                 restoredWindow.position = actualPosition;
                 restoredWindow.ShowUtility();
                 for (int frame = 0; frame < 20; frame++)
@@ -243,6 +251,19 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
 
                 Assert.That(EditorPrefs.GetString(PreferredWindowSizeKey), Is.EqualTo(serializedOversizedPreference));
                 Assert.That(MonitorUtility.TryParseSize(EditorPrefs.GetString(TemporaryWindowClampSizeKey), out _), Is.True);
+
+                yield return new WaitForSecondsRealtime(3f);
+                restoredWindow.position = new Rect(actualPosition.x, actualPosition.y, actualPosition.width - 100f, actualPosition.height - 100f);
+                for (int frame = 0; frame < 20; frame++)
+                {
+                    yield return null;
+                }
+                Assert.That(
+                    EditorPrefs.GetString(PreferredWindowSizeKey),
+                    Is.EqualTo(MonitorUtility.SerializeSize(MonitorUtility.NormalizePreferredSize(restoredWindow.position.size, new Vector2(360f, 480f)))),
+                    "A user resize after settling still replaces the preferred size."
+                );
+                Assert.That(EditorPrefs.HasKey(TemporaryWindowClampSizeKey), Is.False, "A user resize clears the temporary system clamp.");
             }
         }
 
