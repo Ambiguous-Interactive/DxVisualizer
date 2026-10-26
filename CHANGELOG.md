@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Add keyboard access to the Labels toggle and live shortcut hints (#312).
+- Add keyboard access to the Labels toggle and Settings switches, with current input bindings, live hints and visible focus (#312).
 - Add editable input profiles for browser keys, modifiers, focus and pointer gestures. Apply profile changes to open controls and their shortcut hints (#312).
 - Add Page Up/Down focus navigation to large catalogs, with viewport-sized jumps and unchanged selection. Enter rows with boundary/page keys after filtering clears focus (#324,
   #312).

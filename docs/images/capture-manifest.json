@@ -51,9 +51,9 @@
         "reviewScope": "Aligned 28-point label field and Add button; inspected at 1180 and 760 points across the default dark UI. Six-theme geometry assertions also pass."
       },
       "settings": {
-        "revision": "1a456d56710c136a3c229baf2ea2585912cb9843",
-        "capturedAt": "2026-10-25",
-        "reviewScope": "Input profile field, persistence controls, theme and data folder; inspected at 1180 and minimum 360-point window widths. Existing Windows dark skin and DPI context applies."
+        "revision": "6627962e8b5fe67e50a6dfb68384ef5e993cba94",
+        "capturedAt": "2026-10-26",
+        "reviewScope": "Native keyboard-reachable Settings switches, input profile, theme and data folder; inspected at 1180 and 360-point widths after hover and disabled-state repairs. Six-theme geometry, focus, hover and disabled checks pass. Windows dark skin only."
       }
     }
   },

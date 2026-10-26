@@ -4480,7 +4480,8 @@ namespace WallstopStudios.DataVisualizer.Editor
                     {
                         prefsToggle.Label = value ? "Persist State in UserState: " : "Persist State in Settings Asset: ";
                     }
-                }
+                },
+                getInput: () => Input
             )
             {
                 value = settings.persistStateInSettingsAsset,
@@ -4522,7 +4523,8 @@ namespace WallstopStudios.DataVisualizer.Editor
                     {
                         selectionToggle.Label = value ? "Don't Select Active Object: " : "Select Active Object: ";
                     }
-                }
+                },
+                getInput: () => Input
             )
             {
                 value = settings.selectActiveObject,
