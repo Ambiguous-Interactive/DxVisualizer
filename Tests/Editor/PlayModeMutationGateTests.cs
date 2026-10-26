@@ -791,6 +791,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             state.UserState.GetOrCreateTypeOrderList(NamespaceController.GetNamespaceKey(type)).Add(type.FullName);
             ScriptableObject changed = CreateFixtureAsset(folder, "Changed.asset");
             ScriptableObject unchanged = CreateFixtureAsset(folder, "Other.asset");
+            AssetDatabase.SetLabels(changed, new[] { "Inspector stable label" });
             DataVisualizerWindow window = ScriptableObject.CreateInstance<DataVisualizerWindow>();
             using TestCleanupScope windowCleanup = new();
             windowCleanup.Defer(() => EditorSurfaceCapture.CloseWindow(window));
@@ -833,6 +834,13 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             window.position = new Rect(40, 40, 1180, 780);
             yield return null;
             EditorSurfaceCapture.SettleLayout(window);
+            InvokePrivate(window, "SetActiveObject", changed, false);
+            EditorSurfaceCapture.SettleLayout(window);
+            VisualElement inspectorLabels = ReadPrivateField<VisualElement>(window, "_inspectorCurrentLabelsContainer");
+            VisualElement retainedPill = inspectorLabels[0];
+            Button retainedRemove = retainedPill.Q<Button>();
+            retainedRemove.Focus();
+            Assert.That(window.rootVisualElement.focusController.focusedElement, Is.SameAs(retainedRemove));
             ListView list = ReadPrivateField<ListView>(window, "_objectListView");
             List<ScriptableObject> filtered = ReadPrivateField<List<ScriptableObject>>(window, "_filteredObjects");
             int changedIndex = filtered.IndexOf(changed);
@@ -907,6 +915,8 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 Assert.That(updatedMetadata.DisplayTitle, Is.EqualTo(expectedTitle), "Shared display metadata follows the same edit history.");
                 Assert.That(AssetGuidTypeIndex.Shared.Metadata.TryGet(unchangedGuid, out AssetMetadataRecord retainedMetadata));
                 Assert.That(retainedMetadata, Is.SameAs(unchangedMetadata), "Unchanged assets keep their original metadata record.");
+                Assert.That(inspectorLabels[0], Is.SameAs(retainedPill), "Non-label edits must keep existing inspector controls.");
+                Assert.That(window.rootVisualElement.focusController.focusedElement, Is.SameAs(retainedRemove), "Refresh must preserve label-action focus.");
                 Assert.That(bindings, Is.Zero, "Inspector edits and Undo/Redo must not rebind unrelated rows.");
                 Assert.That(ReadPrivateField<int>(window, "_assetRefreshObjectLoadCount"), Is.EqualTo(refreshLoads), "Already loaded assets must not reload.");
                 Assert.That(list.itemsSource.Count, Is.EqualTo(originalCount));

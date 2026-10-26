@@ -8588,24 +8588,47 @@ namespace WallstopStudios.DataVisualizer.Editor
                 _inspectorCurrentLabelsContainer?.Clear();
                 return;
             }
-            _inspectorCurrentLabelsContainer.Clear();
-
             string[] currentLabels = AssetDatabase.GetLabels(_selectedObject);
             Array.Sort(currentLabels, StringComparer.Ordinal);
 
             if (currentLabels.Length == 0)
             {
+                if (_inspectorCurrentLabelsContainer.childCount == 1 && _inspectorCurrentLabelsContainer[0] is Label)
+                {
+                    return;
+                }
+                _inspectorCurrentLabelsContainer.Clear();
                 Label emptyLabel = new("No labels assigned.") { style = { fontSize = 10, unityFontStyleAndWeight = FontStyle.Italic } };
                 emptyLabel.AddToClassList("dataviz-muted");
                 _inspectorCurrentLabelsContainer.Add(emptyLabel);
                 return;
             }
 
+            int index = 0;
             foreach (string labelText in currentLabels)
             {
+                while (
+                    index < _inspectorCurrentLabelsContainer.childCount
+                    && (
+                        _inspectorCurrentLabelsContainer[index] is Label
+                        || StringComparer.Ordinal.Compare(_inspectorCurrentLabelsContainer[index].userData as string, labelText) < 0
+                    )
+                )
+                {
+                    _inspectorCurrentLabelsContainer.RemoveAt(index);
+                }
+                if (
+                    index < _inspectorCurrentLabelsContainer.childCount
+                    && string.Equals(_inspectorCurrentLabelsContainer[index].userData as string, labelText, StringComparison.Ordinal)
+                )
+                {
+                    index++;
+                    continue;
+                }
                 Color backgroundColor = GetColorForLabel(labelText);
                 VisualElement pillContainer = new()
                 {
+                    userData = labelText,
                     name = $"inspector-label-pill-{labelText.Replace(" ", "-").ToLowerInvariant()}",
                     style = { backgroundColor = backgroundColor },
                 };
@@ -8621,7 +8644,11 @@ namespace WallstopStudios.DataVisualizer.Editor
                 removeButton.AddToClassList("label-pill-remove-button");
                 removeButton.style.color = labelElement.style.color.value;
                 pillContainer.Add(removeButton);
-                _inspectorCurrentLabelsContainer.Add(pillContainer);
+                _inspectorCurrentLabelsContainer.Insert(index++, pillContainer);
+            }
+            while (index < _inspectorCurrentLabelsContainer.childCount)
+            {
+                _inspectorCurrentLabelsContainer.RemoveAt(index);
             }
         }
 
