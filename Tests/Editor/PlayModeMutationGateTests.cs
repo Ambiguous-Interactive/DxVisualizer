@@ -133,6 +133,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         private static void SendLabelToggleKey(VisualElement toggle, KeyCode key)
         {
             using KeyDownEvent evt = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = key });
+            evt.target = toggle;
             toggle.SendEvent(evt);
         }
 
@@ -306,6 +307,266 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That((bool)InvokePrivate(window, "HandleObjectActionShortcut", blocked), Is.False);
             InvokePrivate(window, "MoveObjectToTop", selected);
             Assert.That(all[all.Count - 1], Is.SameAs(selected), "Direct menu callbacks must also respect suspension.");
+        }
+
+        [UnityTest]
+        public IEnumerator ShouldChooseProcessorScopeWithOwnerInput()
+        {
+            using TestCleanupScope preferencesCleanup = new();
+            DocsImageCapture.WindowPreferenceSnapshot preferences = DocsImageCapture.WindowPreferenceSnapshot.Capture();
+            preferencesCleanup.Defer(preferences.Restore);
+            foreach (bool projectState in new[] { false, true })
+            {
+                preferences.ApplyWidePanes();
+                using TestCleanupScope cleanup = new();
+                object previousInstance = ReadSharedInstance();
+                cleanup.Defer(() => RestoreSharedInstance(previousInstance));
+                cleanup.Defer(() => AssetGuidTypeIndex.Shared.Cancel());
+                DataVisualizerSettings settings = ScriptableObject.CreateInstance<DataVisualizerSettings>();
+                cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(settings));
+                string output = "Temp/ProcessorInput-" + Guid.NewGuid().ToString("N");
+                cleanup.Defer(() => System.IO.Directory.Delete(output, recursive: true));
+                using PerfWindowStateScope state = new(settings, new DataVisualizerUserState(), output);
+                state.Settings.persistStateInSettingsAsset = projectState;
+                Type type = typeof(TestDataObject);
+                state.UserState.managedTypeNames.Add(type.FullName);
+                state.Settings.HydrateFrom(state.UserState);
+                string folder = CreateFixtureFolder();
+                cleanup.Defer(() => AssetDatabase.DeleteAsset(folder));
+                CreateFixtureAsset(folder, "Input.asset");
+                DataVisualizerWindow window = ScriptableObject.CreateInstance<DataVisualizerWindow>();
+                using TestCleanupScope windowCleanup = new();
+                windowCleanup.Defer(() => EditorSurfaceCapture.CloseWindow(window));
+                SetPrivateField(window, "_settings", state.Settings);
+                SetPrivateField(window, "_userState", state.UserState);
+                SetPrivateField(window, "_userStateFilePath", state.FilePath);
+                EditorSurfaceCapture.ShowPopup(window);
+                SetPrivateField(window, "_settings", state.Settings);
+                SetPrivateField(window, "_userState", state.UserState);
+                SetPrivateField(window, "_userStateFilePath", state.FilePath);
+                window.position = new Rect(40, 40, 1180, 780);
+                window.CreateGUI();
+                InvokePrivate(window, "LoadInitialContent");
+                ReadPrivateField<List<WallstopStudios.DataVisualizer.IDataProcessor>>(window, "_allDataProcessors")
+                    .Add(new EditorProcessorAutomationTests.JsonProbeProcessor<int>());
+                ReadPrivateField<NamespaceController>(window, "_namespaceController").SelectType(window, type);
+                yield return WaitForRefresh(window);
+                ProcessorState config = (ProcessorState)InvokePrivate(window, "LoadOrCreateProcessorState", type);
+                config.isCollapsed = false;
+                InvokePrivate(window, "BuildProcessorColumnView");
+                yield return null;
+                HorizontalToggle scope = window.rootVisualElement.Q<HorizontalToggle>("processor-logic-toggle");
+                Assert.That(scope != null);
+                Assert.That(scope.LeftLabel.focusable && scope.RightLabel.focusable, "Both processor scope choices must enter the focus ring.");
+                EditorSurfaceCapture.SettleLayout(window);
+                Assert.That(scope.LeftLabel.worldBound.Overlaps(window.rootVisualElement.worldBound));
+                Assert.That(config.logic, Is.EqualTo(ProcessorLogic.Filtered));
+                scope.LeftLabel.Focus();
+                SendLabelToggleKey(scope.LeftLabel, KeyCode.Return);
+                yield return new WaitForSecondsRealtime(0.2f);
+                Assert.That(config.logic, Is.EqualTo(ProcessorLogic.All));
+                scope.LeftLabel.Focus();
+                Assert.That(window.rootVisualElement.focusController.focusedElement, Is.SameAs(scope.LeftLabel), "Focus stays on the activated ALL choice.");
+                using (KeyDownEvent next = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = window.Input.nextFocus.key }))
+                {
+                    scope.LeftLabel.SendEvent(next);
+                }
+                Assert.That(window.rootVisualElement.focusController.focusedElement, Is.SameAs(scope.RightLabel));
+                SendLabelToggleKey(scope.RightLabel, KeyCode.Space);
+                yield return new WaitForSecondsRealtime(0.2f);
+                Assert.That(config.logic, Is.EqualTo(ProcessorLogic.Filtered));
+                DataVisualizerInputProfile profile = ScriptableObject.CreateInstance<DataVisualizerInputProfile>();
+                cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(profile));
+                profile.Bindings.Navigation.SelectKey = KeyCode.F6;
+                profile.Bindings.Navigation.AlternateSelectKey = KeyCode.None;
+                profile.Bindings.Navigation.ToggleKey = KeyCode.None;
+                state.Settings.inputProfile = profile;
+                Assert.That(ReadPrivateField<ScriptableObject>(window, "_selectedObject") != null, "A loaded asset must make the competing Rename shortcut available.");
+                profile.Bindings.Navigation.SelectKey = KeyCode.F2;
+                scope.LeftLabel.Focus();
+                SendLabelToggleKey(scope.LeftLabel, KeyCode.F2);
+                Assert.That(config.logic, Is.EqualTo(ProcessorLogic.All), "Configured choice selection takes precedence over the global Rename shortcut.");
+                Assert.That(ReadPrivateField<VisualElement>(window, "_activePopover") == null);
+                scope.RightLabel.Focus();
+                SendLabelToggleKey(scope.RightLabel, KeyCode.F2);
+                Assert.That(config.logic, Is.EqualTo(ProcessorLogic.Filtered));
+                foreach (EventModifiers locks in new[] { EventModifiers.CapsLock, EventModifiers.Numeric, EventModifiers.CapsLock | EventModifiers.Numeric })
+                {
+                    foreach (Label choice in new[] { scope.LeftLabel, scope.RightLabel })
+                    {
+                        choice.Focus();
+                        using KeyDownEvent locked = KeyDownEvent.GetPooled(
+                            new Event
+                            {
+                                type = EventType.KeyDown,
+                                keyCode = KeyCode.F2,
+                                modifiers = locks,
+                            }
+                        );
+                        locked.target = choice;
+                        choice.SendEvent(locked);
+                        Assert.That(
+                            config.logic,
+                            Is.EqualTo(choice == scope.LeftLabel ? ProcessorLogic.All : ProcessorLogic.Filtered),
+                            "Lock flags must not block selection or run Rename."
+                        );
+                        Assert.That(ReadPrivateField<VisualElement>(window, "_activePopover") == null);
+                    }
+                }
+                profile.Bindings.Navigation.SelectKey = KeyCode.F6;
+                foreach (KeyCode key in new[] { KeyCode.Return, KeyCode.Space, KeyCode.KeypadEnter, KeyCode.F6 })
+                {
+                    scope.LeftLabel.Focus();
+                    using (KeyDownEvent activate = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = key }))
+                    {
+                        activate.target = scope.LeftLabel;
+                        scope.LeftLabel.SendEvent(activate);
+                        if (CatalogInputSettings.IsUnitySubmitKey(key))
+                        {
+                            Assert.That(activate.isImmediatePropagationStopped, "Unbound native keys must not reach a later submit handler.");
+                            Assert.That(activate.imguiEvent.type, Is.EqualTo(EventType.Used), "Consume the backing native submit key too.");
+                        }
+                    }
+                    yield return new WaitForSecondsRealtime(0.2f);
+                    Assert.That(config.logic, Is.EqualTo(key == KeyCode.F6 ? ProcessorLogic.All : ProcessorLogic.Filtered), key.ToString());
+                }
+                using (
+                    KeyDownEvent modified = KeyDownEvent.GetPooled(
+                        new Event
+                        {
+                            type = EventType.KeyDown,
+                            keyCode = KeyCode.F6,
+                            modifiers = EventModifiers.Alt,
+                        }
+                    )
+                )
+                {
+                    scope.RightLabel.SendEvent(modified);
+                }
+                Assert.That(config.logic, Is.EqualTo(ProcessorLogic.All), "Selection modifiers are exact.");
+                DataVisualizerInputProfile replacement = ScriptableObject.CreateInstance<DataVisualizerInputProfile>();
+                cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(replacement));
+                replacement.Bindings.Navigation.SelectKey = KeyCode.F7;
+                replacement.Bindings.Navigation.AlternateSelectKey = KeyCode.None;
+                replacement.Bindings.Navigation.ToggleKey = KeyCode.None;
+                replacement.Bindings.Navigation.PointerButton = 1;
+                state.Settings.inputProfile = replacement;
+                scope.RightLabel.Focus();
+                SendLabelToggleKey(scope.RightLabel, KeyCode.F6);
+                Assert.That(config.logic, Is.EqualTo(ProcessorLogic.All));
+                SendLabelToggleKey(scope.RightLabel, KeyCode.F7);
+                yield return new WaitForSecondsRealtime(0.2f);
+                Assert.That(config.logic, Is.EqualTo(ProcessorLogic.Filtered));
+                replacement.Bindings.Navigation.SelectKey = KeyCode.None;
+                SendLabelToggleKey(scope.LeftLabel, KeyCode.F7);
+                Assert.That(config.logic, Is.EqualTo(ProcessorLogic.Filtered), "None disables activation.");
+                foreach (int button in new[] { 0, 1 })
+                {
+                    Event mouse = new()
+                    {
+                        type = EventType.MouseDown,
+                        button = button,
+                        mousePosition = scope.LeftLabel.worldBound.center,
+                        clickCount = 1,
+                    };
+                    using (PointerDownEvent down = PointerDownEvent.GetPooled(mouse))
+                    {
+                        scope.LeftLabel.SendEvent(down);
+                    }
+                    yield return null;
+                    Assert.That(config.logic, Is.EqualTo(ProcessorLogic.Filtered), "Pressing a scope choice must wait for the completed click.");
+                    mouse.type = EventType.MouseUp;
+                    using (PointerUpEvent up = PointerUpEvent.GetPooled(mouse))
+                    {
+                        scope.LeftLabel.SendEvent(up);
+                    }
+                    yield return new WaitForSecondsRealtime(0.2f);
+                    Assert.That(config.logic, Is.EqualTo(button == 1 ? ProcessorLogic.All : ProcessorLogic.Filtered));
+                }
+                scope.SelectRight(animate: false);
+                using (
+                    PointerDownEvent down = PointerDownEvent.GetPooled(
+                        new Event
+                        {
+                            type = EventType.MouseDown,
+                            button = replacement.Bindings.Navigation.PointerButton,
+                            mousePosition = scope.LeftLabel.worldBound.center,
+                        }
+                    )
+                )
+                {
+                    scope.LeftLabel.SendEvent(down);
+                }
+                yield return null;
+                Assert.That(scope.LeftLabel.HasPointerCapture(PointerId.mousePointerId), "The native click gesture must be active before checking cancellation.");
+                using (
+                    PointerUpEvent up = PointerUpEvent.GetPooled(
+                        new Event
+                        {
+                            type = EventType.MouseUp,
+                            button = replacement.Bindings.Navigation.PointerButton,
+                            mousePosition = scope.LeftLabel.worldBound.position - new Vector2(20, 20),
+                        }
+                    )
+                )
+                {
+                    scope.LeftLabel.SendEvent(up);
+                }
+                yield return null;
+                Assert.That(config.logic, Is.EqualTo(ProcessorLogic.Filtered), "Releasing outside a choice cancels the click.");
+                Assert.That(scope.LeftLabel.HasPointerCapture(PointerId.mousePointerId), Is.False);
+                Toggle selected = window.rootVisualElement.Q<Toggle>("processor-selected-scope");
+                selected.value = true;
+                Assert.That(config.logic, Is.EqualTo(ProcessorLogic.Selected));
+                Assert.That(scope.enabledInHierarchy, Is.False);
+                replacement.Bindings.Navigation.SelectKey = KeyCode.F7;
+                SendLabelToggleKey(scope.RightLabel, KeyCode.F7);
+                Assert.That(config.logic, Is.EqualTo(ProcessorLogic.Selected), "Disabled scope cannot replace SELECTED.");
+                selected.value = false;
+                yield return new WaitForSecondsRealtime(0.2f);
+                Assert.That(scope.enabledInHierarchy);
+                Assert.That(config.logic, Is.EqualTo(ProcessorLogic.Filtered));
+                DataVisualizerThemeSelection theme = new();
+                cleanup.Defer(() => theme.Apply(null, null));
+                foreach (string name in new[] { "Dx", "Classic", "Nord", "Dracula", "Compact", "Minimal" })
+                {
+                    theme.Apply(
+                        window.rootVisualElement,
+                        AssetDatabase.LoadAssetAtPath<DataVisualizerThemeSettings>("Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/Styles/" + name + ".asset")
+                    );
+                    scope.RightLabel.Focus();
+                    yield return null;
+                    EditorSurfaceCapture.SettleLayout(window);
+                    Color unfocused = scope.LeftLabel.resolvedStyle.borderBottomColor;
+                    scope.LeftLabel.Focus();
+                    yield return null;
+                    EditorSurfaceCapture.SettleLayout(window);
+                    Assert.That(scope.LeftLabel.resolvedStyle.borderBottomColor, Is.Not.EqualTo(unfocused), name + " focus changes the border color.");
+                    Assert.That(scope.LeftLabel.resolvedStyle.borderBottomWidth, Is.Positive, name + " focus must be visible.");
+                    Assert.That(scope.worldBound.height, Is.LessThanOrEqualTo(32), name + " retains the compact scope.");
+                    using TooltipEvent hint = TooltipEvent.GetPooled();
+                    hint.target = scope.LeftLabel;
+                    scope.LeftLabel.SendEvent(hint);
+                    Assert.That(hint.tooltip, Does.Contain("ALL"));
+                    Assert.That(hint.tooltip, Does.Contain("F7"));
+                }
+                SuspendForPlayMode(window);
+                InvokePrivate(window, "RunDataProcessor", scope, new EditorProcessorAutomationTests.JsonProbeProcessor<int>());
+                Assert.That(config.logic, Is.EqualTo(ProcessorLogic.Filtered), "A blocked processor must preserve the chosen scope.");
+                ResumeFromPlayMode(window);
+                yield return WaitForRefresh(window);
+                DataVisualizerUserState persisted = new();
+                if (projectState)
+                {
+                    persisted.HydrateFrom(state.Settings);
+                }
+                else
+                {
+                    persisted = DataVisualizerUserState.FromJson(System.IO.File.ReadAllText(state.FilePath));
+                }
+                ProcessorState saved = persisted.processorStates.Find(item => item.typeFullName == type.FullName);
+                Assert.That(saved.logic, Is.EqualTo(ProcessorLogic.Filtered), "The chosen scope reaches the active persistence store.");
+            }
         }
 
         [UnityTest]

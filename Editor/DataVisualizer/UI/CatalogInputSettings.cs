@@ -115,6 +115,8 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         public bool IsSelectionKey(KeyCode key) => IsConfirmKey(key) || MatchesKey(key, ToggleKey);
 
+        public bool IsSelectionKey(IKeyboardEvent evt) => IsSelectionKey(evt.keyCode) && new EditorInputBinding(evt.keyCode).MatchesModifiers(evt.modifiers);
+
         public bool HasPassedDragThreshold(Vector2 start, Vector2 current) => DragThresholdPoints * DragThresholdPoints < (current - start).sqrMagnitude;
     }
 }

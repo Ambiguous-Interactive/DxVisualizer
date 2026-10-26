@@ -1,6 +1,7 @@
 namespace WallstopStudios.DataVisualizer.Editor.UI
 {
     using System;
+    using Extensions;
     using UnityEngine;
     using UnityEngine.UIElements;
     using UnityEngine.UIElements.Experimental;
@@ -103,6 +104,9 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         public bool IsLeftSelected => _isLeftSelected;
 
+        private readonly Func<DataVisualizerInputSettings> _getInput;
+        private readonly DataVisualizerInputSettings _defaultInput = new();
+
         private Label _leftLabel;
         private Label _rightLabel;
         private VisualElement _indicator;
@@ -127,7 +131,11 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         private Color? _indicatorColor;
 
         public HorizontalToggle()
+            : this(null) { }
+
+        public HorizontalToggle(Func<DataVisualizerInputSettings> getInput)
         {
+            _getInput = getInput;
             AddToClassList(ussClassName);
             Initialize();
         }
@@ -199,11 +207,79 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
             RegisterCallback<GeometryChangedEvent>(OnGeometryChange);
 
-            _leftLabel.RegisterCallback<ClickEvent, HorizontalToggle>(static (_, context) => context.SelectLeft(), this);
-            _rightLabel.RegisterCallback<ClickEvent, HorizontalToggle>(static (_, context) => context.SelectRight(), this);
+            ConfigureChoice(_leftLabel, true);
+            ConfigureChoice(_rightLabel, false);
 
             UpdateColors();
             UpdateIndicatorPosition(false);
+        }
+
+        private void ConfigureChoice(Label label, bool left)
+        {
+            label.focusable = true;
+            label.tabIndex = 0;
+            label.RegisterCallback<KeyDownEvent>(evt =>
+            {
+                CatalogInputSettings input = (_getInput?.Invoke() ?? _defaultInput).Navigation;
+                if (!label.enabledInHierarchy)
+                {
+                    return;
+                }
+                bool selection = input.IsSelectionKey(evt);
+                if (!selection && !CatalogInputSettings.IsUnitySubmitKey(evt.keyCode))
+                {
+                    return;
+                }
+                if (selection)
+                {
+                    SelectChoice(left);
+                }
+                evt.imguiEvent?.Use();
+                evt.PreventDefaultCompat();
+                evt.StopImmediatePropagation();
+            });
+            label.RegisterCallback<NavigationSubmitEvent>(evt =>
+            {
+                if (label.enabledInHierarchy)
+                {
+                    SelectChoice(left);
+                }
+                evt.StopPropagation();
+            });
+            Clickable click = new(() =>
+            {
+                if (label.enabledInHierarchy)
+                {
+                    label.Focus();
+                    SelectChoice(left);
+                }
+            });
+            click.activators.Clear();
+            click.activators.Add(new ManipulatorActivationFilter { button = (MouseButton)(_getInput?.Invoke() ?? _defaultInput).Navigation.PointerButton });
+            label.RegisterCallback<PointerDownEvent>(
+                _ => click.activators[0] = new ManipulatorActivationFilter { button = (MouseButton)(_getInput?.Invoke() ?? _defaultInput).Navigation.PointerButton },
+                TrickleDown.TrickleDown
+            );
+            label.AddManipulator(click);
+            label.RegisterCallback<TooltipEvent>(evt =>
+            {
+                CatalogInputSettings input = (_getInput?.Invoke() ?? _defaultInput).Navigation;
+                evt.tooltip = $"{label.text} ({input.SelectKey}/{input.AlternateSelectKey}/{input.ToggleKey})";
+                evt.rect = label.worldBound;
+                evt.StopImmediatePropagation();
+            });
+        }
+
+        private void SelectChoice(bool left)
+        {
+            if (left)
+            {
+                SelectLeft(animate: false);
+            }
+            else
+            {
+                SelectRight(animate: false);
+            }
         }
 
         private void OnGeometryChange(GeometryChangedEvent evt)

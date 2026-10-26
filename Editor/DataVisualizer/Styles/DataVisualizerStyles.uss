@@ -1601,6 +1601,17 @@
     -unity-text-align: middle-center;
 }
 
+.horizontal-toggle__left-label,
+.horizontal-toggle__right-label {
+    border-bottom-width: 2px;
+    border-bottom-color: transparent;
+}
+
+.dataviz-root .horizontal-toggle__left-label:focus,
+.dataviz-root .horizontal-toggle__right-label:focus {
+    border-bottom-color: var(--dataviz-text);
+}
+
 .horizontal-toggle__left-label.unselected:hover,
 .horizontal-toggle__right-label.unselected:hover {
     -unity-font-style: italic;
