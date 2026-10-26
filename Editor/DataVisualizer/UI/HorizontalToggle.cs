@@ -221,11 +221,19 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             label.RegisterCallback<KeyDownEvent>(evt =>
             {
                 CatalogInputSettings input = (_getInput?.Invoke() ?? _defaultInput).Navigation;
-                if (!label.enabledInHierarchy || evt.modifiers != EventModifiers.None || !input.IsSelectionKey(evt.keyCode))
+                if (!label.enabledInHierarchy)
                 {
                     return;
                 }
-                SelectChoice(left);
+                bool selection = input.IsSelectionKey(evt);
+                if (!selection && !CatalogInputSettings.IsUnitySubmitKey(evt.keyCode))
+                {
+                    return;
+                }
+                if (selection)
+                {
+                    SelectChoice(left);
+                }
                 evt.imguiEvent?.Use();
                 evt.PreventDefaultCompat();
                 evt.StopImmediatePropagation();

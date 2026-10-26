@@ -4179,8 +4179,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             if (
                 evt.target is VisualElement choice
                 && choice.GetFirstAncestorOfType<HorizontalToggle>() != null
-                && evt.modifiers == EventModifiers.None
-                && Input.Navigation.IsSelectionKey(evt.keyCode)
+                && (Input.Navigation.IsSelectionKey(evt) || CatalogInputSettings.IsUnitySubmitKey(evt.keyCode))
             )
             {
                 return;

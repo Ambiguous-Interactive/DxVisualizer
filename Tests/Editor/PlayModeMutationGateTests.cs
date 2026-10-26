@@ -390,11 +390,43 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 scope.RightLabel.Focus();
                 SendLabelToggleKey(scope.RightLabel, KeyCode.F2);
                 Assert.That(config.logic, Is.EqualTo(ProcessorLogic.Filtered));
+                foreach (EventModifiers locks in new[] { EventModifiers.CapsLock, EventModifiers.Numeric, EventModifiers.CapsLock | EventModifiers.Numeric })
+                {
+                    foreach (Label choice in new[] { scope.LeftLabel, scope.RightLabel })
+                    {
+                        choice.Focus();
+                        using KeyDownEvent locked = KeyDownEvent.GetPooled(
+                            new Event
+                            {
+                                type = EventType.KeyDown,
+                                keyCode = KeyCode.F2,
+                                modifiers = locks,
+                            }
+                        );
+                        locked.target = choice;
+                        choice.SendEvent(locked);
+                        Assert.That(
+                            config.logic,
+                            Is.EqualTo(choice == scope.LeftLabel ? ProcessorLogic.All : ProcessorLogic.Filtered),
+                            "Lock flags must not block selection or run Rename."
+                        );
+                        Assert.That(ReadPrivateField<VisualElement>(window, "_activePopover") == null);
+                    }
+                }
                 profile.Bindings.Navigation.SelectKey = KeyCode.F6;
                 foreach (KeyCode key in new[] { KeyCode.Return, KeyCode.Space, KeyCode.KeypadEnter, KeyCode.F6 })
                 {
                     scope.LeftLabel.Focus();
-                    SendLabelToggleKey(scope.LeftLabel, key);
+                    using (KeyDownEvent activate = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = key }))
+                    {
+                        activate.target = scope.LeftLabel;
+                        scope.LeftLabel.SendEvent(activate);
+                        if (CatalogInputSettings.IsUnitySubmitKey(key))
+                        {
+                            Assert.That(activate.isImmediatePropagationStopped, "Unbound native keys must not reach a later submit handler.");
+                            Assert.That(activate.imguiEvent.type, Is.EqualTo(EventType.Used), "Consume the backing native submit key too.");
+                        }
+                    }
                     yield return new WaitForSecondsRealtime(0.2f);
                     Assert.That(config.logic, Is.EqualTo(key == KeyCode.F6 ? ProcessorLogic.All : ProcessorLogic.Filtered), key.ToString());
                 }
