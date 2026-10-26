@@ -21,6 +21,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         private readonly Dictionary<string, int> _order;
         private readonly List<CatalogEntry> _rows = new();
         private readonly List<CatalogEntry> _catalogRows = new();
+        private readonly HashSet<string> _removableNamespaces = new(StringComparer.Ordinal);
         private readonly HashSet<string> _collapsed = new(StringComparer.Ordinal);
         private readonly List<(int Start, int Length)> _terms = new();
         private int _filterStart;
@@ -262,12 +263,22 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                 return false;
             }
             _catalogRows.Clear();
+            _removableNamespaces.Clear();
             foreach (KeyValuePair<string, List<Type>> group in groups)
             {
                 _catalogRows.Add(new CatalogEntry(group.Key, null));
+                int removable = 0;
                 foreach (Type type in group.Value)
                 {
                     _catalogRows.Add(new CatalogEntry(group.Key, type));
+                    if (removable < 2 && NamespaceController.IsTypeRemovable(type))
+                    {
+                        removable++;
+                    }
+                }
+                if (1 < removable)
+                {
+                    _removableNamespaces.Add(group.Key);
                 }
             }
             _pressed = null;
@@ -746,23 +757,8 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                 : entry.Type != types[types.Count - 1];
             UpdateRowPresentation(row, entry);
             Button remove = row.RemoveButton;
-            int removable = 0;
-            if (header)
-            {
-                foreach (Type type in types)
-                {
-                    if (NamespaceController.IsTypeRemovable(type))
-                    {
-                        removable++;
-                        if (1 < removable)
-                        {
-                            break;
-                        }
-                    }
-                }
-            }
             remove.style.display = header
-                ? (1 < removable ? DisplayStyle.Flex : DisplayStyle.None)
+                ? (_removableNamespaces.Contains(entry.NamespaceKey) ? DisplayStyle.Flex : DisplayStyle.None)
                 : (NamespaceController.IsTypeRemovable(entry.Type) ? DisplayStyle.Flex : DisplayStyle.None);
         }
 
