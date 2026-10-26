@@ -46,6 +46,115 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             button.SendEvent(submit);
         }
 
+        [UnityTest]
+        public IEnumerator ShouldPreserveLabelControlsAndFocusAcrossRefreshes()
+        {
+            using TestCleanupScope cleanup = new();
+            EditorSurfaceCaptureHostWindow window = ScriptableObject.CreateInstance<EditorSurfaceCaptureHostWindow>();
+            cleanup.Defer(() => EditorSurfaceCapture.CloseWindow(window));
+            window.position = new Rect(80, 80, 360, 300);
+            EditorSurfaceCapture.ShowPopup(window);
+            int saves = 0;
+            TypeLabelFilterConfig config = new();
+            LabelFilterEditor editor = new(new VisualElement(), () => saves++);
+            window.rootVisualElement.Add(editor);
+            editor.Bind(config, new[] { "Armor", "Urgent", "urgent" });
+            yield return null;
+            EditorSurfaceCapture.SettleLayout(window);
+            Button urgent = Pill(editor, "Urgent");
+            Button lower = Pill(editor, "urgent");
+            urgent.Focus();
+            yield return null;
+            editor.Bind(config, new[] { "Armor", "Urgent", "urgent" });
+            Assert.That(Pill(editor, "Urgent"), Is.SameAs(urgent), "An asset refresh must reuse unchanged label controls.");
+            Assert.That(window.rootVisualElement.focusController.focusedElement, Is.SameAs(urgent));
+            editor.Bind(config, new[] { "Urgent", "Before", "urgent", "After", "Urgent" });
+            Assert.That(Pill(editor, "Urgent"), Is.SameAs(urgent), "Insertions and removals preserve surviving identities.");
+            Assert.That(Pill(editor, "urgent"), Is.SameAs(lower), "Label identity is ordinal and case-sensitive.");
+            Assert.That(editor.Q("simple-label-pills").childCount, Is.EqualTo(4), "Each exact label has one control.");
+            Assert.That(window.rootVisualElement.focusController.focusedElement, Is.SameAs(urgent));
+            config.andLabels.Add("Urgent");
+            editor.Bind(config, new[] { "After", "urgent" });
+            Assert.That(Pill(editor, "Urgent"), Is.SameAs(urgent), "Missing selected labels remain removable.");
+            Assert.That(urgent.text, Is.EqualTo("Urgent ×"));
+            Assert.That(urgent.ClassListContains(StyleConstants.SelectedClass));
+            Submit(urgent);
+            Assert.That(config.andLabels, Is.Empty);
+            Assert.That(saves, Is.EqualTo(1));
+            Assert.That(editor.Q("simple-label-pills").childCount, Is.EqualTo(2));
+            Assert.That(
+                window.rootVisualElement.focusController.focusedElement,
+                Is.SameAs(editor.Q<DropdownField>("label-filter-mode")),
+                "Removing the focused label returns focus to the mode control."
+            );
+            Assert.That(Pill(editor, "urgent"), Is.SameAs(lower));
+            editor.Q<DropdownField>("label-filter-mode").value = LabelFilterEditor.AdvancedMode;
+            Assert.That(editor.Q("simple-label-pills").childCount, Is.Zero, "Hidden advanced mode must not retain obsolete pill controls.");
+            editor.Q<DropdownField>("label-filter-mode").value = LabelFilterEditor.AnyMode;
+            Assert.That(Pill(editor, "urgent").text, Is.EqualTo("urgent +"));
+            editor.Bind(null, Array.Empty<string>());
+            Assert.That(editor.Q("simple-label-pills").childCount, Is.Zero);
+            Assert.That(saves, Is.EqualTo(1), "Presentation refreshes never persist filter changes.");
+        }
+
+        [Test, Explicit("Repeated label rendering component; creates no assets or native windows")]
+        public void ShouldMeasureRepeatedLabelBinding()
+        {
+            BenchmarkCodeIdentity production = new(
+                typeof(LabelFilterEditor).Assembly,
+                "Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/UI/LabelFilterEditor.cs"
+            );
+            BenchmarkCodeIdentity driver = new(typeof(LabelFilterEditorTests).Assembly, "Packages/com.wallstop-studios.data-visualizer/Tests/Editor/LabelFilterEditorTests.cs");
+            production.Verify();
+            driver.Verify();
+            List<string> output = new()
+            {
+                "# Unity=" + Application.unityVersion + "; OS=" + SystemInfo.operatingSystem + "; CPU=" + SystemInfo.processorType,
+                "# productionSource=" + production.SourceSha256 + "; module=" + production.LoadedModuleId,
+                "# driverSource=" + driver.SourceSha256 + "; module=" + driver.LoadedModuleId,
+                "labels,sample,milliseconds,replacedControls",
+            };
+            foreach (int count in new[] { 10, 100, 1000 })
+            {
+                string[] labels = new string[count];
+                for (int i = 0; i < count; i++)
+                {
+                    labels[i] = "Label" + i.ToString("D4");
+                }
+                LabelFilterEditor editor = new(new VisualElement(), () => Assert.Fail("Binding cannot save."));
+                TypeLabelFilterConfig config = new();
+                editor.Bind(config, labels);
+                VisualElement pills = editor.Q("simple-label-pills");
+                VisualElement[] previous = new VisualElement[count];
+                for (int sample = -5; sample < 30; sample++)
+                {
+                    for (int i = 0; i < count; i++)
+                    {
+                        previous[i] = pills[i];
+                    }
+                    long start = System.Diagnostics.Stopwatch.GetTimestamp();
+                    editor.Bind(config, labels);
+                    double milliseconds = (System.Diagnostics.Stopwatch.GetTimestamp() - start) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+                    int replaced = 0;
+                    for (int i = 0; i < count; i++)
+                    {
+                        if (!ReferenceEquals(previous[i], pills[i]))
+                        {
+                            replaced++;
+                        }
+                    }
+                    if (0 <= sample)
+                    {
+                        output.Add(count + "," + sample + "," + milliseconds.ToString("R", System.Globalization.CultureInfo.InvariantCulture) + "," + replaced);
+                    }
+                }
+            }
+            production.Verify();
+            driver.Verify();
+            output.Add("# status=complete; five discarded warmups and thirty samples per label count; unhosted controls, no asset or whole-editor timings");
+            System.IO.File.WriteAllText("Temp/label-binding.csv", string.Join("\n", output) + "\n");
+        }
+
         [TestCaseSource(nameof(SavedFilters))]
         public void ShouldPreserveSavedExpressionsWhenBindingAndOpeningAdvanced(int combination, int clauses)
         {
