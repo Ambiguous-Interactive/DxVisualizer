@@ -897,6 +897,36 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 yield return null;
                 collapse = view.Query<Button>("catalog-collapse").ToList().Find(button => button.style.display.value == DisplayStyle.Flex);
                 collapse.Focus();
+                using (KeyDownEvent expand = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = view.Input.ExpandKey }))
+                {
+                    collapse.SendEvent(expand);
+                }
+                yield return null;
+                yield return null;
+                EditorSurfaceCapture.SettleLayout(host);
+                int redundantBinds = 0;
+                Action<VisualElement, int> bindBeforeCollapse = view.List.bindItem;
+                view.List.bindItem = (slot, index) =>
+                {
+                    redundantBinds++;
+                    bindBeforeCollapse(slot, index);
+                };
+                redundantBinds = 0;
+                VisualElement expandedFocus = host.rootVisualElement.focusController.focusedElement as VisualElement;
+                float expandedScroll = view.List.Q<ScrollView>().scrollOffset.y;
+                int expandedRows = view.List.itemsSource.Count;
+                for (int repeat = 0; repeat < 3; repeat++)
+                {
+                    using KeyDownEvent right = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = view.Input.ExpandKey });
+                    collapse.SendEvent(right);
+                }
+                Assert.That(redundantBinds, Is.Zero, "Repeated expansion must not rebind unrelated catalog rows.");
+                yield return null;
+                yield return null;
+                Assert.That(view.List.itemsSource.Count, Is.EqualTo(expandedRows));
+                Assert.That(host.rootVisualElement.focusController.focusedElement, Is.SameAs(expandedFocus));
+                Assert.That(view.List.Q<ScrollView>().scrollOffset.y, Is.EqualTo(expandedScroll).Within(1));
+                view.List.bindItem = bindBeforeCollapse;
                 using (KeyDownEvent left = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.LeftArrow }))
                 {
                     left.target = collapse;
@@ -913,6 +943,57 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 List<NamespaceCollapseState> collapsed = SavedState(state).namespaceCollapseStates;
                 Assert.That(collapsed.Find(entry => entry.namespaceKey == firstKey).isCollapsed, Is.True);
                 Assert.That(view.Adjacent(dataset[0], true) == null, "Collapsed groups do not navigate");
+                yield return null;
+                yield return null;
+                EditorSurfaceCapture.SettleLayout(host);
+                redundantBinds = 0;
+                view.List.bindItem = (slot, index) =>
+                {
+                    redundantBinds++;
+                    bindBeforeCollapse(slot, index);
+                };
+                redundantBinds = 0;
+                VisualElement collapsedHeader = focusedControl.GetFirstAncestorOfType<VisualElement>();
+                while (collapsedHeader != null && collapsedHeader.userData is not CatalogEntry)
+                {
+                    collapsedHeader = collapsedHeader.parent;
+                }
+                Assert.That(collapsedHeader != null);
+                using (
+                    PointerDownEvent down = PointerDownEvent.GetPooled(
+                        new Event
+                        {
+                            type = EventType.MouseDown,
+                            button = view.Input.PointerButton,
+                            mousePosition = collapsedHeader.worldBound.center,
+                        }
+                    )
+                )
+                {
+                    down.target = collapsedHeader;
+                    collapsedHeader.SendEvent(down);
+                }
+                Assert.That(collapsedHeader.HasPointerCapture(PointerId.mousePointerId));
+                VisualElement collapsedFocus = host.rootVisualElement.focusController.focusedElement as VisualElement;
+                float collapsedScroll = view.List.Q<ScrollView>().scrollOffset.y;
+                string savedCollapseState = JsonUtility.ToJson(SavedState(state));
+                int collapsedRows = view.List.itemsSource.Count;
+                for (int repeat = 0; repeat < 3; repeat++)
+                {
+                    using KeyDownEvent left = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = view.Input.CollapseKey });
+                    collapsedFocus.SendEvent(left);
+                }
+                Assert.That(redundantBinds, Is.Zero, "Repeated collapse must not rebind unrelated catalog rows.");
+                yield return null;
+                yield return null;
+                Assert.That(view.List.itemsSource.Count, Is.EqualTo(collapsedRows));
+                Assert.That(collapsedHeader.HasPointerCapture(PointerId.mousePointerId), "A redundant collapse must not cancel the current row gesture.");
+                collapsedHeader.ReleasePointer(PointerId.mousePointerId);
+                Assert.That(view.List.Q<ScrollView>().scrollOffset.y, Is.EqualTo(collapsedScroll).Within(1));
+                Assert.That(host.rootVisualElement.focusController.focusedElement, Is.SameAs(collapsedFocus));
+                Assert.That(controller.SelectedType, Is.EqualTo(selectedBeforeFocus));
+                Assert.That(JsonUtility.ToJson(SavedState(state)), Is.EqualTo(savedCollapseState));
+                view.List.bindItem = bindBeforeCollapse;
                 VirtualizedTypeCatalogView reopened = new(owner, controller, managed, order);
                 Assert.That(reopened.List.itemsSource.Count, Is.EqualTo(view.List.itemsSource.Count), "Reopen restores collapse in both stores");
                 reopened.Select(dataset[0]);

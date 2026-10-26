@@ -788,13 +788,10 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         private void SetCollapsed(string key, bool collapsed)
         {
-            if (collapsed)
+            bool changed = collapsed ? _collapsed.Add(key) : _collapsed.Remove(key);
+            if (!changed)
             {
-                _collapsed.Add(key);
-            }
-            else
-            {
-                _collapsed.Remove(key);
+                return;
             }
             _owner.PersistSettings(settings => settings.SetNamespaceCollapsed(key, collapsed), state => state.SetNamespaceCollapsed(key, collapsed));
             Refresh();
