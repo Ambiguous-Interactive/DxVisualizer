@@ -311,8 +311,12 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         [UnityTest]
         public IEnumerator ShouldToggleLabelFiltersWithConfiguredKeyboardAndPointer()
         {
+            using TestCleanupScope preferenceCleanup = new();
+            DocsImageCapture.WindowPreferenceSnapshot preferences = DocsImageCapture.WindowPreferenceSnapshot.Capture();
+            preferenceCleanup.Defer(preferences.Restore);
             foreach (bool projectState in new[] { false, true })
             {
+                preferences.ApplyWidePanes();
                 using TestCleanupScope cleanup = new();
                 object previousInstance = ReadSharedInstance();
                 cleanup.Defer(() => RestoreSharedInstance(previousInstance));
@@ -326,6 +330,10 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 Type type = typeof(TestDataObject);
                 state.UserState.managedTypeNames.Add(type.FullName);
                 state.Settings.HydrateFrom(state.UserState);
+                string folder = CreateFixtureFolder();
+                cleanup.Defer(() => AssetDatabase.DeleteAsset(folder));
+                ScriptableObject labelled = CreateFixtureAsset(folder, "Labelled.asset");
+                AssetDatabase.SetLabels(labelled, new[] { "Toggle fixture" });
                 DataVisualizerWindow window = ScriptableObject.CreateInstance<DataVisualizerWindow>();
                 using TestCleanupScope windowCleanup = new();
                 windowCleanup.Defer(() => EditorSurfaceCapture.CloseWindow(window));
@@ -336,22 +344,32 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 SetPrivateField(window, "_settings", state.Settings);
                 SetPrivateField(window, "_userState", state.UserState);
                 SetPrivateField(window, "_userStateFilePath", state.FilePath);
-                window.position = new Rect(40, 40, 1180, 780);
+                window.position = new Rect(40, 40, projectState ? 760 : 1180, 780);
                 window.CreateGUI();
                 InvokePrivate(window, "LoadInitialContent");
                 ReadPrivateField<NamespaceController>(window, "_namespaceController").SelectType(window, type);
                 yield return WaitForRefresh(window);
+                if (projectState)
+                {
+                    InvokePrivate(window, "ShowInspectorIfCompact");
+                }
                 TypeLabelFilterConfig config = (TypeLabelFilterConfig)InvokePrivate(window, "LoadOrCreateLabelFilterConfig", type);
                 Assert.That(config != null);
                 config.andLabels.Clear();
                 config.orLabels.Clear();
                 InvokePrivate(window, "ToggleLabelsCollapsed", true);
+                InvokePrivate(window, "ShowObjectPaneIfCompact");
                 yield return null;
                 EditorSurfaceCapture.SettleLayout(window);
                 Button toggle = window.rootVisualElement.Q<Button>("label-filter-collapse-toggle");
                 Assert.That(toggle != null, "Label controls need a native focusable button.");
                 Assert.That(toggle.focusable);
-                Assert.That(toggle.worldBound.height, Is.Positive);
+                string layout = "window=" + window.position;
+                for (VisualElement ancestor = toggle; ancestor != null; ancestor = ancestor.parent)
+                {
+                    layout += " / " + ancestor.name + ":" + ancestor.resolvedStyle.display + ":" + ancestor.worldBound;
+                }
+                Assert.That(toggle.worldBound.height, Is.Positive, layout);
                 DataVisualizerThemeSelection selection = new();
                 cleanup.Defer(() => selection.Apply(null, null));
                 foreach (string themeName in new[] { "Dx", "Classic", "Nord", "Dracula", "Compact", "Minimal" })
