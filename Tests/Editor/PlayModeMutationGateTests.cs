@@ -417,18 +417,59 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 Assert.That(config.logic, Is.EqualTo(ProcessorLogic.Filtered), "None disables activation.");
                 foreach (int button in new[] { 0, 1 })
                 {
-                    using PointerDownEvent down = PointerDownEvent.GetPooled(
-                        new Event
-                        {
-                            type = EventType.MouseDown,
-                            button = button,
-                            mousePosition = scope.LeftLabel.worldBound.center,
-                        }
-                    );
-                    scope.LeftLabel.SendEvent(down);
+                    Event mouse = new()
+                    {
+                        type = EventType.MouseDown,
+                        button = button,
+                        mousePosition = scope.LeftLabel.worldBound.center,
+                        clickCount = 1,
+                    };
+                    using (PointerDownEvent down = PointerDownEvent.GetPooled(mouse))
+                    {
+                        scope.LeftLabel.SendEvent(down);
+                    }
+                    yield return null;
+                    Assert.That(config.logic, Is.EqualTo(ProcessorLogic.Filtered), "Pressing a scope choice must wait for the completed click.");
+                    mouse.type = EventType.MouseUp;
+                    using (PointerUpEvent up = PointerUpEvent.GetPooled(mouse))
+                    {
+                        scope.LeftLabel.SendEvent(up);
+                    }
                     yield return new WaitForSecondsRealtime(0.2f);
                     Assert.That(config.logic, Is.EqualTo(button == 1 ? ProcessorLogic.All : ProcessorLogic.Filtered));
                 }
+                scope.SelectRight(animate: false);
+                using (
+                    PointerDownEvent down = PointerDownEvent.GetPooled(
+                        new Event
+                        {
+                            type = EventType.MouseDown,
+                            button = replacement.Bindings.Navigation.PointerButton,
+                            mousePosition = scope.LeftLabel.worldBound.center,
+                        }
+                    )
+                )
+                {
+                    scope.LeftLabel.SendEvent(down);
+                }
+                yield return null;
+                Assert.That(scope.LeftLabel.HasPointerCapture(PointerId.mousePointerId), "The native click gesture must be active before checking cancellation.");
+                using (
+                    PointerUpEvent up = PointerUpEvent.GetPooled(
+                        new Event
+                        {
+                            type = EventType.MouseUp,
+                            button = replacement.Bindings.Navigation.PointerButton,
+                            mousePosition = scope.LeftLabel.worldBound.position - new Vector2(20, 20),
+                        }
+                    )
+                )
+                {
+                    scope.LeftLabel.SendEvent(up);
+                }
+                yield return null;
+                Assert.That(config.logic, Is.EqualTo(ProcessorLogic.Filtered), "Releasing outside a choice cancels the click.");
+                Assert.That(scope.LeftLabel.HasPointerCapture(PointerId.mousePointerId), Is.False);
                 Toggle selected = window.rootVisualElement.Q<Toggle>("processor-selected-scope");
                 selected.value = true;
                 Assert.That(config.logic, Is.EqualTo(ProcessorLogic.Selected));

@@ -130,7 +130,10 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         private Color? _indicatorColor;
 
-        public HorizontalToggle(Func<DataVisualizerInputSettings> getInput = null)
+        public HorizontalToggle()
+            : this(null) { }
+
+        public HorizontalToggle(Func<DataVisualizerInputSettings> getInput)
         {
             _getInput = getInput;
             AddToClassList(ussClassName);
@@ -235,16 +238,21 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                 }
                 evt.StopPropagation();
             });
-            label.RegisterCallback<PointerDownEvent>(evt =>
+            Clickable click = new(() =>
             {
-                if (!label.enabledInHierarchy || evt.button != (_getInput?.Invoke() ?? _defaultInput).Navigation.PointerButton)
+                if (label.enabledInHierarchy)
                 {
-                    return;
+                    label.Focus();
+                    SelectChoice(left);
                 }
-                label.Focus();
-                SelectChoice(left);
-                evt.StopPropagation();
             });
+            click.activators.Clear();
+            click.activators.Add(new ManipulatorActivationFilter { button = (MouseButton)(_getInput?.Invoke() ?? _defaultInput).Navigation.PointerButton });
+            label.RegisterCallback<PointerDownEvent>(
+                _ => click.activators[0] = new ManipulatorActivationFilter { button = (MouseButton)(_getInput?.Invoke() ?? _defaultInput).Navigation.PointerButton },
+                TrickleDown.TrickleDown
+            );
+            label.AddManipulator(click);
             label.RegisterCallback<TooltipEvent>(evt =>
             {
                 CatalogInputSettings input = (_getInput?.Invoke() ?? _defaultInput).Navigation;
