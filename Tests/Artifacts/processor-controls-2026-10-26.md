@@ -10,9 +10,9 @@ loading is still in progress; this image is not loading-performance evidence.
 
 `PlayModeMutationGateTests.ShouldChooseProcessorScopeWithOwnerInput` reproduces two failures on their original implementations: the scope labels are not focusable, and the section
 arrow is not a focusable button. The repaired hosted test passes both persistence stores, Tab entry, Return/Space, remapped/unbound keys, profile replacement, exact scope
-modifiers, remapped pointer input, SELECTED scope, live hints, section collapse/reopen and the paused execution guard. It checks compact geometry and visible focus across all six
-package themes. The 23-case mutation suite and 19-case label-filter suite also pass before the section-button extension; aggregate validation is recorded in commits and linked
-issues.
+modifiers, remapped completed clicks, outside-release cancellation, selection-key precedence over Rename, SELECTED scope, live hints, section collapse/reopen and the paused
+execution guard. It checks compact geometry and visible focus across all six package themes. The 23-case mutation suite and 19-case label-filter suite also pass before the
+section-button extension; aggregate validation is recorded in commits and linked issues.
 
 These are scripted event and layout checks. They do not replace physical-keyboard testing, a human task-time/error study, Unity 2021.3 execution or wider operating-system evidence.
-Broad acceptance in #312 remains open. The test creates no asset and closes its native window; the capture restores host preferences and uses disposable state.
+Broad acceptance in #312 remains open. The test owns and removes one fixture asset and closes its native window; the capture restores host preferences and uses disposable state.
