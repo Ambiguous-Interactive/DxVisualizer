@@ -81,6 +81,9 @@ switching types clears it. A closed and reopened window restores only its existi
 selected GUIDs remain explicit: clear the selection and select again after inspecting a rejected preview. Clone and move commands keep a multi-selection even when they change the
 active inspected item. The preview freezes its targets, so later selection or filter changes cannot change a confirmed batch.
 
+Tab to **ALL** or **FILTERED** and use the configured select or toggle key to choose that scope. Each choice shows its current keys in a tooltip. **SELECTED** disables these
+choices until you turn it off.
+
 Wait for type loading to finish before opening a processor preview. The target list includes hidden selections, so inspect its paths as well as its count. Processor code can change
 other assets; preview lists the supplied batch, not a prediction of arbitrary code's effects. There is no automatic Undo or rollback. Cancellation cannot interrupt `Process`,
 saving or refresh. Closing the workspace, closing the window or entering Play Mode cancels preparation. Recover unwanted changes from a saved copy or version control.

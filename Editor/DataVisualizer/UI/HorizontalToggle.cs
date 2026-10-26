@@ -1,6 +1,7 @@
 namespace WallstopStudios.DataVisualizer.Editor.UI
 {
     using System;
+    using Extensions;
     using UnityEngine;
     using UnityEngine.UIElements;
     using UnityEngine.UIElements.Experimental;
@@ -103,6 +104,9 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         public bool IsLeftSelected => _isLeftSelected;
 
+        private readonly Func<DataVisualizerInputSettings> _getInput;
+        private readonly DataVisualizerInputSettings _defaultInput = new();
+
         private Label _leftLabel;
         private Label _rightLabel;
         private VisualElement _indicator;
@@ -126,8 +130,9 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         private Color? _indicatorColor;
 
-        public HorizontalToggle()
+        public HorizontalToggle(Func<DataVisualizerInputSettings> getInput = null)
         {
+            _getInput = getInput;
             AddToClassList(ussClassName);
             Initialize();
         }
@@ -199,11 +204,66 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
             RegisterCallback<GeometryChangedEvent>(OnGeometryChange);
 
-            _leftLabel.RegisterCallback<ClickEvent, HorizontalToggle>(static (_, context) => context.SelectLeft(), this);
-            _rightLabel.RegisterCallback<ClickEvent, HorizontalToggle>(static (_, context) => context.SelectRight(), this);
+            ConfigureChoice(_leftLabel, true);
+            ConfigureChoice(_rightLabel, false);
 
             UpdateColors();
             UpdateIndicatorPosition(false);
+        }
+
+        private void ConfigureChoice(Label label, bool left)
+        {
+            label.focusable = true;
+            label.tabIndex = 0;
+            label.RegisterCallback<KeyDownEvent>(evt =>
+            {
+                CatalogInputSettings input = (_getInput?.Invoke() ?? _defaultInput).Navigation;
+                if (!label.enabledInHierarchy || evt.modifiers != EventModifiers.None || !input.IsSelectionKey(evt.keyCode))
+                {
+                    return;
+                }
+                SelectChoice(left);
+                evt.imguiEvent?.Use();
+                evt.PreventDefaultCompat();
+                evt.StopImmediatePropagation();
+            });
+            label.RegisterCallback<NavigationSubmitEvent>(evt =>
+            {
+                if (label.enabledInHierarchy)
+                {
+                    SelectChoice(left);
+                }
+                evt.StopPropagation();
+            });
+            label.RegisterCallback<PointerDownEvent>(evt =>
+            {
+                if (!label.enabledInHierarchy || evt.button != (_getInput?.Invoke() ?? _defaultInput).Navigation.PointerButton)
+                {
+                    return;
+                }
+                label.Focus();
+                SelectChoice(left);
+                evt.StopPropagation();
+            });
+            label.RegisterCallback<TooltipEvent>(evt =>
+            {
+                CatalogInputSettings input = (_getInput?.Invoke() ?? _defaultInput).Navigation;
+                evt.tooltip = $"{label.text} ({input.SelectKey}/{input.AlternateSelectKey}/{input.ToggleKey})";
+                evt.rect = label.worldBound;
+                evt.StopImmediatePropagation();
+            });
+        }
+
+        private void SelectChoice(bool left)
+        {
+            if (left)
+            {
+                SelectLeft(animate: false);
+            }
+            else
+            {
+                SelectRight(animate: false);
+            }
         }
 
         private void OnGeometryChange(GeometryChangedEvent evt)

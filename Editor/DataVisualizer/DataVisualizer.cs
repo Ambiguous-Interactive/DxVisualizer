@@ -2986,7 +2986,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
             _processorArea = new VisualElement { style = { flexDirection = FlexDirection.Column } };
             _processorArea.AddToClassList("processor-area");
-            _processorLogicToggle = new HorizontalToggle()
+            _processorLogicToggle = new HorizontalToggle(() => Input)
             {
                 name = "processor-logic-toggle",
                 LeftText = "ALL",
@@ -5939,25 +5939,13 @@ namespace WallstopStudios.DataVisualizer.Editor
             andRow.Add(_andLabelsContainer);
             _labelFilterSelectionRoot.Add(andRow);
 
-            _andOrToggle = new HorizontalToggle()
+            _andOrToggle = new HorizontalToggle(() => Input)
             {
                 name = "and-or-toggle",
                 LeftText = "AND &&",
                 RightText = "OR ||",
             };
             _andOrToggle.AddToClassList("label");
-            _andOrToggle.LeftLabel.focusable = true;
-            _andOrToggle.RightLabel.focusable = true;
-            _andOrToggle.LeftLabel.RegisterCallback<NavigationSubmitEvent>(evt =>
-            {
-                _andOrToggle.SelectLeft(animate: false);
-                evt.StopPropagation();
-            });
-            _andOrToggle.RightLabel.RegisterCallback<NavigationSubmitEvent>(evt =>
-            {
-                _andOrToggle.SelectRight(animate: false);
-                evt.StopPropagation();
-            });
             _andOrToggle.OnLeftSelected += () =>
             {
                 _andOrToggle.EnableInClassList("dataviz-alternate-mode", false);
