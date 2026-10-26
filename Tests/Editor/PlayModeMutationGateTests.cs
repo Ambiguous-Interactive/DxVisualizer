@@ -352,8 +352,12 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 ReadPrivateField<NamespaceController>(window, "_namespaceController").SelectType(window, type);
                 yield return WaitForRefresh(window);
                 ProcessorState config = (ProcessorState)InvokePrivate(window, "LoadOrCreateProcessorState", type);
-                config.isCollapsed = false;
-                InvokePrivate(window, "BuildProcessorColumnView");
+                Button collapse = window.rootVisualElement.Q<Button>("processor-collapse-toggle");
+                Assert.That(collapse != null && collapse.focusable, "Processor expand/collapse must be reachable before its scope choices.");
+                Assert.That(config.isCollapsed);
+                collapse.Focus();
+                SendLabelToggleKey(collapse, KeyCode.Return);
+                Assert.That(config.isCollapsed, Is.False);
                 yield return null;
                 HorizontalToggle scope = window.rootVisualElement.Q<HorizontalToggle>("processor-logic-toggle");
                 Assert.That(scope != null);
@@ -550,6 +554,52 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                     Assert.That(hint.tooltip, Does.Contain("ALL"));
                     Assert.That(hint.tooltip, Does.Contain("F7"));
                 }
+                collapse.Focus();
+                SendLabelToggleKey(collapse, KeyCode.Return);
+                Assert.That(config.isCollapsed, Is.False, "The old physical key cannot toggle the section after a remap.");
+                SendLabelToggleKey(collapse, KeyCode.F7);
+                Assert.That(config.isCollapsed, Is.True);
+                SendLabelToggleKey(collapse, KeyCode.F7);
+                Assert.That(config.isCollapsed, Is.False, "The same focused control expands after collapsing its content.");
+                replacement.Bindings.Navigation.SelectKey = KeyCode.None;
+                SendLabelToggleKey(collapse, KeyCode.F7);
+                Assert.That(config.isCollapsed, Is.False, "None disables section activation.");
+                using (TooltipEvent hint = TooltipEvent.GetPooled())
+                {
+                    hint.target = collapse;
+                    collapse.SendEvent(hint);
+                    Assert.That(hint.tooltip, Does.Contain("Processors"));
+                    Assert.That(hint.tooltip, Does.Contain("None"));
+                }
+                foreach (int button in new[] { 0, 1 })
+                {
+                    Assert.That(collapse.worldBound.Overlaps(window.rootVisualElement.worldBound));
+                    foreach (EventType eventType in new[] { EventType.MouseDown, EventType.MouseUp })
+                    {
+                        Event mouse = new()
+                        {
+                            type = eventType,
+                            button = button,
+                            mousePosition = collapse.worldBound.center,
+                        };
+                        if (eventType == EventType.MouseDown)
+                        {
+                            using PointerDownEvent down = PointerDownEvent.GetPooled(mouse);
+                            collapse.SendEvent(down);
+                        }
+                        else
+                        {
+                            using PointerUpEvent up = PointerUpEvent.GetPooled(mouse);
+                            collapse.SendEvent(up);
+                        }
+                        yield return null;
+                    }
+                    yield return null;
+                    Assert.That(config.isCollapsed, Is.EqualTo(button == 1), "Section collapse follows the current pointer binding.");
+                }
+                replacement.Bindings.Navigation.SelectKey = KeyCode.F7;
+                SendLabelToggleKey(collapse, KeyCode.F7);
+                Assert.That(config.isCollapsed, Is.False);
                 SuspendForPlayMode(window);
                 InvokePrivate(window, "RunDataProcessor", scope, new EditorProcessorAutomationTests.JsonProbeProcessor<int>());
                 Assert.That(config.logic, Is.EqualTo(ProcessorLogic.Filtered), "A blocked processor must preserve the chosen scope.");

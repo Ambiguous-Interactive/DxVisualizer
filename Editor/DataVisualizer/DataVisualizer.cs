@@ -335,7 +335,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         private VisualElement _processorAreaElement;
         private VisualElement _processorListContainer;
-        private Label _processorToggleCollapseButton;
+        private Button _processorToggleCollapseButton;
         private VisualElement _processorHeader;
         private Label _processorHeaderLabel;
         private readonly List<IDataProcessor> _allDataProcessors = new();
@@ -2965,17 +2965,14 @@ namespace WallstopStudios.DataVisualizer.Editor
             _processorHeader = new VisualElement { name = "processor-column-header" };
             _processorHeader.AddToClassList("processor-column-header");
             _processorHeaderLabel = new Label("Processors") { style = { unityFontStyleAndWeight = FontStyle.Bold } };
-            _processorToggleCollapseButton = new Label();
+            _processorToggleCollapseButton = new Button(ToggleProcessorContentCollapse) { name = "processor-collapse-toggle" };
             _processorToggleCollapseButton.AddToClassList("collapse-toggle");
             _processorToggleCollapseButton.AddToClassList(StyleConstants.ClickableClass);
-            _processorToggleCollapseButton.RegisterCallback<PointerDownEvent>(evt =>
+            _processorToggleCollapseButton.RegisterCallback<TooltipEvent>(evt =>
             {
-                if (evt.button != Input.Navigation.PointerButton)
-                {
-                    return;
-                }
-
-                ToggleProcessorContentCollapse();
+                evt.tooltip = $"Expand or collapse Processors ({Input.Navigation.SelectKey}/{Input.Navigation.ToggleKey})";
+                evt.rect = _processorToggleCollapseButton.worldBound;
+                evt.StopImmediatePropagation();
             });
 
             _processorHeader.Add(_processorToggleCollapseButton);
