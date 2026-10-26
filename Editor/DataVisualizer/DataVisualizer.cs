@@ -6427,7 +6427,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             contentArea.AddToClassList(StyleConstants.ClickableClass);
             box.Add(contentArea);
 
-            Label titleLabel = new() { name = "object-item-label" };
+            Label titleLabel = new() { name = "object-item-label", displayTooltipWhenElided = false };
             titleLabel.AddToClassList("object-item__label");
             titleLabel.AddToClassList(StyleConstants.ClickableClass);
             contentArea.Add(titleLabel);
