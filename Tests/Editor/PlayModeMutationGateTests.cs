@@ -479,7 +479,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             state.UserState.managedTypeNames.Add(type.FullName);
             state.UserState.GetOrCreateTypeOrderList(NamespaceController.GetNamespaceKey(type)).Add(type.FullName);
             ScriptableObject changed = CreateFixtureAsset(folder, "Changed.asset");
-            CreateFixtureAsset(folder, "Other.asset");
+            ScriptableObject unchanged = CreateFixtureAsset(folder, "Other.asset");
             DataVisualizerWindow window = ScriptableObject.CreateInstance<DataVisualizerWindow>();
             using TestCleanupScope windowCleanup = new();
             windowCleanup.Defer(() => EditorSurfaceCapture.CloseWindow(window));
@@ -554,6 +554,56 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 bind(element, index);
             };
             bindings = 0;
+            int refreshLoads = ReadPrivateField<int>(window, "_assetRefreshObjectLoadCount");
+            string changedGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(changed));
+            string unchangedGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(unchanged));
+            Assert.That(AssetGuidTypeIndex.Shared.Metadata.TryGet(unchangedGuid, out AssetMetadataRecord unchangedMetadata));
+            string originalTitle = ((TestDataObject)changed).Title;
+            cleanup.Defer(() =>
+            {
+                if (changed != null)
+                {
+                    Undo.ClearUndo(changed);
+                }
+            });
+            Undo.IncrementCurrentGroup();
+            Undo.SetCurrentGroupName("Edit owned fixture title");
+            using (SerializedObject inspector = new(changed))
+            {
+                inspector.FindProperty("_title").stringValue = "Inspector title";
+                Assert.That(inspector.ApplyModifiedProperties(), "The inspector edit must change serialized data.");
+            }
+            Undo.FlushUndoRecordObjects();
+            for (int operation = 0; operation < 3; operation++)
+            {
+                string expectedTitle = operation == 1 ? originalTitle : "Inspector title";
+                if (operation == 1)
+                {
+                    Undo.PerformUndo();
+                }
+                else if (operation == 2)
+                {
+                    Undo.PerformRedo();
+                }
+                Assert.That(((TestDataObject)changed).Title, Is.EqualTo(expectedTitle), "The edit/Undo/Redo must actually change the fixture.");
+                for (int tick = 0; tick < 300 && changedRow.Q<Label>("object-item-label").text != expectedTitle; tick++)
+                {
+                    yield return null;
+                }
+                Assert.That(changedRow.Q<Label>("object-item-label").text, Is.EqualTo(expectedTitle), "Object-change events must refresh the row without a manual queue call.");
+                yield return WaitForRefresh(window);
+                Assert.That(AssetGuidTypeIndex.Shared.Metadata.TryGet(changedGuid, out AssetMetadataRecord updatedMetadata));
+                Assert.That(updatedMetadata.DisplayTitle, Is.EqualTo(expectedTitle), "Shared display metadata follows the same edit history.");
+                Assert.That(AssetGuidTypeIndex.Shared.Metadata.TryGet(unchangedGuid, out AssetMetadataRecord retainedMetadata));
+                Assert.That(retainedMetadata, Is.SameAs(unchangedMetadata), "Unchanged assets keep their original metadata record.");
+                Assert.That(bindings, Is.Zero, "Inspector edits and Undo/Redo must not rebind unrelated rows.");
+                Assert.That(ReadPrivateField<int>(window, "_assetRefreshObjectLoadCount"), Is.EqualTo(refreshLoads), "Already loaded assets must not reload.");
+                Assert.That(list.itemsSource.Count, Is.EqualTo(originalCount));
+                Assert.That(ReadPrivateField<ScriptableObject>(window, "_selectedObject") == selected);
+                Assert.That(ReadPrivateField<int>(window, "_asyncLoadGeneration"), Is.EqualTo(generation));
+                Assert.That(list.Q<ScrollView>().scrollOffset.y, Is.EqualTo(offset).Within(1));
+            }
+            Undo.ClearUndo(changed);
             ((TestDataObject)changed).Title = "Changed row";
             Assert.That(AssetDatabase.RenameAsset(path, "Changed row"), Is.Empty);
             string renamed = AssetDatabase.GetAssetPath(changed);
