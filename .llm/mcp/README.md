@@ -43,15 +43,18 @@ A credential rotated in `.env.local` also has to reach already-running agents. T
    inherits the environment of whichever client happened to start it and holds it for its entire life, so **new sessions stay broken too** — the session is fine, the singleton
    behind it is not. `.devcontainer/recycle_stale_opencode_service.py` compares the running service's credentials against `.env.local` and, on a mismatch, recycles it so the next
    session respawns a healthy one. It is a no-op when the service matches, when there is no `.env.local`, or when no service is running. `post_start.py` runs it on every container
-   start.
+   start. A service credential that is present but **empty** counts as a mismatch: the devcontainer `remoteEnv` resolves an unset host variable to an empty string, so a service
+   started outside a loaded shell (for example by the VS Code extension host) expands every `{env:VAR}` reference to no credential and its remote servers 401 while `.env.local`,
+   the endpoints, and fresh shells all stay healthy. `post_start.py` therefore warms the service with the `.env.local`-loaded environment, and `npm run mcp:doctor` surfaces the
+   poisoned-service state as a failure with the remedy.
 
 ```bash
 python3 .devcontainer/recycle_stale_opencode_service.py --dry-run   # report only
 python3 .devcontainer/recycle_stale_opencode_service.py             # recycle
 ```
 
-Contract tests: `scripts/tests/test_mcp_credentials.py` (credential aliasing, divergence detection, repair), `scripts/tests/test_env_local_precedence.py` (loader precedence), and
-`scripts/tests/test_opencode_service_recycle.py` (service recycling).
+Contract tests: `scripts/tests/test_mcp_credentials.py` (credential aliasing, divergence detection, repair, shared-service health), `scripts/tests/test_env_local_precedence.py`
+(loader precedence), and `scripts/tests/test_opencode_service_recycle.py` (service recycling, including the empty-credential poison shape).
 
 ## One command to wire everything
 
