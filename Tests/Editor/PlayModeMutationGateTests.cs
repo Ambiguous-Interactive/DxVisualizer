@@ -791,6 +791,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             state.UserState.GetOrCreateTypeOrderList(NamespaceController.GetNamespaceKey(type)).Add(type.FullName);
             ScriptableObject changed = CreateFixtureAsset(folder, "Changed.asset");
             ScriptableObject unchanged = CreateFixtureAsset(folder, "Other.asset");
+            AssetDatabase.SetLabels(changed, new[] { "Inspector stable label" });
             DataVisualizerWindow window = ScriptableObject.CreateInstance<DataVisualizerWindow>();
             using TestCleanupScope windowCleanup = new();
             windowCleanup.Defer(() => EditorSurfaceCapture.CloseWindow(window));
@@ -833,6 +834,13 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             window.position = new Rect(40, 40, 1180, 780);
             yield return null;
             EditorSurfaceCapture.SettleLayout(window);
+            InvokePrivate(window, "SetActiveObject", changed, false);
+            EditorSurfaceCapture.SettleLayout(window);
+            VisualElement inspectorLabels = ReadPrivateField<VisualElement>(window, "_inspectorCurrentLabelsContainer");
+            VisualElement retainedPill = inspectorLabels[0];
+            Button retainedRemove = retainedPill.Q<Button>();
+            retainedRemove.Focus();
+            Assert.That(window.rootVisualElement.focusController.focusedElement, Is.SameAs(retainedRemove));
             ListView list = ReadPrivateField<ListView>(window, "_objectListView");
             List<ScriptableObject> filtered = ReadPrivateField<List<ScriptableObject>>(window, "_filteredObjects");
             int changedIndex = filtered.IndexOf(changed);
@@ -858,13 +866,19 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             int originalCount = list.itemsSource.Count;
             float offset = list.Q<ScrollView>().scrollOffset.y;
             int bindings = 0;
+            int unrelatedBindings = 0;
             Action<VisualElement, int> bind = list.bindItem;
             list.bindItem = (element, index) =>
             {
                 bindings++;
+                if (!ReferenceEquals(filtered[index], changed))
+                {
+                    unrelatedBindings++;
+                }
                 bind(element, index);
             };
             bindings = 0;
+            unrelatedBindings = 0;
             int refreshLoads = ReadPrivateField<int>(window, "_assetRefreshObjectLoadCount");
             string changedGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(changed));
             string unchangedGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(unchanged));
@@ -907,7 +921,9 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 Assert.That(updatedMetadata.DisplayTitle, Is.EqualTo(expectedTitle), "Shared display metadata follows the same edit history.");
                 Assert.That(AssetGuidTypeIndex.Shared.Metadata.TryGet(unchangedGuid, out AssetMetadataRecord retainedMetadata));
                 Assert.That(retainedMetadata, Is.SameAs(unchangedMetadata), "Unchanged assets keep their original metadata record.");
-                Assert.That(bindings, Is.Zero, "Inspector edits and Undo/Redo must not rebind unrelated rows.");
+                Assert.That(inspectorLabels[0], Is.SameAs(retainedPill), "Non-label edits must keep existing inspector controls.");
+                Assert.That(window.rootVisualElement.focusController.focusedElement, Is.SameAs(retainedRemove), "Refresh must preserve label-action focus.");
+                Assert.That(unrelatedBindings, Is.Zero, "Inspector edits and Undo/Redo must not rebind unrelated rows.");
                 Assert.That(ReadPrivateField<int>(window, "_assetRefreshObjectLoadCount"), Is.EqualTo(refreshLoads), "Already loaded assets must not reload.");
                 Assert.That(list.itemsSource.Count, Is.EqualTo(originalCount));
                 Assert.That(ReadPrivateField<ScriptableObject>(window, "_selectedObject") == selected);
@@ -915,6 +931,29 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 Assert.That(list.Q<ScrollView>().scrollOffset.y, Is.EqualTo(offset).Within(1));
             }
             Undo.ClearUndo(changed);
+            AssetDatabase.SetLabels(changed, new[] { "A preceding label", "Inspector stable label", "Z following label" });
+            window.QueueAssetChanges(new[] { path }, null, null, null);
+            yield return WaitForRefresh(window);
+            Assert.That(inspectorLabels.childCount, Is.EqualTo(3));
+            Assert.That(inspectorLabels[0].userData, Is.EqualTo("A preceding label"));
+            Assert.That(inspectorLabels[1], Is.SameAs(retainedPill), "Inserting labels on either side must preserve the existing pill.");
+            Assert.That(inspectorLabels[2].userData, Is.EqualTo("Z following label"));
+            Assert.That(window.rootVisualElement.focusController.focusedElement, Is.SameAs(retainedRemove));
+            AssetDatabase.SetLabels(changed, new[] { "Inspector stable label" });
+            window.QueueAssetChanges(new[] { path }, null, null, null);
+            yield return WaitForRefresh(window);
+            Assert.That(inspectorLabels.childCount, Is.EqualTo(1));
+            Assert.That(inspectorLabels[0], Is.SameAs(retainedPill), "Removing neighboring labels must preserve the existing pill.");
+            Assert.That(window.rootVisualElement.focusController.focusedElement, Is.SameAs(retainedRemove));
+            AssetDatabase.SetLabels(changed, Array.Empty<string>());
+            window.QueueAssetChanges(new[] { path }, null, null, null);
+            yield return WaitForRefresh(window);
+            Assert.That(inspectorLabels.childCount, Is.EqualTo(1));
+            Label retainedEmptyLabel = inspectorLabels[0] as Label;
+            Assert.That(retainedEmptyLabel != null);
+            Assert.That(retainedEmptyLabel.text, Is.EqualTo("No labels assigned."));
+            InvokePrivate(window, "PopulateInspectorLabelsUI");
+            Assert.That(inspectorLabels[0], Is.SameAs(retainedEmptyLabel), "An unchanged empty state must not be recreated.");
             ((TestDataObject)changed).Title = "Changed row";
             Assert.That(AssetDatabase.RenameAsset(path, "Changed row"), Is.Empty);
             string renamed = AssetDatabase.GetAssetPath(changed);
@@ -933,7 +972,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(refreshedTitle.worldBound.width, Is.GreaterThan(16));
             Assert.That(refreshedTitle.tooltip, Is.EqualTo("Changed row"), "Native elision updates must not clear the explicit asset-title hint.");
             Assert.That(changedRow.Q<Button>("go-up-button").tooltip, Does.Contain("Changed row"));
-            Assert.That(bindings, Is.Zero, "A nonstructural edit must not rebind unchanged rows.");
+            Assert.That(unrelatedBindings, Is.Zero, "A nonstructural edit must not rebind unchanged rows.");
             Assert.That(list.itemsSource.Count, Is.EqualTo(originalCount));
             Assert.That(ReadPrivateField<ScriptableObject>(window, "_selectedObject") == selected);
             Assert.That(ReadPrivateField<int>(window, "_asyncLoadGeneration"), Is.EqualTo(generation));
@@ -942,7 +981,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             AssetDatabase.SetLabels(changed, new[] { filterLabel });
             window.QueueAssetChanges(new[] { renamed }, null, null, null);
             yield return WaitForRefresh(window);
-            Assert.That(bindings, Is.Zero, "Label edits without membership changes keep row bindings.");
+            Assert.That(unrelatedBindings, Is.Zero, "Label edits without membership changes keep row bindings.");
             InvokePrivate(window, "ToggleLabelsCollapsed", false);
             yield return null;
             EditorSurfaceCapture.SettleLayout(window);
@@ -957,7 +996,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             yield return WaitForRefresh(window);
             Assert.That(focusedLabel.parent, Is.SameAs(labelPills), "Incremental label refresh preserves surviving controls.");
             Assert.That(window.rootVisualElement.focusController.focusedElement, Is.SameAs(focusedLabel), "Asset edits must not steal filter focus.");
-            Assert.That(bindings, Is.Zero);
+            Assert.That(unrelatedBindings, Is.Zero);
             TypeLabelFilterConfig filter = state.UserState.labelFilterConfigs.Find(config => config.typeFullName == type.FullName);
             filter.andLabels.Add(filterLabel);
             InvokePrivate(window, "ApplyLabelFilter", true);
@@ -993,6 +1032,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(changedRow != null);
             AssertRowOrderingControls(changedRow, canMoveUp: true, canMoveDown: false);
             bindings = 0;
+            unrelatedBindings = 0;
             window.QueueAssetChanges(new[] { renamed }, null, null, null);
             yield return WaitForRefresh(window);
             AssertRowOrderingControls(changedRow, canMoveUp: true, canMoveDown: false);
