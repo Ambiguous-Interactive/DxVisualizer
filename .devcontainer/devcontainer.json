@@ -12,8 +12,14 @@
         "--add-host=host.docker.internal:host-gateway"
     ],
     // Forward a host-provided PAT / Z.ai key to terminal harnesses without
-    // storing them in the image. The gitignored .env.local remains the
-    // preferred credential source; these are fallbacks for host shells.
+    // storing them in the image. The spec resolves an unset ${localEnv:VAR}
+    // to an EMPTY string, so a host without these exports hands every
+    // VS Code-spawned process empty credential names. Consumers must treat
+    // empty as absent: the bashrc loader fills them from .env.local,
+    // post_start warms the opencode service with loaded credentials, and
+    // recycle_stale_opencode_service.py recycles a service that was started
+    // poisoned. The gitignored .env.local remains the preferred credential
+    // source; these are fallbacks for host shells.
     "remoteEnv": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "${localEnv:GITHUB_PERSONAL_ACCESS_TOKEN}",
         "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
