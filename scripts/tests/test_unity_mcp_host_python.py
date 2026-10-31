@@ -23,6 +23,53 @@ def settings() -> BridgeSettings:
 
 
 class StartupTests(unittest.TestCase):
+    def test_reconnect_refuses_pending_requests_and_never_replays_them(self) -> None:
+        bridge = host.Bridge(settings())
+        self.addCleanup(bridge.close)
+        pending = host.Pending('mutation')
+        bridge.pending[1] = pending
+        child = Mock()
+        bridge.child = child
+        self.assertFalse(bridge.reconnect())
+        self.assertIs(bridge.pending[1], pending)
+        self.assertFalse(pending.ready.is_set())
+        child.kill.assert_not_called()
+
+    def test_closed_bridge_cannot_spawn_for_a_late_http_request(self) -> None:
+        bridge = host.Bridge(settings())
+        bridge.close()
+        with patch.object(host.subprocess, 'Popen') as spawn:
+            response = bridge.request({'id': 1, 'method': 'mutate'})
+        self.assertIn('Bridge stopped', response['error']['message'])
+        spawn.assert_not_called()
+
+    def test_shutdown_leaves_pipe_closure_to_the_writer(self) -> None:
+        bridge = host.Bridge(settings())
+        child = Mock()
+        bridge.child = child
+        bridge.close()
+        child.kill.assert_called_once()
+        child.wait.assert_called_once_with(timeout=2)
+        child.stdin.close.assert_not_called()
+
+    def test_catalog_notification_storage_is_bounded_and_replacement_owns_cleanup(self) -> None:
+        bridge = host.Bridge(settings())
+        self.addCleanup(bridge.close)
+        session = bridge.new_session()
+        self.assertTrue(bridge.valid_session(session))
+        self.assertFalse(bridge.valid_session('forged'))
+        with bridge.stream(session) as first:
+            for _ in range(1000):
+                bridge.publish_catalog_change()
+            self.assertEqual(first.qsize(), 1)
+            with bridge.stream(session) as second:
+                self.assertIsNone(first.get_nowait())
+                bridge.publish_catalog_change()
+                self.assertEqual(second.qsize(), 1)
+            self.assertNotIn(session, bridge.streams)
+        bridge.reconnect()
+        self.assertFalse(bridge.valid_session(session))
+
     def test_docker_route_requires_the_same_instance_before_publication(self) -> None:
         with patch.object(host.sys, 'platform', 'win32'), patch.object(host, 'log'):
             for value in ('different-listener', None, 'expected'):
