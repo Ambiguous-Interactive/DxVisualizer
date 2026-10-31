@@ -66,6 +66,48 @@ class DoctorTests(unittest.TestCase):
             result = doctor.run()
         return doctor, result, stream.getvalue()
 
+    def test_host_discovery_is_pinned_and_keeps_modern_failure_codes(self) -> None:
+        commands = []
+        def command(arguments: List[str]) -> str:
+            commands.append(arguments)
+            if arguments == ['--version']:
+                return 'fixture'
+            return json.dumps({'success': False, 'errors': [{'code': 'STATUS_PIPELINE_LOAD_PENDING', 'message': 'Pipeline cannot start on 6000.5.2f1; update to 6000.5.3f1. fixture-secret'}],
+                               'data': {'items': [{'projectPath': str(self.project), 'token': 'never-print-this'}]}})
+        doctor = Doctor(self.root, self.root, {'UNITY_MCP_PROJECT': str(self.project), 'DATAVIZ_IN_CONTAINER': '0', 'UNITY_MCP_TOKEN': 'fixture-secret'}, command, self.request)
+        with contextlib.redirect_stdout(io.StringIO()) as stream:
+            doctor.run()
+        self.assertIn(['status', '--format', 'json', '--project-path', str(self.project)], commands)
+        self.assertIn('STATUS_PIPELINE_LOAD_PENDING', stream.getvalue())
+        self.assertIn('update to 6000.5.3f1', stream.getvalue())
+        self.assertNotIn('fixture-secret', stream.getvalue())
+        self.assertNotIn('never-print-this', stream.getvalue())
+        self.assertNotIn('No Unity Editor is running', stream.getvalue())
+
+    def test_container_can_obtain_the_host_compatibility_remedy_without_editor_tools(self) -> None:
+        self.responses['tools/list'] = {'result': {'tools': [{'name': 'unity-cli-status'}, {'name': 'bridge_diagnostics'}]}}
+        self.responses['tools/call'] = {'result': {'isError': True, 'content': [{'text': 'No Pipeline instance'}]}}
+        original = self.request
+        def request(url: str, headers: Dict[str, str], payload: Optional[JsonObject]) -> JsonObject:
+            if payload and payload.get('params') == {'name': 'bridge_diagnostics', 'arguments': {}}:
+                details = {'discoveryErrors': [{'code': 'STATUS_PIPELINE_LOAD_PENDING', 'message': 'Update to 6000.5.3f1'}]}
+                return {'result': {'content': [{'text': json.dumps(details)}]}}
+            return original(url, headers, payload)
+        doctor = Doctor(self.root, self.root, {'DATAVIZ_IN_CONTAINER': '1'}, self.command, request)
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(doctor.run(), 1)
+        self.assertIn('Pinned host diagnosis', output.getvalue())
+        self.assertIn('Update to 6000.5.3f1', output.getvalue())
+
+    def test_unavailable_cli_catalog_uses_its_diagnostic_tool_and_preserves_reason(self) -> None:
+        self.responses['tools/list'] = {'result': {'tools': [{'name': 'unity-cli-status'}]}}
+        self.responses['tools/call'] = {'result': {'isError': True, 'content': [{'type': 'text', 'text': 'Pipeline discovery denied for this account'}]}}
+        doctor, code, output = self.run_doctor({'DATAVIZ_IN_CONTAINER': '1'})
+        self.assertEqual(code, 1)
+        self.assertEqual(self.calls[-1]['params'], {'name': 'unity-cli-status', 'arguments': {}})
+        self.assertIn('Pipeline discovery denied for this account', output)
+        self.assertNotIn('likely not running', output)
+
     def test_healthy_roundtrip_and_token_precedence(self) -> None:
         (self.root / '.env.local').write_text('UNITY_MCP_TOKEN=local-secret\nUNITY_MCP_HTTP_PORT=9001', encoding='utf-8')
         doctor, code, output = self.run_doctor({'UNITY_MCP_PROJECT': str(self.project), 'UNITY_MCP_TOKEN': 'process-secret', 'UNITY_MCP_HTTP_PORT': '9002'})
@@ -134,7 +176,7 @@ class DoctorTests(unittest.TestCase):
         doctor = Doctor(self.root, self.root, {'UNITY_MCP_PROJECT': str(self.project), 'DATAVIZ_IN_CONTAINER': '0'}, self.raise_command_error, self.request)
         with contextlib.redirect_stdout(io.StringIO()):
             code = doctor.run()
-        self.assertEqual((code, doctor.failures, doctor.warnings), (1, 1, 1))
+        self.assertEqual((code, doctor.failures, doctor.warnings), (1, 1, 2))
         self.assertEqual(len(self.calls), 4)
 
     def raise_command_error(self, arguments: List[str]) -> str:

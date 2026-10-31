@@ -61,7 +61,15 @@ def enclosing_project(start: Path) -> Optional[Path]:
 def unity_command(arguments: List[str]) -> str:
     local = {**read_env_local(Path.home() / '.unity-mcp' / '.env.local'), **read_env_local(REPO_ROOT / '.env.local')}
     executable = os.environ.get('UNITY_CLI') or local.get('UNITY_CLI') or 'unity'
-    return subprocess.check_output([executable, *arguments], text=True, encoding='utf-8').strip()
+    result = subprocess.run([executable, *arguments], capture_output=True, text=True, encoding='utf-8', timeout=15, check=False)
+    if result.returncode:
+        try:
+            parsed: object = json.loads(result.stdout)
+        except ValueError:
+            parsed = None
+        if not isinstance(parsed, dict):
+            raise subprocess.CalledProcessError(result.returncode, [executable, *arguments])
+    return result.stdout.strip()
 
 
 def request_json(url: str, headers: Dict[str, str], payload: Optional[JsonObject], timeout: float = 30) -> JsonObject:
@@ -155,20 +163,29 @@ class Doctor:
                           f'unity pipeline install --project-path {self.project} (unity mcp tools need it).')
         except (OSError, ValueError) as error:
             self.warn(f'Could not read project Packages/manifest.json: {error}')
-        try:
-            status = object_value(cast(Json, json.loads(self.command(['status', '--format', 'json']))))
-            instances = object_value(status.get('data')).get('instances')
-            editors = [str(object_value(item).get('project', '')) for item in instances] if isinstance(instances, list) else []
-            if not editors:
-                self.warn('No Unity Editor is running; editor-dependent tools will fail until one is. '
-                          f'Start it with: unity open {self.project}')
-            elif not any(Path(editor).resolve() == self.project for editor in editors):
-                print(f"ℹ️  `unity status` only lists editor(s) for: {', '.join(editors)}. It does not list every reachable "
-                      'Editor; the editor_status canary below is authoritative for whether the pinned project is drivable.')
-            else:
-                self.ok('A running Editor belongs to the pinned project.')
-        except (OSError, ValueError, subprocess.SubprocessError):
-            self.warn('Could not query `unity status` for running editors.')
+        for arguments in (['status', '--format', 'json', '--project-path', str(self.project)], ['pipeline', 'list', '--format', 'json']):
+            try:
+                status = object_value(cast(Json, json.loads(self.command(arguments))))
+                errors = status.get('errors')
+                if isinstance(errors, list):
+                    reasons = [{key: object_value(error)[key] for key in ('code', 'message') if key in object_value(error)} for error in errors]
+                    diagnostic = json.dumps(reasons, ensure_ascii=False)
+                    for source in (self.environment, self.local):
+                        for name, value in source.items():
+                            if value and any(part in name.upper() for part in ('TOKEN', 'SECRET', 'PASSWORD', 'API_KEY')):
+                                diagnostic = diagnostic.replace(value, '<redacted>')
+                    if reasons:
+                        self.warn('Unity ' + arguments[0] + ' discovery: ' + diagnostic)
+                data = object_value(status.get('data'))
+                rows = data.get('items', data.get('instances'))
+                if isinstance(rows, list):
+                    fields = ('project', 'projectPath', 'pid', 'port', 'status', 'safeMode', 'pipelineInstalled')
+                    summary = [{key: object_value(row)[key] for key in fields if key in object_value(row)} for row in rows]
+                    print('ℹ️  Unity ' + arguments[0] + ' discovery: ' + json.dumps(summary))
+                else:
+                    print('ℹ️  Unity ' + arguments[0] + ' returned no instance rows; the MCP canary determines reachability.')
+            except (OSError, ValueError, subprocess.SubprocessError):
+                self.warn('Could not query `unity ' + ' '.join(arguments) + '`; check host CLI discovery directly.')
 
     def check_bridge(self) -> None:
         port = self.environment.get('UNITY_MCP_HTTP_PORT') or self.local.get('UNITY_MCP_HTTP_PORT') or '9020'
@@ -177,7 +194,15 @@ class Doctor:
         base = endpoint.rsplit('/', 1)[0]
         try:
             health = self.request(base + '/healthz', {}, None)
-            self.ok(f"Bridge healthz: ok={str(health.get('ok')).lower()} cli={json.dumps(health.get('cli'))}")
+            self.ok(f"Bridge HTTP reachable: bridgePid={health.get('bridgePid')} cliPid={health.get('pid')} cliRunning={health.get('cliRunning', health.get('ok'))}")
+            print('ℹ️  A live CLI process does not establish Editor/Pipeline readiness.')
+            if health.get('sourceRevision'):
+                import hashlib
+                source = self.root / 'scripts' / 'unity_mcp_host.py'
+                if source.is_file() and health['sourceRevision'] != hashlib.sha256(source.read_bytes()).hexdigest():
+                    self.warn('Running bridge code differs from this checkout; restart the bridge to load the fix.')
+            elif health.get('bridge') == 'dataviz-unity-mcp':
+                self.warn('Running bridge predates lifecycle diagnostics; restart it to load the updated bridge.')
         except (OSError, ValueError) as error:
             self.fail(f'Bridge HTTP health failed on {base}: {error}. Check the host /healthz URL, bridge port, and firewall; '
                       'start it on the host with: npm run unity:mcp:host. If TCP connects but HTTP hangs, stop forwarding the bridge port in VS Code Ports; a reverse tunnel can send requests back to a closed container port.')
@@ -209,10 +234,15 @@ class Doctor:
         except (OSError, ValueError) as error:
             self.fail(f'MCP initialize failed: {error}')
             return
+        canary = 'editor_status'
+        names: List[Json] = []
         try:
             self.request(endpoint, headers, {'jsonrpc': '2.0', 'method': 'notifications/initialized'})
             tools = object_value(rpc(2, 'tools/list', {}).get('result')).get('tools')
-            count = len(tools) if isinstance(tools, list) else 0
+            names = [object_value(tool).get('name') for tool in tools] if isinstance(tools, list) else []
+            available = {name.replace('-', '_'): name for name in names if isinstance(name, str)}
+            canary = next((available[name] for name in ('editor_status', 'editor_status_get', 'unity_cli_status') if name in available), 'editor_status')
+            count = len(names)
             if count == 0:
                 self.fail('tools/list returned 0 tools.')
             else:
@@ -220,12 +250,12 @@ class Doctor:
         except (OSError, ValueError) as error:
             self.fail(f'tools/list failed: {error}')
         try:
-            call = rpc(3, 'tools/call', {'name': 'editor_status', 'arguments': {}})
-            if object_value(call.get('result')).get('isError'):
-                raise ValueError('editor_status returned isError=true')
+            call = rpc(3, 'tools/call', {'name': canary, 'arguments': {}})
             content = object_value(call.get('result')).get('content')
             text = object_value(content[0]).get('text') if isinstance(content, list) and content else json.dumps(call.get('error'))
             text = text if isinstance(text, str) else json.dumps(text)
+            if object_value(call.get('result')).get('isError'):
+                raise ValueError(f'{canary}: ' + text[:2000])
             try:
                 status = object_value(cast(Json, json.loads(text)))
             except ValueError:
@@ -246,10 +276,20 @@ class Doctor:
                     self.fail(f"WRONG EDITOR: the MCP server drives '{actual}' but the pinned project is "
                               f"'{expected}'. Restart the bridge after fixing UNITY_MCP_PROJECT.")
             else:
-                self.fail('editor_status did not return a project (editor for the pinned project likely not running): '
+                self.fail('editor_status did not establish project readiness: '
                           + ' '.join(text[:200].split()))
         except (OSError, ValueError) as error:
             self.fail(f'editor_status canary failed: {error}')
+            if 'bridge_diagnostics' in names:
+                try:
+                    diagnostic = object_value(rpc(4, 'tools/call', {'name': 'bridge_diagnostics', 'arguments': {}}).get('result'))
+                    entries = diagnostic.get('content')
+                    raw = object_value(entries[0]).get('text') if isinstance(entries, list) and entries else ''
+                    details = object_value(cast(Json, json.loads(raw))) if isinstance(raw, str) else {}
+                    self.warn('Pinned host diagnosis: ' + json.dumps(details.get('discoveryErrors', details.get('probeError', 'No structured host result.'))))
+                except (OSError, ValueError) as diagnostic_error:
+                    self.warn('Pinned host diagnosis failed: ' + str(diagnostic_error))
+
 
     def run(self) -> int:
         if self.remote:

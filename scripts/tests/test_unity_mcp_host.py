@@ -135,11 +135,15 @@ for line in sys.stdin:
         sys.stdout.write('partial output')
         sys.stdout.flush()
         os._exit(1)
+    if message.get('method') == 'catalog-change':
+        print(json.dumps(dict(jsonrpc='2.0', method='notifications/tools/list_changed')), flush=True)
     if message.get('method') == 'never-respond':
         continue
     if 'id' not in message:
         continue
     result = dict(serverInfo=dict(name='fixture'), capabilities={}, protocolVersion='2025-03-26') if message.get('method') == 'initialize' else dict(method=message.get('method'), params=message.get('params'))
+    if message.get('method') == 'tools/list':
+        result = dict(tools=[dict(name='editor_status')])
     time.sleep(0.005)
     print(json.dumps(dict(jsonrpc='2.0', id=message['id'], result=result)), flush=True)
     if message.get('method') == 'pause-input':
@@ -227,7 +231,8 @@ class HostTests(unittest.TestCase):
 
     def launch(self, command: Optional[list[str]] = None) -> None:
         offset = len(self.logs())
-        self.process = subprocess.Popen(command or self.command(), cwd=self.root, env=self.env, stdout=self.log, stderr=self.log)
+        self.process = subprocess.Popen(command or self.command(), cwd=self.root, env=self.env, stdout=self.log, stderr=self.log,
+                                        creationflags=getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0))
         deadline = time.monotonic() + 10
         while 'Startup complete.' not in self.logs()[offset:]:
             if self.process.poll() is not None or deadline <= time.monotonic():
@@ -277,6 +282,92 @@ class HostTests(unittest.TestCase):
 
     def rpc(self, method: str, identifier: int = 7) -> Any:
         return self.http('/mcp', {'jsonrpc': '2.0', 'id': identifier, 'method': method, 'params': {}})[1]
+
+    def test_diagnostics_exposes_pinned_host_compatibility_without_editor_tools(self) -> None:
+        (self.root / 'status').write_text("import json; print(json.dumps({'success': False, 'errors': [{'code': 'STATUS_PIPELINE_LOAD_PENDING', 'message': 'Update the Editor fixture-secret'}]}))", encoding='utf-8')
+        self.rpc('initialize')
+        tools = self.rpc('tools/list')['result']['tools']
+        self.assertIn('bridge_diagnostics', [tool['name'] for tool in tools])
+        result = self.http('/mcp', dict(jsonrpc='2.0', id=8, method='tools/call', params={'name': 'bridge_diagnostics', 'arguments': {}}))[1]
+        text = result['result']['content'][0]['text']
+        report = json.loads(text)
+        self.assertEqual(report['discoveryErrors'][0]['code'], 'STATUS_PIPELINE_LOAD_PENDING')
+        self.assertIn('Update the Editor', text)
+        self.assertNotIn('fixture-secret', text)
+        self.assertFalse(report['statusSuccess'])
+        self.assertIn('--project-path', report['health']['cli'])
+
+    def test_console_interrupt_exits_without_an_http_wakeup(self) -> None:
+        self.rpc('initialize')
+        interrupt = signal.CTRL_BREAK_EVENT if os.name == 'nt' else signal.SIGINT
+        self.process.send_signal(interrupt)
+        self.assertEqual(self.process.wait(timeout=4), 0, self.logs())
+
+    def test_explicit_reconnect_invalidates_sessions_without_replaying_a_request(self) -> None:
+        connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=3)
+        self.addCleanup(connection.close)
+        connection.request('POST', '/mcp', json.dumps(dict(id=1, method='initialize')),
+                           {'Authorization': 'Bearer fixture-secret'})
+        response = connection.getresponse()
+        session = response.getheader('Mcp-Session-Id')
+        response.read()
+        health = self.http('/healthz')[1]
+        result = subprocess.run([*self.command(), '--reconnect'], cwd=self.root, env=self.env, capture_output=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        connection.request('POST', '/mcp', json.dumps(dict(id=2, method='unreplayed')),
+                           {'Authorization': 'Bearer fixture-secret', 'Mcp-Session-Id': session})
+        expired = connection.getresponse()
+        self.assertEqual(expired.status, 404)
+        expired.read()
+        self.assertEqual(self.rpc('initialize')['result']['serverInfo']['name'], 'fixture')
+        self.assertNotEqual(self.http('/healthz')[1]['pid'], health['pid'])
+
+    def test_catalog_changes_reach_each_initialized_http_session(self) -> None:
+        connections = []
+        for _ in range(2):
+            connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=3)
+            self.addCleanup(connection.close)
+            body = json.dumps(dict(jsonrpc='2.0', id=1, method='initialize', params={}))
+            headers = {'Authorization': 'Bearer fixture-secret', 'Content-Type': 'application/json'}
+            connection.request('POST', '/mcp', body, headers)
+            response = connection.getresponse()
+            session = response.getheader('Mcp-Session-Id')
+            response.read()
+            self.assertTrue(session, 'Each client needs a session for catalog notifications.')
+            headers.update({'Mcp-Session-Id': session, 'Accept': 'text/event-stream'})
+            connection.request('GET', '/mcp', headers=headers)
+            response = connection.getresponse()
+            self.assertEqual(response.status, 200)
+            self.assertEqual(response.getheader('Content-Type'), 'text/event-stream')
+            self.assertEqual(response.readline(), b': connected\n')
+            self.assertEqual(response.readline(), b'\n')
+            self.assertEqual(response.readline(), b'event: message\n')
+            initial = json.loads(response.readline().removeprefix(b'data: '))
+            self.assertEqual(initial['method'], 'notifications/tools/list_changed')
+            self.assertEqual(response.readline(), b'\n')
+            connections.append(response)
+        self.rpc('catalog-change')
+        for response in connections:
+            self.assertEqual(response.readline(), b'event: message\n')
+            notification = json.loads(response.readline().removeprefix(b'data: '))
+            self.assertEqual(notification['method'], 'notifications/tools/list_changed')
+            self.assertEqual(response.readline(), b'\n')
+
+    def test_authenticated_stop_exits_with_a_stalled_cli_writer(self) -> None:
+        self.rpc('initialize')
+        self.rpc('pause-input')
+        self.http('/mcp', dict(jsonrpc='2.0', id=8, method='large', params={'text': 'x' * 1000000}))
+        health = self.http('/healthz')[1]
+        with self.assertRaises(HTTPError) as raised:
+            self.http('/control', {'action': 'stop', 'instanceId': health['instanceId']}, token='wrong')
+        raised.exception.close()
+        self.assertEqual(raised.exception.code, 401)
+        with self.assertRaises(HTTPError) as stale:
+            self.http('/control', {'action': 'stop', 'instanceId': 'stale'})
+        stale.exception.close()
+        self.assertEqual(stale.exception.code, 409)
+        self.assertEqual(self.http('/control', {'action': 'stop', 'instanceId': health['instanceId']})[0], 200)
+        self.assertEqual(self.process.wait(timeout=4), 0, self.logs())
 
     def test_auth_notifications_and_parallel_request_ids(self) -> None:
         health = self.http('/healthz')[1]
@@ -332,7 +423,7 @@ class HostTests(unittest.TestCase):
                         else:
                             self.assertEqual(body, b'')
                         if status == 405:
-                            self.assertEqual(response.getheader('Allow'), 'POST, DELETE')
+                            self.assertEqual(response.getheader('Allow'), 'GET, POST, DELETE')
                     client.sendall(b'{}')
                     self.assertEqual(client.recv(1), b'', 'Close only after consuming the complete request.')
 
