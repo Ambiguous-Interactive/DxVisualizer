@@ -207,12 +207,56 @@ class Doctor:
         except (OSError, ValueError) as error:
             self.report('❌', f'unity bridge failed at {base}: {error}. On the host run: npm run unity:mcp:host (then unity:mcp:doctor for depth).')
 
+    def check_shared_service(self) -> None:
+        """Surface the shared opencode service's credential health (names only).
+
+        The singleton keeps the environment of whoever started it first for its
+        entire life, so a poisoned start 401s the remote MCP servers for every
+        session while shells, .env.local, and the endpoints all stay healthy:
+        VS Code devcontainers forward an unset host variable through remoteEnv
+        as an EMPTY string, and every env-var reference in the generated configs
+        then expands to no credential. The recycler owns the staleness rule, so
+        this check runs it in --dry-run mode and reports its finding.
+        """
+        record = Path(os.environ.get('XDG_STATE_HOME') or Path.home() / '.local' / 'state') / 'opencode' / 'service.json'
+        if not record.is_file():
+            return
+        print('--- Shared opencode service ---')
+        if not Path('/proc/self').is_dir():
+            self.report('ℹ️', 'shared opencode service: environment inspection needs /proc (Linux); skipped on this host.')
+            return
+        try:
+            completed = subprocess.run(
+                [sys.executable, str(self.root / '.devcontainer' / 'recycle_stale_opencode_service.py'),
+                 '--dry-run', '--state-dir', str(record.parent), '--env-file', str(self.root / '.env.local')],
+                cwd=self.root, env=dict(self.environment), capture_output=True, text=True,
+                encoding='utf-8', errors='replace', timeout=30, check=False)
+        except (OSError, subprocess.SubprocessError) as error:
+            self.report('ℹ️', f'shared opencode service: recycler dry run failed ({error}); run it manually for depth.')
+            return
+        output = (completed.stdout or '') + (completed.stderr or '')
+        names = ' '.join(found.strip() for found in
+                         (line.partition('holds a stale credential for:')[2] for line in output.splitlines()) if found.strip())
+        if names:
+            self.report('❌', f'shared opencode service holds stale or empty MCP credentials for:{names}. '
+                        'Remedy: uv run .devcontainer/recycle_stale_opencode_service.py, then restart agent CLIs '
+                        '(post_start also recycles the service at the next container start).')
+            return
+        if 'not running' in output:
+            self.report('ℹ️', 'shared opencode service: the discovery record names a dead pid; post_start cleans it at the next start.')
+            return
+        if completed.returncode != 0:
+            self.report('ℹ️', f'shared opencode service: recycler dry run exited {completed.returncode}; run it manually for depth.')
+            return
+        self.report('✅', 'shared opencode service: tracked credentials match .env.local.')
+
     def run(self, repair: bool) -> int:
         container = self.environment.get('DATAVIZ_IN_CONTAINER') == '1' or Path('/.dockerenv').exists() or Path('/run/.containerenv').exists()
         print(f'Environment: {"devcontainer" if container else "host"} · workspace: {self.root}')
         skip = self.environment.get('DATAVIZ_MCP_STUB_SKIP_PROBES') == '1'
         zai = self.check_credentials(repair, skip)
         self.check_config()
+        self.check_shared_service()
         if skip:
             self.report('ℹ️', 'Skipping endpoint, stdio, and unity-bridge probes (DATAVIZ_MCP_STUB_SKIP_PROBES=1) — credential and config checks only.')
         else:
