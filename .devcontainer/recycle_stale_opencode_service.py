@@ -27,6 +27,9 @@ Safety properties, each covered by a contract test:
 * Credential VALUES are never printed - only variable NAMES.
 * Missing evidence fails safe: an unreadable environment or
   an empty file value leaves a key unjudged, and an unjudged key never kills.
+  A present-but-empty service credential IS judgeable evidence (VS Code
+  devcontainers forward an unset host variable through remoteEnv as an empty
+  string, so a poisoned service genuinely exports ``KEY=``) and recycles.
 
 The recycler is a Linux devcontainer component: it reads the service's
 environment from ``/proc`` and runs its bash children with POSIX paths, which
@@ -49,7 +52,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 from env_local import load_environment
 
@@ -109,14 +112,15 @@ def _parse_env_entries(raw: bytes) -> Dict[str, str]:
 
     Values are decoded with ``surrogateescape`` so a byte sequence that is not
     valid UTF-8 survives the round trip instead of being replaced into a
-    different string. Empty values are dropped: the loader's own precedence
-    never produces a meaningful empty credential, and the bash original treated
-    an empty file value as absent.
+    different string. Empty SERVICE values are kept: a present-but-empty
+    credential is judgeable evidence (an exported ``KEY=`` is exactly what a
+    remoteEnv-poisoned start holds), unlike an unreadable environment, which
+    yields no entries at all and must stay unjudged.
     """
     values: Dict[str, str] = {}
     for entry in raw.split(b"\0"):
         key_bytes, separator, value_bytes = entry.partition(b"=")
-        if not separator or not value_bytes:
+        if not separator:
             continue
         key = key_bytes.decode("utf-8", errors="surrogateescape")
         if key in CREDENTIAL_KEYS:
@@ -131,6 +135,30 @@ def read_env_file_values(env_file: Path) -> Dict[str, str]:
     except OSError:
         return {}
     return {key: value for key, value in values.items() if key in CREDENTIAL_KEYS and value}
+
+
+def stale_credential_keys(file_values: Mapping[str, str], service_values: Mapping[str, str]) -> List[str]:
+    """Tracked keys where the service provably holds a credential the file disagrees with.
+
+    Only keys the service environment itself names are judged:
+
+    * present and different from a non-empty file value - the classic stale
+      singleton after a credential rotation;
+    * present but EMPTY while the file holds a value - a poisoned start. VS
+      Code devcontainers forward an unset host variable through ``remoteEnv``
+      as an empty string, so a service started from that environment expands
+      every ``{env:KEY}`` reference to no credential and its remote MCP
+      servers 401 while .env.local and fresh shells stay healthy.
+
+    An ABSENT key is unjudged and never matches: an unreadable ``/proc``
+    environment yields no entries at all, so absence must not read as a
+    mismatch. An empty FILE value is likewise unjudged.
+    """
+    return [
+        key
+        for key in CREDENTIAL_KEYS
+        if key in service_values and file_values.get(key) and service_values[key] != file_values[key]
+    ]
 
 
 def service_environment(pid: int) -> Dict[str, str]:
@@ -244,14 +272,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     file_values = read_env_file_values(env_file)
     service_values = service_environment(pid)
-    stale_keys: List[str] = []
-    for key in CREDENTIAL_KEYS:
-        service_value = service_values.get(key, "")
-        file_value = file_values.get(key, "")
-        # Compare each credential the service holds against .env.local. Report
-        # NAMES only; the values themselves are compared, never displayed.
-        if service_value and file_value and service_value != file_value:
-            stale_keys.append(key)
+    stale_keys = stale_credential_keys(file_values, service_values)
 
     if not stale_keys:
         return 0

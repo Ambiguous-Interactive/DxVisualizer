@@ -137,8 +137,16 @@ class _ServiceFixture:
         )
         write_fixture_file(self.state_dir(), "service.json", content)
 
-    def start(self, service_env_value: str) -> None:
-        """Spawn the sleeper with the chosen credential value in its environment."""
+    def start(self, github_token_value: str, mcp_pat_value: Optional[str] = None) -> None:
+        """Spawn the sleeper with the chosen credential values in its environment.
+
+        ``mcp_pat_value`` defaults to mirroring the canonical value. An empty
+        string is a real, present-but-empty export: VS Code ``remoteEnv``
+        forwards an unset host variable as an empty string, so a poisoned
+        service genuinely holds ``GITHUB_PERSONAL_ACCESS_TOKEN=`` in its
+        environment rather than lacking the name.
+        """
+        pat_value = github_token_value if mcp_pat_value is None else mcp_pat_value
         for attempt in (1, 2):
             marker = self.root / f"fixture-ready.{attempt}"
             marker.unlink(missing_ok=True)
@@ -148,8 +156,8 @@ class _ServiceFixture:
             # exported.
             for name in ("ZAI_API_KEY", "Z_AI_API_KEY", "GITHUB_TOKEN"):
                 env.pop(name, None)
-            env["GITHUB_PERSONAL_ACCESS_TOKEN"] = service_env_value
-            env["GITHUB_MCP_PAT"] = service_env_value
+            env["GITHUB_PERSONAL_ACCESS_TOKEN"] = github_token_value
+            env["GITHUB_MCP_PAT"] = pat_value
             self._process = subprocess.Popen(
                 ["bash", "-c", 'printf "%s\\n" "$$" >"$1" && exec sleep 300', "fixture", str(marker)],
                 env=env,
@@ -286,19 +294,42 @@ def case_recycles_service_with_stale_credential(python: str) -> None:
     # The exact incident: .env.local holds the repaired value, the running
     # service still holds the old one. New sessions keep attaching to the stale
     # singleton, so the service must be replaced.
-    fixture = _ServiceFixture()
-    try:
-        fixture.write_env_file(f"GITHUB_PERSONAL_ACCESS_TOKEN={LIVE}\n")
-        fixture.start(STALE)
-        fixture.write_record()
-        fixture.require_live()
-        output, exit_code = run_recycle(python, fixture)
-        assert_exit_code(0, "a stale service must be recycled successfully", exit_code)
-        assert_true("stale credential" in output, f"the output must report the stale credential: {output}")
-        assert_true(str(fixture.pid) in output, f"the output must name the recycled pid: {output}")
-        assert_true(fixture.wait_until_gone(), "the stale service process must be terminated")
-    finally:
-        fixture.cleanup()
+    #
+    # Data-driven over the shapes a poisoned start takes:
+    # - divergent: the service holds an older value (credential rotated in
+    #   .env.local after the service started).
+    # - empty: the tracked names are exported EMPTY while the file has values
+    #   (the 2026-10-31 incident: VS Code remoteEnv forwards unset host
+    #   variables as empty strings; every {env:NAME} reference in the generated
+    #   configs then expands to no credential, so the remote github and
+    #   zai-web-search MCP servers 401 for every session while the endpoints
+    #   and .env.local stay perfectly healthy).
+    # - mixed incident: only the canonical name is empty while the alternate
+    #   matches the file; exactly that name may be reported.
+    cases = [
+        ("divergent", STALE, STALE, (True, True)),
+        ("empty", "", "", (True, True)),
+        ("mixed-incident", "", LIVE, (True, False)),
+    ]
+    for label, token_value, pat_value, expected_stale in cases:
+        fixture = _ServiceFixture()
+        try:
+            fixture.write_env_file(f"GITHUB_PERSONAL_ACCESS_TOKEN={LIVE}\nGITHUB_MCP_PAT={LIVE}\n")
+            fixture.start(token_value, pat_value)
+            fixture.write_record()
+            fixture.require_live()
+            output, exit_code = run_recycle(python, fixture)
+            assert_exit_code(0, f"[{label}] a stale service must be recycled successfully", exit_code)
+            assert_true("stale credential" in output, f"[{label}] the output must report the stale credential: {output}")
+            assert_true(str(fixture.pid) in output, f"[{label}] the output must name the recycled pid: {output}")
+            for name, stale in zip(("GITHUB_PERSONAL_ACCESS_TOKEN", "GITHUB_MCP_PAT"), expected_stale):
+                if stale:
+                    assert_true(name in output, f"[{label}] the output must name {name}: {output}")
+                else:
+                    assert_true(name not in output, f"[{label}] the output must not name the healthy {name}: {output}")
+            assert_true(fixture.wait_until_gone(), f"[{label}] the stale service process must be terminated")
+        finally:
+            fixture.cleanup()
 
 
 def case_removes_stale_discovery_record(python: str) -> None:
