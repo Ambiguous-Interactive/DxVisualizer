@@ -165,7 +165,7 @@ def recycle_stale_service(workspace: Path) -> None:
     run_child([sys.executable, str(workspace / ".devcontainer" / "recycle_stale_opencode_service.py")], workspace)
 
 
-def warm_opencode_service() -> None:
+def warm_opencode_service(environment: Dict[str, str]) -> None:
     """Touch the shared service so the first attach never reports no MCP servers.
 
     OpenCode V2 runs a shared background server (``serve --service``) that
@@ -173,10 +173,16 @@ def warm_opencode_service() -> None:
     list`` after a service restart can briefly report "No MCP servers
     configured". Warm the service at startup so that race never surfaces in a
     user's first command.
+
+    The attach must carry the .env.local-loaded environment: the service keeps
+    the environment of whoever starts it first for its entire life, and the
+    raw lifecycle environment holds the remoteEnv-forwarded EMPTY strings for
+    credentials the host never set, which would 401 the remote MCP servers
+    for every session until the next recycle.
     """
-    subprocess.run(["opencode", "mcp", "list"], capture_output=True, check=False)
+    subprocess.run(["opencode", "mcp", "list"], capture_output=True, check=False, env=environment)
     time.sleep(1)
-    subprocess.run(["opencode", "mcp", "list"], capture_output=True, check=False)
+    subprocess.run(["opencode", "mcp", "list"], capture_output=True, check=False, env=environment)
 
 
 def main(argv: Sequence[str]) -> int:
@@ -198,7 +204,7 @@ def main(argv: Sequence[str]) -> int:
 
     if shutil.which("opencode") is not None:
         recycle_stale_service(workspace)
-        warm_opencode_service()
+        warm_opencode_service(env)
 
     print("✅ Data Visualizer dev container ready.")
     return 0

@@ -77,6 +77,8 @@ class Sandbox:
             directory.mkdir(parents=True)
         self.marker = self.root / "marker.log"
         shutil.copy(LIFECYCLE_DIR / "env-local.sh", self.ws / ".devcontainer" / "env-local.sh")
+        for name in ("env_local.py", "recycle_stale_opencode_service.py"):
+            shutil.copy(LIFECYCLE_DIR / name, self.ws / ".devcontainer" / name)
         for relative in (".devcontainer/install_npm_tools.py", ".devcontainer/ai_backends.py", ".llm/mcp/sync_mcp.py"):
             self.write_stub(self.ws / relative, STUB_RECORD)
         self.write_stub(self.stubs / "node", STUB_RECORD)
@@ -334,6 +336,37 @@ def case_post_start_replaces_block_and_loads_env() -> None:
         sandbox.cleanup()
 
 
+def case_post_start_warms_opencode_with_loaded_credentials() -> None:
+    """The shared service keeps the environment of whoever starts it first.
+
+    A lifecycle environment carries the remoteEnv-forwarded EMPTY strings for
+    credentials the host never set (the devcontainer spec resolves an unset
+    ``${localEnv:VAR}`` to a blank value). The warm attach must run with the
+    .env.local-loaded environment, or the service it spawns expands every
+    ``{env:NAME}`` reference empty and 401s the remote MCP servers all day.
+    """
+    sandbox = Sandbox()
+    try:
+        sandbox.ws.joinpath(".env.local").write_text("GITHUB_PERSONAL_ACCESS_TOKEN=file-value\n")
+        sandbox.env["GITHUB_PERSONAL_ACCESS_TOKEN"] = ""
+        sandbox.write_stub(sandbox.stubs / "opencode", STUB_RECORD)
+        code, output = sandbox.run("post_start.py")
+        assert_exit_code(0, "post_start should succeed in a sandbox", code)
+        warm_calls = [line for line in sandbox.marker_lines() if line.startswith("STUB opencode|")]
+        assert_true(
+            len(warm_calls) == 2,
+            f"the warm attach should call `opencode mcp list` twice, got {warm_calls}",
+        )
+        for line in warm_calls:
+            assert_true(
+                "GITHUB_PERSONAL_ACCESS_TOKEN=file-value;" in line,
+                f"the warm attach must carry the loaded credential, got: {line}",
+            )
+        print(output)
+    finally:
+        sandbox.cleanup()
+
+
 def case_update_content_restores_and_syncs_only_when_present() -> None:
     sandbox = Sandbox()
     try:
@@ -394,6 +427,7 @@ def main() -> int:
         ("PostCreate_RetriesUntilTheThirdAttemptSucceeds", case_post_create_retries_until_success),
         ("PostCreate_InstallsPreCommitHooksBestEffort", case_post_create_installs_pre_commit_hooks),
         ("PostStart_ReplacesBashrcBlockAndLoadsEnvWithFilePrecedence", case_post_start_replaces_block_and_loads_env),
+        ("PostStart_WarmsOpencodeWithLoadedCredentials", case_post_start_warms_opencode_with_loaded_credentials),
         ("UpdateContent_RestoresAndSyncsOnlyWhenPresent", case_update_content_restores_and_syncs_only_when_present),
         ("Lifecycle_MissingWorkspaceFailsForEveryEntry", case_missing_workspace_fails_for_every_entry),
     ])
