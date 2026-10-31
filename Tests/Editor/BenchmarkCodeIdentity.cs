@@ -82,6 +82,15 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             return BitConverter.ToString(bytes).Replace("-", string.Empty).ToLowerInvariant();
         }
 
+        private static string GetAssemblyPath(Assembly assembly)
+        {
+#if UNITY_6000_4_OR_NEWER
+            return UnityEngine.AssemblyExtension.GetLoadedAssemblyPath(assembly);
+#else
+            return assembly.Location;
+#endif
+        }
+
         public void Verify()
         {
             try
@@ -91,7 +100,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                     CaptureCompilerEvidence();
                 }
                 ValidateEvidence(EditorApplication.isCompiling, EditorApplication.isUpdating, LoadedModuleId, LoadedModuleId, SourceSha256, HashFile(_sourcePath));
-                if (!string.Equals(AssemblySha256, HashFile(_assembly.Location), StringComparison.Ordinal))
+                if (!string.Equals(AssemblySha256, HashFile(GetAssemblyPath(_assembly)), StringComparison.Ordinal))
                 {
                     throw new InvalidOperationException("Benchmark assembly changed during measurement.");
                 }
@@ -108,8 +117,9 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         private void CaptureCompilerEvidence()
         {
             // Reject missing or mismatched symbols rather than treating disk source as executing code.
-            string assemblyHash = HashFile(_assembly.Location);
-            using ModuleDefinition module = ModuleDefinition.ReadModule(_assembly.Location, new ReaderParameters { ReadSymbols = true, InMemory = true });
+            string assemblyPath = GetAssemblyPath(_assembly);
+            string assemblyHash = HashFile(assemblyPath);
+            using ModuleDefinition module = ModuleDefinition.ReadModule(assemblyPath, new ReaderParameters { ReadSymbols = true, InMemory = true });
             string sourcePath = Path.GetFullPath(_sourcePath);
             Document document = null;
             foreach (TypeDefinition type in module.GetTypes())
