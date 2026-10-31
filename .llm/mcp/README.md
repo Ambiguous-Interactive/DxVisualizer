@@ -173,6 +173,41 @@ Security: the bridge listens on all interfaces by default (Linux Docker cannot r
   and the `/healthz` `cli` line shows the exact spawned command.
 - **Editor must be running.** Editor-dependent tools fail until an Editor is open for the pinned project: `unity open <project>`.
 
+### Readiness, recovery and shutdown
+
+`/healthz` establishes HTTP/process liveness, not Editor readiness. `ok` remains a compatibility alias for `cliRunning`; `editorReady: null` means not probed. Health also reports
+bridge/CLI PIDs, the Python version, pending request count and the loaded bridge source hash. The doctor compares that hash with this checkout and warns when a running process
+still has old code. Never infer that the Editor GUI is closed from a CLI discovery failure.
+
+Run `npm run unity:mcp:doctor` on the **host** for pinned `unity status` and `unity pipeline list` evidence as well as the HTTP/MCP canary. Discovery errors can describe pending
+package loading, Safe Mode, unreadable discovery files or a wrong account; retain the actual codes. Container diagnostics cannot query the host process registry. The doctor uses
+the advertised status tool, including `unity-cli-status`, and preserves its error text. See [lifecycle diagnosis](../references/unity-bridge-lifecycle.md).
+
+The bridge now forwards Unity's tool-catalog changes over authenticated GET `/mcp` SSE streams. Initialization returns `Mcp-Session-Id`; clients send it on later requests. Each
+session has one active stream, notification storage is bounded, and repeated catalog changes coalesce. A CLI exit/reconnect expires those sessions; HTTP 404 asks clients to
+initialize again. Sessionless request/response clients remain compatible but cannot receive unsolicited catalog changes.
+
+Use a second **host** terminal when the first terminal cannot stop:
+
+```bash
+npm run unity:mcp:host -- --stop
+npm run unity:mcp:host
+```
+
+To discard an idle CLI connection and discover the pinned Editor again, without restarting HTTP:
+
+```bash
+npm run unity:mcp:host -- --reconnect
+```
+
+Both controls verify the project and bridge instance and use the configured bearer token. Reconnect refuses while requests are in flight. Neither control stops Unity or replays an
+earlier request. A timeout does not prove an Editor operation stopped; inspect its job/status before retrying a mutation. Ctrl+C and Windows Ctrl+Break also stop the bridge; the
+main loop uses bounded waits and the stdin writer owns pipe closure.
+
+Bridges started before these controls existed cannot accept them. Read their `bridgePid` from the doctor and verify that PID's command line is `unity_mcp_host.py` before stopping
+that one process in the host task manager or PowerShell. Do not terminate the Editor. Start the updated bridge and rerun the doctor; replacing repository files alone does not
+update an already running Python process.
+
 ### Removing the legacy custom bridge
 
 The previous hand-rolled `UnityMcpBridge.cs` (10 tools) is deprecated. If it was installed into the Unity project, delete `<project>/Assets/Editor/UnityMcpBridge.cs` (and its
