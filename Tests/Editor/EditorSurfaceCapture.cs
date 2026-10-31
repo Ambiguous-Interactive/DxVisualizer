@@ -312,9 +312,14 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 return;
             }
 
-            using PanelImGuiScope imGuiScope = PanelImGuiScope.Open(imguiContainer);
-            InvokePanelMethod(panel, "Repaint", Array.Empty<object>());
-            InvokePanelMethod(panel, "Render", Array.Empty<object>());
+            PanelImGuiScope imGuiScope = PanelImGuiScope.Open(imguiContainer);
+            using (imGuiScope)
+            {
+                InvokePanelMethod(panel, "Repaint", Array.Empty<object>());
+                InvokePanelMethod(panel, "Render", Array.Empty<object>());
+            }
+
+            imGuiScope.ThrowIfCloseFailed();
         }
 
         private static string DescribeLayout(VisualElement root)
@@ -339,12 +344,28 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         {
             private const BindingFlags StaticMembers = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
             private const BindingFlags InstanceMembers = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-            private static readonly MethodInfo BeginContainerGui = typeof(IMGUIContainer).GetMethod("BeginContainerGUI", StaticMembers);
-            private static readonly MethodInfo EndContainerGui = typeof(IMGUIContainer).GetMethod("EndContainerGUI", StaticMembers);
-            private static readonly PropertyInfo LayoutCache = typeof(IMGUIContainer).GetProperty("cache", InstanceMembers);
+            private static readonly PropertyInfo LayoutCacheProperty = typeof(IMGUIContainer).GetProperty("cache", InstanceMembers);
+            private static readonly MethodInfo BeginContainerGui =
+                LayoutCacheProperty == null
+                    ? null
+                    : typeof(IMGUIContainer).GetMethod(
+                        "BeginContainerGUI",
+                        StaticMembers,
+                        binder: null,
+                        types: new[] { LayoutCacheProperty.PropertyType, typeof(Event), typeof(IMGUIContainer) },
+                        modifiers: null
+                    );
+            private static readonly MethodInfo EndContainerGui = typeof(IMGUIContainer).GetMethod(
+                "EndContainerGUI",
+                StaticMembers,
+                binder: null,
+                types: new[] { typeof(Event), typeof(Rect) },
+                modifiers: null
+            );
 
             private readonly Event _repaintEvent;
             private readonly Rect _layoutSize;
+            private Exception _closeFailure;
             private bool _disposed;
 
             private PanelImGuiScope(Event repaintEvent, Rect layoutSize)
@@ -360,7 +381,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                     throw new ArgumentNullException(nameof(container));
                 }
 
-                if (BeginContainerGui == null || EndContainerGui == null || LayoutCache == null)
+                if (BeginContainerGui == null || EndContainerGui == null || LayoutCacheProperty == null)
                 {
                     throw new InvalidOperationException(
                         "This editor's IMGUIContainer exposes no container scope taking a Repaint Event; "
@@ -368,7 +389,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                     );
                 }
 
-                object cache = LayoutCache.GetValue(container);
+                object cache = LayoutCacheProperty.GetValue(container);
                 Event repaintEvent = new() { type = EventType.Repaint };
                 BeginContainerGui.Invoke(null, new object[] { cache, repaintEvent, container });
                 return new PanelImGuiScope(repaintEvent, container.layout);
@@ -382,7 +403,32 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 }
 
                 _disposed = true;
-                EndContainerGui.Invoke(null, new object[] { _repaintEvent, _layoutSize });
+                try
+                {
+                    EndContainerGui.Invoke(null, new object[] { _repaintEvent, _layoutSize });
+                }
+                catch (Exception exception)
+                {
+                    /*
+                        Dispose must not replace a render exception that is already
+                        propagating. The failure is recorded here and rethrown by
+                        ThrowIfCloseFailed only when the render path completed.
+                    */
+                    _closeFailure = exception;
+                }
+            }
+
+            internal void ThrowIfCloseFailed()
+            {
+                if (_closeFailure == null)
+                {
+                    return;
+                }
+
+                throw new InvalidOperationException(
+                    "The offscreen capture could not close its IMGUI container scope; " + "IMGUI content for the rest of the capture is unreliable.",
+                    _closeFailure
+                );
             }
         }
     }
