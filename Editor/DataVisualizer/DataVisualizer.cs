@@ -5298,9 +5298,20 @@ namespace WallstopStudios.DataVisualizer.Editor
         */
         private void FocusObjectList()
         {
+            VisualElement focusedAtDelete = rootVisualElement?.focusController?.focusedElement as VisualElement;
             bool listVisible = _objectListView != null && _objectListView.style.display.value != DisplayStyle.None;
             VisualElement target = listVisible ? _objectListView : _createObjectButton;
-            target?.FocusAfterLayout();
+            target?.FocusAfterLayout(() => !FocusMoved(focusedAtDelete));
+        }
+
+        /*
+            A control that took focus after the delete started owns it now, so the deferred
+            list focus must not pull it back.
+        */
+        private bool FocusMoved(VisualElement previous)
+        {
+            VisualElement focused = rootVisualElement?.focusController?.focusedElement as VisualElement;
+            return focused != null && focused.panel != null && focused != previous;
         }
 
         private void TogglePopover(VisualElement popover, VisualElement triggerElement)
