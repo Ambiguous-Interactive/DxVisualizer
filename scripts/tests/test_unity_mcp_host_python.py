@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import socket
+import subprocess
 import os
 import sys
 import threading
 import unittest
+from typing import cast
 from unittest.mock import Mock, patch
 from urllib.error import URLError
 
@@ -23,6 +26,93 @@ def settings() -> BridgeSettings:
 
 
 class StartupTests(unittest.TestCase):
+    def test_reconnect_refuses_pending_requests_and_never_replays_them(self) -> None:
+        bridge = host.Bridge(settings())
+        self.addCleanup(bridge.close)
+        pending = host.Pending('mutation')
+        bridge.pending[1] = pending
+        child = Mock()
+        bridge.child = child
+        self.assertFalse(bridge.reconnect())
+        self.assertIs(bridge.pending[1], pending)
+        self.assertFalse(pending.ready.is_set())
+        child.kill.assert_not_called()
+
+    def test_closed_bridge_cannot_spawn_for_a_late_http_request(self) -> None:
+        bridge = host.Bridge(settings())
+        bridge.close()
+        with patch.object(host.subprocess, 'Popen') as spawn:
+            response = bridge.request({'id': 1, 'method': 'mutate'})
+        self.assertIn('Bridge stopped', response['error']['message'])
+        spawn.assert_not_called()
+
+    def test_diagnostics_reports_probe_failures_without_raising(self) -> None:
+        bridge = host.Bridge(settings())
+        self.addCleanup(bridge.close)
+        failures = (FileNotFoundError('unity'), PermissionError('denied'), subprocess.TimeoutExpired(['unity'], 15))
+        for failure in failures:
+            with self.subTest(failure=type(failure).__name__), patch.object(host.subprocess, 'run', side_effect=failure):
+                report = bridge.diagnostics()
+                self.assertIn(type(failure).__name__, report['probeError'])
+                self.assertNotIn('discoveryErrors', report)
+        completed = subprocess.CompletedProcess(['unity'], 1, stdout='account denied', stderr='')
+        with patch.object(host.subprocess, 'run', return_value=completed):
+            report = bridge.diagnostics()
+        self.assertEqual(report['statusExitCode'], 1)
+        self.assertIn('probeError', report)
+        self.assertNotIn('discoveryErrors', report)
+
+    def test_tokenless_control_requires_a_loopback_peer(self) -> None:
+        cases = [('127.0.0.1', '', True), ('127.5.5.5', '', True), ('::1', '', True), ('::ffff:127.0.0.1', '', True),
+                 ('10.1.2.3', '', False), ('::2', '', False), ('10.1.2.3', 'fixture-token', True)]
+        for address, token, allowed in cases:
+            with self.subTest(address=address, token=bool(token)):
+                self.assertEqual(host.control_allowed(address, token), allowed)
+
+    def test_diagnostics_redacts_inherited_credentials(self) -> None:
+        values = settings()
+        values['token'] = 'bridge-token'
+        bridge = host.Bridge(values)
+        self.addCleanup(bridge.close)
+        status = {'success': False, 'errors': [{'code': 'STATUS_PIPELINE_LOAD_PENDING', 'message': 'Denied for inherited-key and bridge-token'}]}
+        completed = subprocess.CompletedProcess(['unity'], 1, stdout=json.dumps(status), stderr='')
+        with patch.dict(host.os.environ, {'UNITY_MCP_API_KEY': 'inherited-key'}), patch.object(host.subprocess, 'run', return_value=completed):
+            report = bridge.diagnostics()
+            response = cast(host.JsonMap, bridge.handle({'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call',
+                                                         'params': {'name': 'bridge_diagnostics', 'arguments': {}}}))
+        self.assertEqual(report['discoveryErrors'][0]['message'], 'Denied for <redacted> and <redacted>')
+        text = response['result']['content'][0]['text']
+        self.assertIn('STATUS_PIPELINE_LOAD_PENDING', text)
+        self.assertNotIn('inherited-key', text)
+        self.assertNotIn('bridge-token', text)
+
+    def test_shutdown_leaves_pipe_closure_to_the_writer(self) -> None:
+        bridge = host.Bridge(settings())
+        child = Mock()
+        bridge.child = child
+        bridge.close()
+        child.kill.assert_called_once()
+        child.wait.assert_called_once_with(timeout=2)
+        child.stdin.close.assert_not_called()
+
+    def test_catalog_notification_storage_is_bounded_and_replacement_owns_cleanup(self) -> None:
+        bridge = host.Bridge(settings())
+        self.addCleanup(bridge.close)
+        session = bridge.new_session()
+        self.assertTrue(bridge.valid_session(session))
+        self.assertFalse(bridge.valid_session('forged'))
+        with bridge.stream(session) as first:
+            for _ in range(1000):
+                bridge.publish_catalog_change()
+            self.assertEqual(first.qsize(), 1)
+            with bridge.stream(session) as second:
+                self.assertIsNone(first.get_nowait())
+                bridge.publish_catalog_change()
+                self.assertEqual(second.qsize(), 1)
+            self.assertNotIn(session, bridge.streams)
+        bridge.reconnect()
+        self.assertFalse(bridge.valid_session(session))
+
     def test_docker_route_requires_the_same_instance_before_publication(self) -> None:
         with patch.object(host.sys, 'platform', 'win32'), patch.object(host, 'log'):
             for value in ('different-listener', None, 'expected'):

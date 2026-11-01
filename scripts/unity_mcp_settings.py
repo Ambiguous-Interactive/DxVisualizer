@@ -41,6 +41,28 @@ def read_env_file(path: Path) -> Dict[str, str]:
     return result
 
 
+CREDENTIAL_NAME_PARTS = ('TOKEN', 'SECRET', 'PASSWORD', 'API_KEY')
+
+
+def credential_values(sources: Sequence[Mapping[str, str]]) -> List[str]:
+    """Return the inherited values whose setting names mark them as credentials.
+
+    A Unity CLI child inherits this process environment, so its error text can
+    echo a token, password, or API key back through a report. Longest value
+    first keeps a password that contains a shorter secret from being cut short.
+    """
+    found = {value for source in sources for name, value in source.items()
+             if value and any(part in name.upper() for part in CREDENTIAL_NAME_PARTS)}
+    return sorted(found, key=len, reverse=True)
+
+
+def redact_credentials(text: str, values: Sequence[str]) -> str:
+    """Replace every inherited credential value in text with a placeholder."""
+    for value in values:
+        text = text.replace(value, '<redacted>')
+    return text
+
+
 def is_project(path: Path) -> bool:
     try:
         return (path / 'ProjectSettings' / 'ProjectVersion.txt').is_file()
