@@ -4056,7 +4056,7 @@ namespace WallstopStudios.DataVisualizer.Editor
         private void CloseActivePopover(bool restoreFocus)
         {
             VisualElement closingPopover = _activePopover;
-            VisualElement focusTarget = restoreFocus && ShouldRestorePopoverFocus(closingPopover) ? _popoverTrigger : null;
+            VisualElement focusTarget = restoreFocus && FocusLeftPopover(closingPopover) ? _popoverTrigger : null;
             _popoverTrigger = null;
             _lastActiveFocusArea = FocusArea.None;
             if (_activePopover == _searchPopover)
@@ -4099,7 +4099,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
             _activePopover = null;
             _popoverContext = null;
-            RestorePopoverFocus(focusTarget);
+            RestorePopoverFocus(focusTarget, closingPopover);
         }
 
         /*
@@ -4108,7 +4108,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             window. The trigger may be a plain element such as a row label, so walk up to
             the nearest focusable control that is still visible.
         */
-        private void RestorePopoverFocus(VisualElement trigger)
+        private void RestorePopoverFocus(VisualElement trigger, VisualElement popover)
         {
             for (VisualElement current = trigger; current != null; current = current.parent)
             {
@@ -4117,16 +4117,11 @@ namespace WallstopStudios.DataVisualizer.Editor
                     continue;
                 }
 
-                VisualElement target = current;
-                target
-                    .schedule.Execute(() =>
-                    {
-                        if (target.panel != null && target.resolvedStyle.display != DisplayStyle.None)
-                        {
-                            target.Focus();
-                        }
-                    })
-                    .ExecuteLater(1);
+                /*
+                    An action that closes the popover may open and focus another panel first,
+                    and that choice wins over the deferred restore.
+                */
+                current.FocusAfterLayout(() => FocusLeftPopover(popover));
                 return;
             }
         }
@@ -4137,10 +4132,10 @@ namespace WallstopStudios.DataVisualizer.Editor
             trigger back. A click on another focusable control moves focus there instead,
             and that choice must win over the closing popover.
         */
-        private bool ShouldRestorePopoverFocus(VisualElement popover)
+        private bool FocusLeftPopover(VisualElement popover)
         {
             VisualElement focused = rootVisualElement?.focusController?.focusedElement as VisualElement;
-            return focused == null || popover == null || popover == focused || popover.Contains(focused);
+            return focused == null || focused.panel == null || popover == null || popover == focused || popover.Contains(focused);
         }
 
         private void HandleButtonPointer(EventBase evt)
@@ -5302,20 +5297,7 @@ namespace WallstopStudios.DataVisualizer.Editor
         */
         private void FocusObjectList()
         {
-            if (_objectListView == null)
-            {
-                return;
-            }
-
-            _objectListView
-                .schedule.Execute(() =>
-                {
-                    if (_objectListView != null && _objectListView.panel != null)
-                    {
-                        _objectListView.Focus();
-                    }
-                })
-                .ExecuteLater(1);
+            _objectListView?.FocusAfterLayout();
         }
 
         private void TogglePopover(VisualElement popover, VisualElement triggerElement)

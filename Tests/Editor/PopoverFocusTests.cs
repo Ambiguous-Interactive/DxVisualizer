@@ -178,6 +178,37 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         }
 
         [UnityTest]
+        public IEnumerator ShouldKeepNewPanelFocusWhenAClosingPopoverRestoresFocus()
+        {
+            using TestCleanupScope cleanup = new();
+            DataVisualizerWindow window = OpenSettingsWindow(cleanup, "PopoverFocusHandoff");
+            yield return null;
+
+            Button trigger = ReadPrivateField<Button>(window, "_settingsButton");
+            VisualElement popover = ReadPrivateField<VisualElement>(window, "_settingsPopover");
+            trigger.Focus();
+            yield return null;
+            InvokePrivate(window, "TogglePopover", popover, trigger);
+            yield return WaitForFocus(window, popover);
+            Assert.That(Focused(window), Is.SameAs(popover), "An open popover owns focus.");
+
+            /*
+                Opening a tool closes the popover and focuses the tool in the same call. The
+                popover's deferred focus restore must not take focus back from that tool.
+            */
+            window.OpenAssetValidation();
+            AssetValidationPanel panel = window.rootVisualElement.Q<AssetValidationPanel>();
+            Assert.That(panel != null, "Opening validation adds its panel.");
+            for (int tick = 0; tick < 3; tick++)
+            {
+                yield return null;
+            }
+
+            Assert.That(Display(popover), Is.EqualTo(DisplayStyle.None), "The popover closes.");
+            Assert.That(Focused(window), Is.SameAs(panel), "The tool that replaced the popover keeps focus.");
+        }
+
+        [UnityTest]
         public IEnumerator ShouldKeepFocusInTheObjectListAfterAConfirmedDelete()
         {
             using TestCleanupScope cleanup = new();
