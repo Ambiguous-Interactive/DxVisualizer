@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Project virtual-environment contracts (issue #509).
+"""Project virtual-environment contracts (issues #509, #511).
 
 ``uv`` refuses to use a project environment that exists but is not a virtual
 environment. An interrupted first ``uv run`` leaves a Windows-layout
@@ -19,10 +19,12 @@ touches a real environment or the network.
 from __future__ import annotations
 
 import json
+import os
+import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -38,6 +40,16 @@ RESIDUE = ".partial-bootstrap"
 GUIDANCE = "npm run env:repair"
 
 
+def native_home() -> str:
+    """Return a `home` value the current platform's uv writes."""
+    return "C:\\Python312" if sys.platform.startswith("win") else "/usr/bin"
+
+
+def foreign_home() -> str:
+    """Return a `home` value only another operating system writes."""
+    return "/usr/bin" if sys.platform.startswith("win") else "C:\\Python312"
+
+
 def write_valid_environment(root: Path, relative: str = ".venv") -> Path:
     """Build the marker set uv accepts: pyvenv.cfg plus a runnable interpreter."""
     environment = root / relative
@@ -49,7 +61,7 @@ def write_valid_environment(root: Path, relative: str = ".venv") -> Path:
     interpreter.write_text("", encoding="utf-8")
     if not sys.platform.startswith("win"):
         interpreter.chmod(0o755)
-    (environment / "pyvenv.cfg").write_text("home = /usr\n", encoding="utf-8")
+    (environment / "pyvenv.cfg").write_text(f"home = {native_home()}\n", encoding="utf-8")
     return environment
 
 
@@ -97,14 +109,36 @@ def stub_runner(*, build: bool = True, exit_code: int = 0, output: str = "", bui
     return calls, run
 
 
+def inspect_project(root: Path, environment: Optional[Mapping[str, str]] = None) -> uv_environment.EnvironmentReport:
+    """Inspect with a pinned environment map so ambient variables cannot leak in."""
+    return uv_environment.inspect_project_environment(root, {} if environment is None else environment)
+
+
+def repair_project(
+    root: Path,
+    run: Optional[Callable[[Sequence[str], Path], Tuple[int, str]]] = None,
+    environment: Optional[Mapping[str, str]] = None,
+    files: Optional[uv_environment.FileOperations] = None,
+) -> uv_environment.RepairOutcome:
+    """Repair with a pinned environment map so ambient variables cannot leak in."""
+    return uv_environment.repair_project_environment(root, uv_executable="uv", environment={} if environment is None else environment, run=run, files=files)
+
+
 def cli(arguments: Sequence[str]) -> Tuple[str, int]:
-    """Run the real script as a child so exit codes stay observable."""
+    """Run the real script as a child so exit codes stay observable.
+
+    The ambient ``UV_PROJECT_ENVIRONMENT`` is stripped: the devcontainer sets
+    it to a shared container path, and a fixture root must resolve its own
+    environment or every CLI case would inspect that shared path instead.
+    """
+    environment = {name: value for name, value in os.environ.items() if name != "UV_PROJECT_ENVIRONMENT"}
     completed = subprocess.run(
         [find_python(), str(SCRIPT), *arguments],
         capture_output=True,
         text=True,
         encoding="utf-8",
         errors="replace",
+        env=environment,
         check=False,
     )
     return ((completed.stdout or "") + (completed.stderr or "")), completed.returncode
@@ -113,7 +147,7 @@ def cli(arguments: Sequence[str]) -> Tuple[str, int]:
 def case_missing_environment_is_healthy() -> None:
     root = new_temp_root(prefix="uv-env-missing-")
     try:
-        report = uv_environment.inspect_project_environment(root)
+        report = inspect_project(root)
         assert_true(report.state == uv_environment.STATE_MISSING, f"expected missing, got {report.state}")
         assert_true(not report.needs_repair, "a missing environment is uv's job to create, not a failure")
         assert_true(report.problems == (), f"expected no problems, got {report.problems}")
@@ -125,7 +159,7 @@ def case_interrupted_windows_residue_is_invalid() -> None:
     root = new_temp_root(prefix="uv-env-interrupted-")
     try:
         environment = write_interrupted_environment(root)
-        report = uv_environment.inspect_project_environment(root)
+        report = inspect_project(root)
         assert_true(report.state == uv_environment.STATE_INVALID, f"expected invalid, got {report.state}")
         assert_true(report.needs_repair, "an interrupted environment must request repair")
         assert_true(report.path == environment, f"expected {environment}, got {report.path}")
@@ -142,8 +176,8 @@ def case_pyvenv_without_interpreter_is_invalid() -> None:
     try:
         environment = root / ".venv"
         environment.mkdir()
-        (environment / "pyvenv.cfg").write_text("home = /usr\n", encoding="utf-8")
-        report = uv_environment.inspect_project_environment(root)
+        (environment / "pyvenv.cfg").write_text(f"home = {native_home()}\n", encoding="utf-8")
+        report = inspect_project(root)
         assert_true(report.state == uv_environment.STATE_INVALID, f"expected invalid, got {report.state}")
         assert_true(any("interpreter" in problem for problem in report.problems), f"expected an interpreter problem, got {report.problems}")
         assert_true(not any("pyvenv.cfg" in problem for problem in report.problems), f"pyvenv.cfg is present, got {report.problems}")
@@ -155,7 +189,7 @@ def case_environment_path_that_is_a_file_is_invalid() -> None:
     root = new_temp_root(prefix="uv-env-file-")
     try:
         write_fixture_file(root, ".venv", "not a directory\n")
-        report = uv_environment.inspect_project_environment(root)
+        report = inspect_project(root)
         assert_true(report.state == uv_environment.STATE_INVALID, f"expected invalid, got {report.state}")
         assert_true(any("not a directory" in problem for problem in report.problems), f"expected a directory problem, got {report.problems}")
     finally:
@@ -166,7 +200,7 @@ def case_valid_environment_is_healthy() -> None:
     root = new_temp_root(prefix="uv-env-valid-")
     try:
         write_valid_environment(root)
-        report = uv_environment.inspect_project_environment(root)
+        report = inspect_project(root)
         assert_true(report.state == uv_environment.STATE_VALID, f"expected valid, got {report.state} ({report.problems})")
         assert_true(not report.needs_repair, "a valid environment must not request repair")
     finally:
@@ -183,8 +217,8 @@ def case_dangling_interpreter_link_is_invalid() -> None:
         environment = root / ".venv"
         (environment / "bin").mkdir(parents=True)
         (environment / "bin" / "python").symlink_to(root / "missing-python")
-        (environment / "pyvenv.cfg").write_text("home = /usr\n", encoding="utf-8")
-        report = uv_environment.inspect_project_environment(root)
+        (environment / "pyvenv.cfg").write_text(f"home = {native_home()}\n", encoding="utf-8")
+        report = inspect_project(root)
         assert_true(report.state == uv_environment.STATE_INVALID, f"expected invalid, got {report.state}")
         assert_true(any("interpreter" in problem for problem in report.problems), f"expected an interpreter problem, got {report.problems}")
     finally:
@@ -196,11 +230,11 @@ def case_project_environment_override_is_inspected() -> None:
     try:
         write_valid_environment(root, "custom-env")
         environment = {"UV_PROJECT_ENVIRONMENT": "custom-env"}
-        report = uv_environment.inspect_project_environment(root, environment)
+        report = inspect_project(root, environment)
         assert_true(report.state == uv_environment.STATE_VALID, f"expected the override inspected, got {report.state}")
         assert_true(report.path == root / "custom-env", f"expected the override path, got {report.path}")
         write_interrupted_environment(root, "other-env")
-        other = uv_environment.inspect_project_environment(root, {"UV_PROJECT_ENVIRONMENT": str(root / "other-env")})
+        other = inspect_project(root, {"UV_PROJECT_ENVIRONMENT": str(root / "other-env")})
         assert_true(other.state == uv_environment.STATE_INVALID, f"expected the absolute override inspected, got {other.state}")
     finally:
         remove_temp_root(root)
@@ -211,7 +245,7 @@ def case_repair_rebuilds_an_invalid_environment() -> None:
     try:
         write_interrupted_environment(root)
         calls, run = stub_runner()
-        outcome = uv_environment.repair_project_environment(root, uv_executable="uv", run=run)
+        outcome = repair_project(root, run=run)
         assert_true(outcome.removed, "the broken directory must be removed")
         assert_true(outcome.ok, f"expected a healthy environment, got {outcome.after.state} ({outcome.after.problems})")
         assert_true(len(calls) == 1, f"expected one uv invocation, got {calls}")
@@ -227,7 +261,7 @@ def case_repair_skips_a_healthy_environment() -> None:
     try:
         write_valid_environment(root)
         calls, run = stub_runner()
-        outcome = uv_environment.repair_project_environment(root, uv_executable="uv", run=run)
+        outcome = repair_project(root, run=run)
         assert_true(not outcome.removed, "a valid environment must not be removed")
         assert_true(outcome.ok, "a valid environment is already repaired")
         assert_true(calls == [], f"expected no uv invocation, got {calls}")
@@ -239,7 +273,7 @@ def case_repair_skips_a_missing_environment() -> None:
     root = new_temp_root(prefix="uv-env-absent-")
     try:
         calls, run = stub_runner()
-        outcome = uv_environment.repair_project_environment(root, uv_executable="uv", run=run)
+        outcome = repair_project(root, run=run)
         assert_true(not outcome.removed, "nothing exists to remove")
         assert_true(not calls, f"uv creates a missing environment on the next run, got {calls}")
     finally:
@@ -253,7 +287,7 @@ def case_repair_fails_loudly_when_uv_leaves_the_environment_invalid() -> None:
         calls, run = stub_runner(build=False)
         raised = ""
         try:
-            uv_environment.repair_project_environment(root, uv_executable="uv", run=run)
+            repair_project(root, run=run)
         except ValueError as error:
             raised = str(error)
         assert_true(raised != "", "a repair that leaves the environment invalid must fail, not report success")
@@ -270,7 +304,7 @@ def case_repair_reports_uv_output_when_sync_fails() -> None:
         calls, run = stub_runner(build=False, exit_code=1, output="error: failed to fetch lock file")
         raised = ""
         try:
-            uv_environment.repair_project_environment(root, uv_executable="uv", run=run)
+            repair_project(root, run=run)
         except ValueError as error:
             raised = str(error)
         assert_true([tuple(call[1:]) for call in calls] == [("sync", "--locked")], f"expected the single-tier rebuild, got {calls}")
@@ -290,7 +324,7 @@ def case_repair_quarantines_an_environment_it_cannot_delete() -> None:
             raise OSError(1, "Operation not permitted")
 
         files = uv_environment.FileOperations(delete=refuse_delete)
-        outcome = uv_environment.repair_project_environment(root, uv_executable="uv", run=run, files=files)
+        outcome = repair_project(root, run=run, files=files)
         assert_true(outcome.removed, "the unusable environment must be dealt with")
         quarantined = outcome.quarantined
         assert_true(quarantined is not None, "an environment that cannot be deleted must be moved aside")
@@ -318,7 +352,7 @@ def case_repair_rebuilds_in_place_when_deletion_and_move_are_blocked() -> None:
             raise OSError(13, "Permission denied")
 
         files = uv_environment.FileOperations(delete=refuse_delete, move=refuse_move)
-        outcome = uv_environment.repair_project_environment(root, uv_executable="uv", run=run, files=files)
+        outcome = repair_project(root, run=run, files=files)
         assert_true(outcome.removed, "the unusable environment must be dealt with")
         assert_true(outcome.quarantined is None, "a blocked move leaves nothing quarantined")
         assert_true(outcome.rebuilt_in_place, "the last tier must rebuild around the residue")
@@ -335,13 +369,13 @@ def case_environment_pointing_at_the_project_root_is_refused() -> None:
     root = new_project_root(prefix="uv-env-root-")
     try:
         environment = {"UV_PROJECT_ENVIRONMENT": "."}
-        report = uv_environment.inspect_project_environment(root, environment)
+        report = inspect_project(root, environment)
         assert_true(report.state == uv_environment.STATE_INVALID, f"the project root is never an environment, got {report.state}")
         assert_true(not report.repairable, "a fatal path must not advertise an automatic repair")
         calls, run = stub_runner()
         raised = ""
         try:
-            uv_environment.repair_project_environment(root, uv_executable="uv", environment=environment, run=run)
+            repair_project(root, environment=environment, run=run)
         except ValueError as error:
             raised = str(error)
         assert_true(raised != "", "a repair must refuse the project root")
@@ -360,11 +394,11 @@ def case_environment_pointing_at_an_ancestor_is_refused() -> None:
         root.mkdir()
         write_fixture_file(root, "pyproject.toml", '[project]\nname = "uv-environment-fixture"\nversion = "0.0.0"\n')
         environment = {"UV_PROJECT_ENVIRONMENT": ".."}
-        report = uv_environment.inspect_project_environment(root, environment)
+        report = inspect_project(root, environment)
         assert_true(report.state == uv_environment.STATE_INVALID, f"a parent of the project is never an environment, got {report.state}")
         raised = ""
         try:
-            uv_environment.repair_project_environment(root, uv_executable="uv", environment=environment, run=stub_runner()[1])
+            repair_project(root, environment=environment, run=stub_runner()[1])
         except ValueError as error:
             raised = str(error)
         assert_true(raised != "", "a repair must refuse a parent of the project")
@@ -379,11 +413,11 @@ def case_environment_outside_the_project_is_rebuilt_but_never_deleted() -> None:
     try:
         write_interrupted_environment(outside)
         environment = {"UV_PROJECT_ENVIRONMENT": str(outside / ".venv")}
-        report = uv_environment.inspect_project_environment(root, environment)
+        report = inspect_project(root, environment)
         assert_true(report.state == uv_environment.STATE_INVALID, f"the outside environment is broken, got {report.state}")
         assert_true(report.repairable, "an outside environment is still repairable, only never deletable")
         calls, run = stub_runner(build_at=outside / ".venv")
-        outcome = uv_environment.repair_project_environment(root, uv_executable="uv", environment=environment, run=run)
+        outcome = repair_project(root, environment=environment, run=run)
         assert_true(outcome.quarantined is None, "an outside environment must never be moved")
         invoked = [tuple(call[1:]) for call in calls]
         assert_true(invoked == [("venv", "--allow-existing"), ("sync", "--locked")], f"expected the in-place ladder, got {invoked}")
@@ -402,13 +436,13 @@ def case_environment_with_an_unresolvable_path_is_refused() -> None:
     try:
         (root / "loop").symlink_to("loop")
         environment = {"UV_PROJECT_ENVIRONMENT": "loop"}
-        report = uv_environment.inspect_project_environment(root, environment)
+        report = inspect_project(root, environment)
         assert_true(report.state == uv_environment.STATE_INVALID, f"an unresolvable path is never an environment, got {report.state}")
         assert_true(not report.repairable, "an unverified path must not advertise an automatic repair")
         calls, run = stub_runner()
         raised = ""
         try:
-            uv_environment.repair_project_environment(root, uv_executable="uv", environment=environment, run=run)
+            repair_project(root, environment=environment, run=run)
         except ValueError as error:
             raised = str(error)
         assert_true(raised != "", "an unresolvable environment path must fail the repair, not escape as another error")
@@ -422,13 +456,13 @@ def case_environment_from_a_dot_dot_path_is_refused() -> None:
     root = new_project_root(prefix="uv-env-dotdot-")
     try:
         environment = {"UV_PROJECT_ENVIRONMENT": "missing/.."}
-        report = uv_environment.inspect_project_environment(root, environment)
+        report = inspect_project(root, environment)
         assert_true(report.state == uv_environment.STATE_INVALID, f"'missing/..' names the project root, got {report.state}")
         assert_true(not report.repairable, "a path that normalizes to the project root must not be repaired")
         calls, run = stub_runner()
         raised = ""
         try:
-            uv_environment.repair_project_environment(root, uv_executable="uv", environment=environment, run=run)
+            repair_project(root, environment=environment, run=run)
         except ValueError as error:
             raised = str(error)
         assert_true(raised != "", "a path that normalizes to the project root must fail the repair")
@@ -448,11 +482,11 @@ def case_dangling_environment_link_keeps_its_outside_target() -> None:
     try:
         target = outside / "env"
         (root / ".venv").symlink_to(target, target_is_directory=True)
-        report = uv_environment.inspect_project_environment(root)
+        report = inspect_project(root)
         assert_true(report.state == uv_environment.STATE_INVALID, f"a dangling link is not a usable environment, got {report.state}")
         assert_true(report.repairable, "the target can still be rebuilt")
         calls, run = stub_runner(build_at=target)
-        outcome = uv_environment.repair_project_environment(root, uv_executable="uv", run=run)
+        outcome = repair_project(root, run=run)
         assert_true(outcome.quarantined is None, "a link outside the project must never be moved")
         invoked = [tuple(call[1:]) for call in calls]
         assert_true(invoked == [("venv", "--allow-existing"), ("sync", "--locked")], f"expected the in-place ladder, got {invoked}")
@@ -462,6 +496,35 @@ def case_dangling_environment_link_keeps_its_outside_target() -> None:
     finally:
         remove_temp_root(root)
         remove_temp_root(outside)
+
+
+def case_environment_built_by_another_operating_system_is_invalid() -> None:
+    root = new_temp_root(prefix="uv-env-foreign-")
+    try:
+        environment = write_valid_environment(root)
+        (environment / "pyvenv.cfg").write_text(f"home = {foreign_home()}\nversion_info = 3.12\n", encoding="utf-8")
+        report = inspect_project(root)
+        assert_true(report.state == uv_environment.STATE_INVALID, f"a foreign platform cannot run here, got {report.state} (markers all pass)")
+        assert_true(any("another operating system" in problem for problem in report.problems), f"expected the other platform named, got {report.problems}")
+        calls, run = stub_runner()
+        outcome = repair_project(root, run=run)
+        assert_true(outcome.ok, f"expected a rebuilt environment, got {outcome.after.state} ({outcome.after.problems})")
+        assert_true("another operating system" in uv_environment.describe_repair(outcome), f"the repair must say why, got: {uv_environment.describe_repair(outcome)}")
+        assert_true(len(calls) == 1, f"expected one uv invocation, got {calls}")
+    finally:
+        remove_temp_root(root)
+
+
+def case_devcontainer_keeps_its_environment_outside_the_checkout() -> None:
+    spec = (REPO_ROOT / ".devcontainer" / "devcontainer.json").read_text(encoding="utf-8")
+    match = re.search(r'"UV_PROJECT_ENVIRONMENT"\s*:\s*"([^"]+)"', spec)
+    assert_true(match is not None, "the devcontainer must keep its own environment; the bind-mounted .venv belongs to the host")
+    configured = match.group(1) if match is not None else ""
+    assert_true(
+        "${containerWorkspaceFolder}" not in configured and not configured.startswith("./"),
+        f"the container environment must live outside the shared checkout, got: {configured}",
+    )
+    assert_true(configured.startswith("/"), f"the container environment must be an absolute container path, got: {configured}")
 
 
 def case_cli_check_fails_with_recovery_guidance() -> None:
@@ -555,6 +618,8 @@ CASES: Sequence[Tuple[str, Callable[[], None]]] = (
     ("environment pointing at the project root is refused", case_environment_pointing_at_the_project_root_is_refused),
     ("environment pointing at an ancestor is refused", case_environment_pointing_at_an_ancestor_is_refused),
     ("environment outside the project is rebuilt but never deleted", case_environment_outside_the_project_is_rebuilt_but_never_deleted),
+    ("environment built by another operating system is invalid", case_environment_built_by_another_operating_system_is_invalid),
+    ("devcontainer keeps its environment outside the checkout", case_devcontainer_keeps_its_environment_outside_the_checkout),
     ("environment with an unresolvable path is refused", case_environment_with_an_unresolvable_path_is_refused),
     ("environment from a dot-dot path is refused", case_environment_from_a_dot_dot_path_is_refused),
     ("dangling environment link keeps its outside target", case_dangling_environment_link_keeps_its_outside_target),

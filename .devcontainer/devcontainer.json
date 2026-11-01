@@ -25,7 +25,13 @@
         "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
         "ZAI_API_KEY": "${localEnv:ZAI_API_KEY}",
         "OPENROUTER_API_KEY": "${localEnv:OPENROUTER_API_KEY}",
-        "NANOCODER_MCPSERVERS_FILE": "${containerWorkspaceFolder}/.nanocoder/mcp.json"
+        "NANOCODER_MCPSERVERS_FILE": "${containerWorkspaceFolder}/.nanocoder/mcp.json",
+        // The checkout is a bind mount of the Windows host drive, so the
+        // project `.venv` is shared with the host and each platform rewrites
+        // `pyvenv.cfg` for itself. Keep the container's environment outside
+        // the checkout so `npm run` here never invalidates the host
+        // environment, and the host never invalidates this one.
+        "UV_PROJECT_ENVIRONMENT": "/home/vscode/.venvs/dxvisualizer"
     },
     // Block attach until onCreate finishes so terminals always have .env.local
     // sourced and MCP configs regenerated.

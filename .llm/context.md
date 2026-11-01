@@ -209,6 +209,10 @@ reaches uv, except `env:check`, runs `uv run --no-project scripts/uv_environment
 `UV_PROJECT_ENVIRONMENT` that resolves outside the project is rebuilt in place and never deleted, and one that resolves to the project root or a parent is refused.
 `npm run env:check` reports the state and `npm run env:repair` runs the same repair by hand.
 
+The container sets `UV_PROJECT_ENVIRONMENT=/home/vscode/.venvs/dxvisualizer` in `.devcontainer/devcontainer.json`. The checkout is a bind mount of the Windows host drive, so one
+project `.venv` would otherwise be shared by two platforms and each side would rewrite `pyvenv.cfg` for itself; an environment that names another platform is reported as foreign
+and rebuilt.
+
 ### Testing
 
 - Close every shown temporary `EditorWindow` through `EditorWindow.Close()`, including popup captures and benchmarks. `DestroyImmediate(window)` alone leaves its native host and
