@@ -521,10 +521,21 @@ def case_devcontainer_keeps_its_environment_outside_the_checkout() -> None:
     assert_true(match is not None, "the devcontainer must keep its own environment; the bind-mounted .venv belongs to the host")
     configured = match.group(1) if match is not None else ""
     assert_true(
-        "${containerWorkspaceFolder}" not in configured and not configured.startswith("./"),
-        f"the container environment must live outside the shared checkout, got: {configured}",
+        configured == "/home/vscode/.venvs/dxvisualizer",
+        f"the container environment must stay outside the shared checkout, got: {configured}",
     )
-    assert_true(configured.startswith("/"), f"the container environment must be an absolute container path, got: {configured}")
+
+
+def case_mixed_platform_pyvenv_is_invalid() -> None:
+    root = new_temp_root(prefix="uv-env-mixed-")
+    try:
+        environment = write_valid_environment(root)
+        (environment / "pyvenv.cfg").write_text(f"home = {foreign_home()}\nbase-home = {native_home()}\n", encoding="utf-8")
+        report = inspect_project(root)
+        assert_true(report.state == uv_environment.STATE_INVALID, f"a file naming both platforms is unusable, got {report.state} (markers all pass)")
+        assert_true(any("another operating system" in problem for problem in report.problems), f"expected the other platform named, got {report.problems}")
+    finally:
+        remove_temp_root(root)
 
 
 def case_cli_check_fails_with_recovery_guidance() -> None:
@@ -619,6 +630,7 @@ CASES: Sequence[Tuple[str, Callable[[], None]]] = (
     ("environment pointing at an ancestor is refused", case_environment_pointing_at_an_ancestor_is_refused),
     ("environment outside the project is rebuilt but never deleted", case_environment_outside_the_project_is_rebuilt_but_never_deleted),
     ("environment built by another operating system is invalid", case_environment_built_by_another_operating_system_is_invalid),
+    ("mixed-platform pyvenv.cfg is invalid", case_mixed_platform_pyvenv_is_invalid),
     ("devcontainer keeps its environment outside the checkout", case_devcontainer_keeps_its_environment_outside_the_checkout),
     ("environment with an unresolvable path is refused", case_environment_with_an_unresolvable_path_is_refused),
     ("environment from a dot-dot path is refused", case_environment_from_a_dot_dot_path_is_refused),

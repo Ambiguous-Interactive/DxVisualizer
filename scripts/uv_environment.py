@@ -222,16 +222,19 @@ def foreign_platform_problem(environment: Path) -> Optional[Message]:
         key, _, value = line.partition("=")
         if key.strip() in ("home", "executable", "base-executable", "base-prefix", "base-home"):
             values.append(value.strip())
-    windows_style = any(re.match(r"^[A-Za-z]:[\\/]", value) or value.startswith("\\\\") for value in values)
-    posix_style = any(value.startswith("/") for value in values)
-    if os.name == "nt":
-        foreign = posix_style and not windows_style
-    else:
-        foreign = windows_style
-    if not foreign:
+    styles: Dict[Message, bool] = {
+        "windows": any(re.match(r"^[A-Za-z]:[\\/]", value) or value.startswith("\\\\") for value in values),
+        "posix": any(value.startswith("/") for value in values),
+    }
+    # Any path from the other platform proves the file describes a foreign
+    # interpreter, even when a second key names this platform.
+    foreign_style = "posix" if os.name == "nt" else "windows"
+    if not styles[foreign_style]:
         return None
-    other = "Windows" if os.name != "nt" else "POSIX"
-    example = next((value for value in values if value.startswith(("/", "\\\\")) or re.match(r"^[A-Za-z]:[\\/]", value)), "")
+    names: Dict[Message, Message] = {"windows": "Windows", "posix": "POSIX"}
+    patterns: Dict[Message, Message] = {"windows": r"^[A-Za-z]:[\\/]", "posix": r"^/"}
+    other = names[foreign_style]
+    example = next((value for value in values if re.match(patterns[foreign_style], value) or value.startswith("\\\\")), "")
     return f"pyvenv.cfg describes a {other} interpreter ('{example}'), so this environment was built on another operating system"
 
 
