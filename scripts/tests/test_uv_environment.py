@@ -418,6 +418,52 @@ def case_environment_with_an_unresolvable_path_is_refused() -> None:
         remove_temp_root(root)
 
 
+def case_environment_from_a_dot_dot_path_is_refused() -> None:
+    root = new_project_root(prefix="uv-env-dotdot-")
+    try:
+        environment = {"UV_PROJECT_ENVIRONMENT": "missing/.."}
+        report = uv_environment.inspect_project_environment(root, environment)
+        assert_true(report.state == uv_environment.STATE_INVALID, f"'missing/..' names the project root, got {report.state}")
+        assert_true(not report.repairable, "a path that normalizes to the project root must not be repaired")
+        calls, run = stub_runner()
+        raised = ""
+        try:
+            uv_environment.repair_project_environment(root, uv_executable="uv", environment=environment, run=run)
+        except ValueError as error:
+            raised = str(error)
+        assert_true(raised != "", "a path that normalizes to the project root must fail the repair")
+        assert_true(calls == [], f"no uv command may run against a fatal path, got {calls}")
+        assert_true((root / "pyproject.toml").is_file(), "the project root must survive untouched")
+    finally:
+        remove_temp_root(root)
+
+
+def case_dangling_environment_link_keeps_its_outside_target() -> None:
+    if sys.platform.startswith("win"):
+        # A file symlink needs privileges Windows CI may not grant; the POSIX
+        # case pins the same classification the dangling-link logic provides.
+        return
+    root = new_project_root(prefix="uv-env-dangling-target-")
+    outside = new_temp_root(prefix="uv-env-dangling-outside-")
+    try:
+        target = outside / "env"
+        (root / ".venv").symlink_to(target, target_is_directory=True)
+        report = uv_environment.inspect_project_environment(root)
+        assert_true(report.state == uv_environment.STATE_INVALID, f"a dangling link is not a usable environment, got {report.state}")
+        assert_true(report.repairable, "the target can still be rebuilt")
+        calls, run = stub_runner(build_at=target)
+        outcome = uv_environment.repair_project_environment(root, uv_executable="uv", run=run)
+        assert_true(outcome.quarantined is None, "a link outside the project must never be moved")
+        invoked = [tuple(call[1:]) for call in calls]
+        assert_true(invoked == [("venv", "--allow-existing"), ("sync", "--locked")], f"expected the in-place ladder, got {invoked}")
+        assert_true((root / ".venv").is_symlink(), "the user's link must survive the repair")
+        assert_true(target.is_dir(), "the rebuild must land on the link target")
+        assert_true(outcome.ok, f"expected a usable environment, got {outcome.after.state} ({outcome.after.problems})")
+    finally:
+        remove_temp_root(root)
+        remove_temp_root(outside)
+
+
 def case_cli_check_fails_with_recovery_guidance() -> None:
     root = new_project_root(prefix="uv-env-cli-")
     try:
@@ -510,6 +556,8 @@ CASES: Sequence[Tuple[str, Callable[[], None]]] = (
     ("environment pointing at an ancestor is refused", case_environment_pointing_at_an_ancestor_is_refused),
     ("environment outside the project is rebuilt but never deleted", case_environment_outside_the_project_is_rebuilt_but_never_deleted),
     ("environment with an unresolvable path is refused", case_environment_with_an_unresolvable_path_is_refused),
+    ("environment from a dot-dot path is refused", case_environment_from_a_dot_dot_path_is_refused),
+    ("dangling environment link keeps its outside target", case_dangling_environment_link_keeps_its_outside_target),
     ("cli check fails with recovery guidance", case_cli_check_fails_with_recovery_guidance),
     ("cli check accepts healthy and absent environments", case_cli_check_accepts_healthy_and_absent_environments),
     ("cli json reports the environment state", case_cli_json_reports_the_environment_state),

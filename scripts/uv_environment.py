@@ -99,17 +99,28 @@ def resolve_existing(path: Path) -> Path:
 
     ``Path.resolve(strict=False)`` can swallow a symlink-loop error on Python
     3.13 and later, which would classify an unverifiable path as safe to
-    delete. Strict resolution keeps the error, and a genuinely missing
-    environment path still resolves through its nearest existing parent so a
-    first run is not treated as a failure.
+    delete. Strict resolution keeps the error.
+
+    A missing path resolves through its nearest existing parent, so a first run
+    is not treated as a failure, and the reconstructed result is normalized so
+    ``missing/..`` classifies as the parent it names instead of its own text.
+    A dangling symlink resolves to its link target, so a link that points
+    outside the project keeps the outside-path protections instead of being
+    unlinked as if it were a local directory.
     """
     try:
         return path.resolve(strict=True)
     except FileNotFoundError:
-        parent = path.parent
-        if parent == path:
-            return path
-        return resolve_existing(parent) / path.name
+        pass
+    if path.is_symlink():
+        target = Path(os.readlink(path))
+        if not target.is_absolute():
+            target = path.parent / target
+        return resolve_existing(target)
+    parent = path.parent
+    if parent == path:
+        return path
+    return Path(os.path.normpath(str(resolve_existing(parent) / path.name)))
 
 
 def containment(root: Path, environment: Path) -> Containment:
