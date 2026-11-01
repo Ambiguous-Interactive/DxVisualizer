@@ -46,8 +46,8 @@ A credential rotated in `.env.local` also has to reach already-running agents. T
    start. A service credential that is present but **empty** counts as a mismatch: the devcontainer `remoteEnv` resolves an unset host variable to an empty string, so a service
    started outside a loaded shell (for example by the VS Code extension host) expands every `{env:VAR}` reference to no credential and its remote servers 401 while `.env.local`,
    the endpoints, and fresh shells all stay healthy. `post_start.py` therefore warms the service with the `.env.local`-loaded environment, and `npm run mcp:doctor` surfaces the
-   poisoned-service state as a failure with the remedy. A service that names no tracked key is unjudged rather than healthy: the doctor says so and asks for a restart from a shell
-   that loads `.env.local`, because rerunning the recycler changes nothing there.
+   poisoned-service state as a failure with the remedy. A service that names no tracked key is unjudged rather than healthy: the doctor says so and asks the operator to stop the
+   process named in `service.json` and start an agent CLI from a shell that loads `.env.local`, because rerunning the recycler changes nothing there.
 
 ```bash
 python3 .devcontainer/recycle_stale_opencode_service.py --dry-run   # report only

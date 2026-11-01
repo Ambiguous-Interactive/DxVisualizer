@@ -254,8 +254,9 @@ class Doctor:
         if 'names no tracked credential' in output:
             self.report(
                 '⚠️',
-                'shared opencode service names no tracked credential; restart it from a shell that loads .env.local '
-                '(quit the agent CLIs, then start one again).',
+                'shared opencode service names no tracked credential and keeps its start environment. Stop the '
+                'process named by the pid in ~/.local/state/opencode/service.json, then start an agent CLI from a '
+                'shell that loads .env.local.',
             )
             return
         self.report('ℹ️', 'shared opencode service: .env.local defines none of the credentials the service names; nothing to compare.')

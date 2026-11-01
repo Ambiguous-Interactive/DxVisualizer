@@ -555,7 +555,7 @@ def case_doctor_explains_how_to_restart_an_unjudged_service() -> None:
         )
         assert_contains("doctor reports the shared service check", "shared opencode service", sandbox.stdout)
         assert_contains("doctor names the unjudged service", "names no tracked credential", sandbox.stdout)
-        assert_contains("doctor gives the restart remedy", "restart it", sandbox.stdout)
+        assert_contains("doctor gives the service-stop remedy", "Stop the process named by the pid", sandbox.stdout)
         assert_not_contains("an unjudged service must not read as a match", "tracked credentials match", sandbox.stdout)
         assert_not_contains("an unjudged service is not a failure", "❌", sandbox.stdout)
     finally:
@@ -581,7 +581,7 @@ def case_doctor_reports_nothing_to_compare() -> None:
         )
         assert_contains("doctor says nothing could be compared", "nothing to compare", sandbox.stdout)
         assert_not_contains("a disjoint pair must not read as a match", "tracked credentials match", sandbox.stdout)
-        assert_not_contains("a disjoint pair needs no restart", "restart it", sandbox.stdout)
+        assert_not_contains("a disjoint pair needs no restart", "Stop the process named by the pid", sandbox.stdout)
     finally:
         service.terminate()
         service.wait(timeout=10)
