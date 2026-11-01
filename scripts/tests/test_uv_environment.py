@@ -394,6 +394,30 @@ def case_environment_outside_the_project_is_rebuilt_but_never_deleted() -> None:
         remove_temp_root(outside)
 
 
+def case_environment_with_an_unresolvable_path_is_refused() -> None:
+    if sys.platform.startswith("win"):
+        # Creating a symlink loop needs privileges Windows CI may not grant.
+        return
+    root = new_project_root(prefix="uv-env-loop-")
+    try:
+        (root / "loop").symlink_to("loop")
+        environment = {"UV_PROJECT_ENVIRONMENT": "loop"}
+        report = uv_environment.inspect_project_environment(root, environment)
+        assert_true(report.state == uv_environment.STATE_INVALID, f"an unresolvable path is never an environment, got {report.state}")
+        assert_true(not report.repairable, "an unverified path must not advertise an automatic repair")
+        calls, run = stub_runner()
+        raised = ""
+        try:
+            uv_environment.repair_project_environment(root, uv_executable="uv", environment=environment, run=run)
+        except ValueError as error:
+            raised = str(error)
+        assert_true(raised != "", "an unresolvable environment path must fail the repair, not escape as another error")
+        assert_true(calls == [], f"no uv command may run against a fatal path, got {calls}")
+        assert_true((root / "loop").is_symlink(), "the unresolvable path must survive untouched")
+    finally:
+        remove_temp_root(root)
+
+
 def case_cli_check_fails_with_recovery_guidance() -> None:
     root = new_project_root(prefix="uv-env-cli-")
     try:
@@ -485,6 +509,7 @@ CASES: Sequence[Tuple[str, Callable[[], None]]] = (
     ("environment pointing at the project root is refused", case_environment_pointing_at_the_project_root_is_refused),
     ("environment pointing at an ancestor is refused", case_environment_pointing_at_an_ancestor_is_refused),
     ("environment outside the project is rebuilt but never deleted", case_environment_outside_the_project_is_rebuilt_but_never_deleted),
+    ("environment with an unresolvable path is refused", case_environment_with_an_unresolvable_path_is_refused),
     ("cli check fails with recovery guidance", case_cli_check_fails_with_recovery_guidance),
     ("cli check accepts healthy and absent environments", case_cli_check_accepts_healthy_and_absent_environments),
     ("cli json reports the environment state", case_cli_json_reports_the_environment_state),

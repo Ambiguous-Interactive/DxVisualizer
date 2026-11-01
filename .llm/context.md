@@ -203,10 +203,10 @@ runs everything, including the Prettier Markdown check, on ubuntu and windows. C
 ### Python environment recovery
 
 `uv` refuses to use `.venv` when that directory exists but is not a virtual environment. An interrupted first `uv run` leaves the partial build behind (on Windows a hardlinked
-`.venv/Scripts/python.exe` with no `pyvenv.cfg`), and every npm script then fails with `failed to locate pyvenv.cfg` before Python starts. Every npm script that reaches uv runs
-`uv run --no-project scripts/uv_environment.py --repair` first; the repair deletes the unusable directory, moves it to the gitignored `.artifacts/` tree when deletion is refused,
-or rebuilds in place with `uv venv --allow-existing` when the file system blocks both, then syncs from `uv.lock`. It never deletes a path outside the project and refuses a
-`UV_PROJECT_ENVIRONMENT` that points at the project root or a parent. `npm run env:check` reports the state and `npm run env:repair` runs the same repair by hand.
+`.venv/Scripts/python.exe` with no `pyvenv.cfg`), and every npm script then fails with `failed to locate pyvenv.cfg` before Python starts. Every npm script that reaches uv, except
+`env:check`, runs `uv run --no-project scripts/uv_environment.py --repair` first; the repair deletes the unusable directory, moves it to the gitignored `.artifacts/` tree when
+deletion is refused, or rebuilds in place with `uv venv --allow-existing` when the file system blocks both, then syncs from `uv.lock`. It never deletes a path outside the project
+and refuses a `UV_PROJECT_ENVIRONMENT` that points at the project root or a parent. `npm run env:check` reports the state and `npm run env:repair` runs the same repair by hand.
 
 ### Testing
 

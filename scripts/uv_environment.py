@@ -106,8 +106,15 @@ def containment(root: Path, environment: Path) -> Containment:
     try:
         resolved_root = root.resolve()
         resolved_environment = environment.resolve()
-    except OSError:
-        return Containment(inside_root=True, fatal=False)
+    except (OSError, RuntimeError) as error:
+        # A symlink loop raises RuntimeError on some Python versions, and an
+        # unreadable path raises OSError. Neither proves the path is safe, so
+        # the repair must not delete or move anything it could not verify.
+        return Containment(
+            inside_root=False,
+            fatal=True,
+            reason=f"the project environment path '{display_path(environment)}' could not be resolved ({error})",
+        )
     if resolved_environment == resolved_root:
         return Containment(
             inside_root=False,
