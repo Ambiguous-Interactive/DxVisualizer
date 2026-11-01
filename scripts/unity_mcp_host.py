@@ -44,6 +44,15 @@ def rpc_error(identifier: object, code: int, message: str) -> JsonMap:
     return {'jsonrpc': '2.0', 'id': identifier, 'error': {'code': code, 'message': message}}
 
 
+def control_allowed(client: str, token: str) -> bool:
+    """Return whether a control request may proceed from this peer address.
+
+    A token protects every client. Without one, the health endpoint already
+    exposes the instance identity, so only this host may drive control.
+    """
+    return bool(token) or client.startswith('127.') or client in ('::1', '::ffff:127.0.0.1')
+
+
 @dataclass
 class Pending:
     identifier: object
@@ -411,6 +420,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond(200, bridge.health(), early=True)
             elif route not in ('/mcp', '/control'):
                 self.respond(404, early=True)
+            elif route == '/control' and not control_allowed(self.client_address[0], bridge.settings['token']):
+                self.respond(403, {'error': 'Control requires UNITY_MCP_TOKEN unless the client is on loopback.'}, early=True)
             elif bridge.settings['token'] and not hmac.compare_digest(
                 self.headers.get('Authorization', '').encode('utf-8'), ('Bearer ' + bridge.settings['token']).encode('utf-8')
             ):

@@ -62,6 +62,13 @@ class StartupTests(unittest.TestCase):
         self.assertIn('probeError', report)
         self.assertNotIn('discoveryErrors', report)
 
+    def test_tokenless_control_requires_a_loopback_peer(self) -> None:
+        cases = [('127.0.0.1', '', True), ('127.5.5.5', '', True), ('::1', '', True), ('::ffff:127.0.0.1', '', True),
+                 ('10.1.2.3', '', False), ('::2', '', False), ('10.1.2.3', 'fixture-token', True)]
+        for address, token, allowed in cases:
+            with self.subTest(address=address, token=bool(token)):
+                self.assertEqual(host.control_allowed(address, token), allowed)
+
     def test_diagnostics_redacts_inherited_credentials(self) -> None:
         values = settings()
         values['token'] = 'bridge-token'
