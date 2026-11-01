@@ -536,10 +536,11 @@ def case_doctor_passes_a_healthy_shared_service() -> None:
         sandbox.destroy()
 
 
-def case_doctor_reports_a_service_it_could_not_compare() -> None:
+def case_doctor_explains_how_to_restart_an_unjudged_service() -> None:
     # A service that names none of the tracked keys is unjudged, not healthy:
     # the recycler has no common key to compare, so the doctor must not claim
-    # a match it never established.
+    # a match it never established. The remedy is a restart from a loaded
+    # shell, because running the recycler again changes nothing.
     if not _service_fixture_available():
         print("    SKIP: the service fixture needs a POSIX host with bash and /proc.")
         return
@@ -553,9 +554,34 @@ def case_doctor_reports_a_service_it_could_not_compare() -> None:
             extra_env={"XDG_STATE_HOME": str(sandbox.home / ".local" / "state")},
         )
         assert_contains("doctor reports the shared service check", "shared opencode service", sandbox.stdout)
-        assert_contains("doctor says the credentials were not compared", "could not be compared", sandbox.stdout)
+        assert_contains("doctor names the unjudged service", "names no tracked credential", sandbox.stdout)
+        assert_contains("doctor gives the restart remedy", "restart it", sandbox.stdout)
         assert_not_contains("an unjudged service must not read as a match", "tracked credentials match", sandbox.stdout)
         assert_not_contains("an unjudged service is not a failure", "❌", sandbox.stdout)
+    finally:
+        service.terminate()
+        service.wait(timeout=10)
+        sandbox.destroy()
+
+
+def case_doctor_reports_nothing_to_compare() -> None:
+    # The file defines no credential the service names, so no pair exists to
+    # judge: the doctor reports that, not a match and not a restart remedy.
+    if not _service_fixture_available():
+        print("    SKIP: the service fixture needs a POSIX host with bash and /proc.")
+        return
+    sandbox = Sandbox()
+    sandbox.write_env_file("ZAI_API_KEY=zai-secret-placeholder\n")
+    service = _spawn_service_fixture({"GITHUB_PERSONAL_ACCESS_TOKEN": LIVE})
+    try:
+        _write_service_record(sandbox, service.pid)
+        sandbox.run_isolated(
+            DOCTOR,
+            extra_env={"XDG_STATE_HOME": str(sandbox.home / ".local" / "state")},
+        )
+        assert_contains("doctor says nothing could be compared", "nothing to compare", sandbox.stdout)
+        assert_not_contains("a disjoint pair must not read as a match", "tracked credentials match", sandbox.stdout)
+        assert_not_contains("a disjoint pair needs no restart", "restart it", sandbox.stdout)
     finally:
         service.terminate()
         service.wait(timeout=10)
@@ -606,7 +632,8 @@ CASES = (
     case_doctor_never_prints_secret_values,
     case_doctor_flags_a_poisoned_shared_service,
     case_doctor_passes_a_healthy_shared_service,
-    case_doctor_reports_a_service_it_could_not_compare,
+    case_doctor_explains_how_to_restart_an_unjudged_service,
+    case_doctor_reports_nothing_to_compare,
     case_repair_reconciles_divergent_github_pair,
     case_repair_refuses_when_neither_credential_authenticates,
     case_repair_respects_reverse_divergence,

@@ -281,8 +281,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if compared_keys:
             compared_names = "".join(f" {key}" for key in compared_keys)
             print(f"recycle: service credentials match .env.local for:{compared_names}")
+        elif service_values:
+            print("recycle: .env.local defines none of the credentials the service names; nothing to compare")
         else:
-            print("recycle: no tracked credential is in both the service and .env.local; nothing to compare")
+            print(f"recycle: service pid {pid} names no tracked credential; restart it from a shell that loads .env.local")
         return 0
 
     stale_names = "".join(f" {key}" for key in stale_keys)

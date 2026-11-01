@@ -251,11 +251,14 @@ class Doctor:
         if 'service credentials match' in output:
             self.report('✅', 'shared opencode service: tracked credentials match .env.local.')
             return
-        self.report(
-            'ℹ️',
-            'shared opencode service: credentials could not be compared with .env.local '
-            '(no tracked key is in both); run the recycler manually for detail.',
-        )
+        if 'names no tracked credential' in output:
+            self.report(
+                '⚠️',
+                'shared opencode service names no tracked credential; restart it from a shell that loads .env.local '
+                '(quit the agent CLIs, then start one again).',
+            )
+            return
+        self.report('ℹ️', 'shared opencode service: .env.local defines none of the credentials the service names; nothing to compare.')
 
     def run(self, repair: bool) -> int:
         container = self.environment.get('DATAVIZ_IN_CONTAINER') == '1' or Path('/.dockerenv').exists() or Path('/run/.containerenv').exists()
