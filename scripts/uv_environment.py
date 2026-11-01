@@ -94,6 +94,24 @@ class Containment:
     reason: Message = ""
 
 
+def resolve_existing(path: Path) -> Path:
+    """Resolve the deepest existing part of a path, so a symlink loop always raises.
+
+    ``Path.resolve(strict=False)`` can swallow a symlink-loop error on Python
+    3.13 and later, which would classify an unverifiable path as safe to
+    delete. Strict resolution keeps the error, and a genuinely missing
+    environment path still resolves through its nearest existing parent so a
+    first run is not treated as a failure.
+    """
+    try:
+        return path.resolve(strict=True)
+    except FileNotFoundError:
+        parent = path.parent
+        if parent == path:
+            return path
+        return resolve_existing(parent) / path.name
+
+
 def containment(root: Path, environment: Path) -> Containment:
     """Classify the environment path so a repair never deletes the wrong tree.
 
@@ -104,8 +122,8 @@ def containment(root: Path, environment: Path) -> Containment:
     the project root or one of its parents is refused outright.
     """
     try:
-        resolved_root = root.resolve()
-        resolved_environment = environment.resolve()
+        resolved_root = resolve_existing(root)
+        resolved_environment = resolve_existing(environment)
     except (OSError, RuntimeError) as error:
         # A symlink loop raises RuntimeError on some Python versions, and an
         # unreadable path raises OSError. Neither proves the path is safe, so
