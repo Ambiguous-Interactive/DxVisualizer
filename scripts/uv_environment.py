@@ -32,7 +32,11 @@ script that reaches uv runs ``--repair`` first, so a corrupted environment
 costs one rebuild instead of a dead end.
 
 ``UV_PROJECT_ENVIRONMENT`` is honored, because it moves the environment the
-same way it moves uv's. It can be relative (to the project) or absolute.
+same way it moves uv's. It can be relative (to the project) or absolute. That
+variable is user input, so the repair only deletes or moves a directory inside
+the project: an outside path is rebuilt in place and keeps its residue, and a
+path equal to the project root or one of its parents is refused before any
+file changes.
 """
 
 from __future__ import annotations
@@ -81,6 +85,50 @@ def environment_directory(root: Path, environment: Optional[Mapping[str, str]] =
     return candidate if candidate.is_absolute() else root / candidate
 
 
+@dataclass(frozen=True)
+class Containment:
+    """Where the project environment sits relative to the project root."""
+
+    inside_root: bool
+    fatal: bool
+    reason: Message = ""
+
+
+def containment(root: Path, environment: Path) -> Containment:
+    """Classify the environment path so a repair never deletes the wrong tree.
+
+    ``UV_PROJECT_ENVIRONMENT`` is user input. Pointed at the repository, a
+    parent, or an unrelated directory, a "repair" would delete the wrong tree,
+    so the classification decides what the repair may do: a path inside the
+    project can be deleted or moved, an outside path is rebuilt in place, and
+    the project root or one of its parents is refused outright.
+    """
+    try:
+        resolved_root = root.resolve()
+        resolved_environment = environment.resolve()
+    except OSError:
+        return Containment(inside_root=True, fatal=False)
+    if resolved_environment == resolved_root:
+        return Containment(
+            inside_root=False,
+            fatal=True,
+            reason=f"the project environment resolves to the project root '{display_path(resolved_root)}'",
+        )
+    if resolved_environment in resolved_root.parents:
+        return Containment(
+            inside_root=False,
+            fatal=True,
+            reason=f"the project environment resolves to '{display_path(resolved_environment)}', a parent of the project",
+        )
+    if resolved_root in resolved_environment.parents:
+        return Containment(inside_root=True, fatal=False)
+    return Containment(
+        inside_root=False,
+        fatal=False,
+        reason=f"the project environment resolves outside the project, to '{display_path(resolved_environment)}'",
+    )
+
+
 def interpreter_candidates(environment: Path) -> Tuple[Path, ...]:
     """List the interpreter names uv requires for this platform's venv layout."""
     if os.name == "nt":
@@ -103,6 +151,7 @@ class EnvironmentReport:
     path: Path
     state: Message
     problems: Tuple[Message, ...] = ()
+    repairable: bool = True
 
     @property
     def needs_repair(self) -> bool:
@@ -121,6 +170,15 @@ class EnvironmentReport:
 def inspect_project_environment(root: Path, environment: Optional[Mapping[str, str]] = None) -> EnvironmentReport:
     """Report whether uv can use this root's project environment as it stands."""
     environment_path = environment_directory(root, environment)
+    position = containment(root, environment_path)
+    if position.fatal:
+        return EnvironmentReport(
+            root=root,
+            path=environment_path,
+            state=STATE_INVALID,
+            problems=(position.reason + "; point UV_PROJECT_ENVIRONMENT at a directory inside the project, or unset it",),
+            repairable=False,
+        )
     if not environment_path.exists() and not environment_path.is_symlink():
         return EnvironmentReport(root=root, path=environment_path, state=STATE_MISSING)
     if not environment_path.is_dir():
@@ -280,7 +338,13 @@ def repair_project_environment(
     if not before.needs_repair:
         return RepairOutcome(before=before, after=before)
 
-    removal = remove_environment(root, before.path, files)
+    position = containment(root, before.path)
+    if position.fatal:
+        raise ValueError(
+            f"{position.reason}, so the repair must not touch it. Point UV_PROJECT_ENVIRONMENT at a directory inside the "
+            f"project, or unset it, then re-run '{REPAIR_COMMAND}'."
+        )
+    removal = remove_environment(root, before.path, files) if position.inside_root else Removal(blocked=position.reason)
     executable = uv_executable or shutil.which("uv") or "uv"
     rebuild: List[Tuple[str, ...]] = []
     if not removal.cleared:
@@ -324,7 +388,7 @@ def report_failure(report: EnvironmentReport) -> None:
     )
     for problem in report.problems:
         print(f"  - {problem}", file=sys.stderr)
-    print(f"  fix: {REPAIR_COMMAND}", file=sys.stderr)
+    print(f"  fix: {REPAIR_COMMAND}" if report.repairable else "  fix: point UV_PROJECT_ENVIRONMENT at a directory inside the project, or unset it", file=sys.stderr)
 
 
 def check(root: Path, as_json: bool) -> int:

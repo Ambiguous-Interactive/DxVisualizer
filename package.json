@@ -63,8 +63,8 @@
     "mcp:repair": "uv run --no-project scripts/uv_environment.py --repair && uv run scripts/mcp_doctor.py --repair",
     "unity:mcp:host": "uv run --no-project scripts/uv_environment.py --repair && uv run scripts/unity_mcp_host.py",
     "unity:mcp:doctor": "uv run --no-project scripts/uv_environment.py --repair && uv run scripts/unity_mcp_doctor.py",
-    "tools:install": "uv run .devcontainer/install_npm_tools.py",
-    "ai:backends:install": "uv run .devcontainer/ai_backends.py install",
+    "tools:install": "uv run --no-project scripts/uv_environment.py --repair && uv run .devcontainer/install_npm_tools.py",
+    "ai:backends:install": "uv run --no-project scripts/uv_environment.py --repair && uv run .devcontainer/ai_backends.py install",
     "format:md": "prettier --write \"**/*.md\"",
     "format:md:check": "prettier --check \"**/*.md\""
   },

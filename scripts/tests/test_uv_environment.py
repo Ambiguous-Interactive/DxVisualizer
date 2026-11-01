@@ -22,7 +22,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Callable, Dict, List, Sequence, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -81,14 +81,17 @@ def new_project_root(prefix: str) -> Path:
     return root
 
 
-def stub_runner(*, build: bool = True, exit_code: int = 0, output: str = "") -> Tuple[List[Sequence[str]], Callable[[Sequence[str], Path], Tuple[int, str]]]:
+def stub_runner(*, build: bool = True, exit_code: int = 0, output: str = "", build_at: Optional[Path] = None) -> Tuple[List[Sequence[str]], Callable[[Sequence[str], Path], Tuple[int, str]]]:
     """Return a fake uv runner and the call log it appends to."""
     calls: List[Sequence[str]] = []
 
     def run(command: Sequence[str], cwd: Path) -> Tuple[int, str]:
         calls.append(list(command))
         if build and exit_code == 0:
-            write_valid_environment(cwd)
+            if build_at is None:
+                write_valid_environment(cwd)
+            else:
+                write_valid_environment(build_at.parent, build_at.name)
         return exit_code, output
 
     return calls, run
@@ -328,6 +331,69 @@ def case_repair_rebuilds_in_place_when_deletion_and_move_are_blocked() -> None:
         remove_temp_root(root)
 
 
+def case_environment_pointing_at_the_project_root_is_refused() -> None:
+    root = new_project_root(prefix="uv-env-root-")
+    try:
+        environment = {"UV_PROJECT_ENVIRONMENT": "."}
+        report = uv_environment.inspect_project_environment(root, environment)
+        assert_true(report.state == uv_environment.STATE_INVALID, f"the project root is never an environment, got {report.state}")
+        assert_true(not report.repairable, "a fatal path must not advertise an automatic repair")
+        calls, run = stub_runner()
+        raised = ""
+        try:
+            uv_environment.repair_project_environment(root, uv_executable="uv", environment=environment, run=run)
+        except ValueError as error:
+            raised = str(error)
+        assert_true(raised != "", "a repair must refuse the project root")
+        assert_true("UV_PROJECT_ENVIRONMENT" in raised, f"the refusal must name the variable to fix, got: {raised}")
+        assert_true(calls == [], f"no uv command may run against a fatal path, got {calls}")
+        assert_true((root / "pyproject.toml").is_file(), "the project root must survive untouched")
+        assert_true(not (root / "pyvenv.cfg").exists(), "nothing may be written into the project root")
+    finally:
+        remove_temp_root(root)
+
+
+def case_environment_pointing_at_an_ancestor_is_refused() -> None:
+    parent = new_temp_root(prefix="uv-env-ancestor-")
+    try:
+        root = parent / "project"
+        root.mkdir()
+        write_fixture_file(root, "pyproject.toml", '[project]\nname = "uv-environment-fixture"\nversion = "0.0.0"\n')
+        environment = {"UV_PROJECT_ENVIRONMENT": ".."}
+        report = uv_environment.inspect_project_environment(root, environment)
+        assert_true(report.state == uv_environment.STATE_INVALID, f"a parent of the project is never an environment, got {report.state}")
+        raised = ""
+        try:
+            uv_environment.repair_project_environment(root, uv_executable="uv", environment=environment, run=stub_runner()[1])
+        except ValueError as error:
+            raised = str(error)
+        assert_true(raised != "", "a repair must refuse a parent of the project")
+        assert_true((root / "pyproject.toml").is_file(), "the project must survive untouched")
+    finally:
+        remove_temp_root(parent)
+
+
+def case_environment_outside_the_project_is_rebuilt_but_never_deleted() -> None:
+    root = new_project_root(prefix="uv-env-outside-project-")
+    outside = new_temp_root(prefix="uv-env-outside-")
+    try:
+        write_interrupted_environment(outside)
+        environment = {"UV_PROJECT_ENVIRONMENT": str(outside / ".venv")}
+        report = uv_environment.inspect_project_environment(root, environment)
+        assert_true(report.state == uv_environment.STATE_INVALID, f"the outside environment is broken, got {report.state}")
+        assert_true(report.repairable, "an outside environment is still repairable, only never deletable")
+        calls, run = stub_runner(build_at=outside / ".venv")
+        outcome = uv_environment.repair_project_environment(root, uv_executable="uv", environment=environment, run=run)
+        assert_true(outcome.quarantined is None, "an outside environment must never be moved")
+        invoked = [tuple(call[1:]) for call in calls]
+        assert_true(invoked == [("venv", "--allow-existing"), ("sync", "--locked")], f"expected the in-place ladder, got {invoked}")
+        assert_true(residue(outside / ".venv").is_file(), "an outside environment keeps its residue instead of being deleted")
+        assert_true(outcome.ok, f"expected a usable environment, got {outcome.after.state} ({outcome.after.problems})")
+    finally:
+        remove_temp_root(root)
+        remove_temp_root(outside)
+
+
 def case_cli_check_fails_with_recovery_guidance() -> None:
     root = new_project_root(prefix="uv-env-cli-")
     try:
@@ -376,7 +442,7 @@ def npm_scripts() -> Dict[str, str]:
 def case_every_uv_npm_script_runs_the_preflight() -> None:
     missing: List[str] = []
     for name, command in npm_scripts().items():
-        if "uv run scripts/" not in command or "--no-project" in command:
+        if "uv run" not in command or name in ("env:check", "env:repair"):
             continue
         if not command.startswith(PREFLIGHT + " && "):
             missing.append(f"{name}: {command}")
@@ -416,6 +482,9 @@ CASES: Sequence[Tuple[str, Callable[[], None]]] = (
     ("repair reports uv output when sync fails", case_repair_reports_uv_output_when_sync_fails),
     ("repair quarantines an environment it cannot delete", case_repair_quarantines_an_environment_it_cannot_delete),
     ("repair rebuilds in place when deletion and a move are blocked", case_repair_rebuilds_in_place_when_deletion_and_move_are_blocked),
+    ("environment pointing at the project root is refused", case_environment_pointing_at_the_project_root_is_refused),
+    ("environment pointing at an ancestor is refused", case_environment_pointing_at_an_ancestor_is_refused),
+    ("environment outside the project is rebuilt but never deleted", case_environment_outside_the_project_is_rebuilt_but_never_deleted),
     ("cli check fails with recovery guidance", case_cli_check_fails_with_recovery_guidance),
     ("cli check accepts healthy and absent environments", case_cli_check_accepts_healthy_and_absent_environments),
     ("cli json reports the environment state", case_cli_json_reports_the_environment_state),
