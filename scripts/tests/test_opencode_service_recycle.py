@@ -159,7 +159,7 @@ class _ServiceFixture:
             env["GITHUB_PERSONAL_ACCESS_TOKEN"] = github_token_value
             env["GITHUB_MCP_PAT"] = pat_value
             self._process = subprocess.Popen(
-                ["bash", "-c", 'printf "%s\\n" "$$" >"$1" && exec sleep 300', "fixture", str(marker)],
+                ["bash", "-c", 'printf "%s\\n" "$$" >"$1" && exec -a "opencode serve --service" sleep 300', "fixture", str(marker)],
                 env=env,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -432,6 +432,41 @@ def case_reports_the_compared_credentials_on_a_match(python: str) -> None:
         fixture.cleanup()
 
 
+def case_ignores_a_record_for_an_unrelated_live_pid(python: str) -> None:
+    # A discovery record can outlive its service and the pid can be reused. The
+    # recycler must check the command line before reading another process's
+    # environment: an unrelated process is a stale record, not a service.
+    fixture = _ServiceFixture()
+    unrelated = subprocess.Popen(
+        ["bash", "-c", "exec sleep 300"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        fixture.write_env_file(f"GITHUB_PERSONAL_ACCESS_TOKEN={LIVE}\n")
+        write_fixture_file(
+            fixture.state_dir(),
+            "service.json",
+            '{ "id": "reused", "version": "2.0.26", "url": "http://127.0.0.1:1", "pid": ' + str(unrelated.pid) + " }\n",
+        )
+        output, exit_code = run_recycle(python, fixture)
+        assert_exit_code(0, "a record for an unrelated process must exit zero", exit_code)
+        assert_true(
+            "is not the opencode service" in output,
+            f"the report must reject the unrelated pid: {output}",
+        )
+        assert_true(unrelated.poll() is None, "the unrelated process must not be touched")
+        assert_true(not fixture.record().exists(), "the stale record must be removed")
+    finally:
+        unrelated.terminate()
+        try:
+            unrelated.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            unrelated.kill()
+            unrelated.wait(timeout=10)
+        fixture.cleanup()
+
+
 def case_missing_service_record_is_a_no_op(python: str) -> None:
     fixture = _ServiceFixture()
     try:
@@ -561,6 +596,7 @@ def main() -> int:
         ("Reports_WhenNothingWasCompared", lambda: case_reports_when_nothing_was_compared(python)),
         ("Reports_TheComparedCredentialsOnAMatch", lambda: case_reports_the_compared_credentials_on_a_match(python)),
         ("MissingServiceRecord_IsANoOp", lambda: case_missing_service_record_is_a_no_op(python)),
+        ("Ignores_RecordForAnUnrelatedLivePid", lambda: case_ignores_a_record_for_an_unrelated_live_pid(python)),
         ("DeadPid_IsCleanedUp", lambda: case_dead_pid_is_cleaned_up(python)),
         ("NoEnvFile_IsANoOp", lambda: case_no_env_file_is_a_no_op(python)),
         ("QuotedAndCrlfEnvFile_IsParsedLikeTheLoader", lambda: case_quoted_and_crlf_env_file_is_parsed_like_the_loader(python)),

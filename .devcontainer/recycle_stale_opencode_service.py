@@ -24,7 +24,9 @@ Safety properties, each covered by a contract test:
 * A service whose credential MATCHES .env.local is never touched, and the
   report names the compared keys so a caller can tell a match from an
   unjudged key.
-* A record whose pid is gone is removed (clients must not attach to it).
+* A record whose pid is gone, or whose pid now belongs to another process,
+  is removed (clients must not attach to it, and a reused pid must never
+  be judged or named to the operator).
 * No .env.local means nothing to compare against, so nothing to do.
 * Credential VALUES are never printed - only variable NAMES.
 * Missing evidence fails safe: an unreadable environment or
@@ -73,6 +75,8 @@ CREDENTIAL_KEYS: Tuple[str, ...] = (
 # or the environment contains can reach a shell parser: pids and paths travel
 # as argv, never as interpolated script text.
 SERVICE_ENVIRON_CHILD = 'cat "/proc/$1/environ" 2>/dev/null'
+
+SERVICE_CMDLINE_CHILD = 'tr "\\0" " " < "/proc/$1/cmdline" 2>/dev/null'
 
 PID_ALIVE_CHILD = 'kill -0 "$1" 2>/dev/null'
 
@@ -128,6 +132,18 @@ def _parse_env_entries(raw: bytes) -> Dict[str, str]:
         if key in CREDENTIAL_KEYS:
             values[key] = value_bytes.decode("utf-8", errors="surrogateescape")
     return values
+
+
+def is_opencode_service(pid: int) -> bool:
+    """Whether the pid's command line is the opencode service.
+
+    A discovery record can outlive its service, and the operating system may
+    reuse the pid. Reading another process's environment would then invent a
+    credential finding and the doctor would name an unrelated process to stop,
+    so the command line must name the service before anything is judged.
+    """
+    command_line = _bash_child_output(SERVICE_CMDLINE_CHILD, [str(pid)]).decode("utf-8", errors="surrogateescape")
+    return "opencode" in command_line and "serve" in command_line
 
 
 def read_env_file_values(env_file: Path) -> Dict[str, str]:
@@ -264,6 +280,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if not pid_alive(pid):
         print(f"recycle: service pid {pid} not running; removing stale discovery record")
+        if not options.dry_run:
+            remove_record(record)
+        return 0
+
+    if not is_opencode_service(pid):
+        print(f"recycle: service pid {pid} is not the opencode service; removing stale discovery record")
         if not options.dry_run:
             remove_record(record)
         return 0

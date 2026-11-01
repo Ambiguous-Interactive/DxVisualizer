@@ -471,7 +471,7 @@ def _spawn_service_fixture(credential_env: Dict[str, str]) -> subprocess.Popen:
         env.pop(key, None)
     env.update(credential_env)
     return subprocess.Popen(
-        ["bash", "-c", "exec sleep 60"],
+        ["bash", "-c", 'exec -a "opencode serve --service" sleep 60'],
         env=env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -564,6 +564,34 @@ def case_doctor_explains_how_to_restart_an_unjudged_service() -> None:
         sandbox.destroy()
 
 
+def case_doctor_rejects_a_record_for_an_unrelated_live_pid() -> None:
+    # A reused pid must not become a stop instruction: the doctor reports the
+    # stale record instead of asking the operator to kill an unrelated process.
+    if not _service_fixture_available():
+        print("    SKIP: the service fixture needs a POSIX host with bash and /proc.")
+        return
+    sandbox = Sandbox()
+    sandbox.write_env_file(f"GITHUB_PERSONAL_ACCESS_TOKEN={LIVE}\nZAI_API_KEY=zai-secret-placeholder\n")
+    unrelated = subprocess.Popen(
+        ["bash", "-c", "exec sleep 60"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        _write_service_record(sandbox, unrelated.pid)
+        sandbox.run_isolated(
+            DOCTOR,
+            extra_env={"XDG_STATE_HOME": str(sandbox.home / ".local" / "state")},
+        )
+        assert_contains("doctor rejects the unrelated pid", "not the opencode service", sandbox.stdout)
+        assert_not_contains("an unrelated process must not be named for a stop", "Stop the process named by the pid", sandbox.stdout)
+        assert_not_contains("an unrelated process is not a failure", "❌", sandbox.stdout)
+    finally:
+        unrelated.terminate()
+        unrelated.wait(timeout=10)
+        sandbox.destroy()
+
+
 def case_doctor_reports_nothing_to_compare() -> None:
     # The file defines no credential the service names, so no pair exists to
     # judge: the doctor reports that, not a match and not a restart remedy.
@@ -634,6 +662,7 @@ CASES = (
     case_doctor_passes_a_healthy_shared_service,
     case_doctor_explains_how_to_restart_an_unjudged_service,
     case_doctor_reports_nothing_to_compare,
+    case_doctor_rejects_a_record_for_an_unrelated_live_pid,
     case_repair_reconciles_divergent_github_pair,
     case_repair_refuses_when_neither_credential_authenticates,
     case_repair_respects_reverse_divergence,

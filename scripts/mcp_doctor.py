@@ -245,6 +245,13 @@ class Doctor:
         if 'not running' in output:
             self.report('ℹ️', 'shared opencode service: the discovery record names a dead pid; post_start cleans it at the next start.')
             return
+        if 'is not the opencode service' in output:
+            self.report(
+                'ℹ️',
+                f'shared opencode service: the discovery record {record} names a pid that is not the opencode service; '
+                'post_start removes the record at the next start.',
+            )
+            return
         if completed.returncode != 0:
             self.report('ℹ️', f'shared opencode service: recycler dry run exited {completed.returncode}; run it manually for depth.')
             return
@@ -255,7 +262,7 @@ class Doctor:
             self.report(
                 '⚠️',
                 'shared opencode service names no tracked credential and keeps its start environment. Stop the '
-                'process named by the pid in ~/.local/state/opencode/service.json, then start an agent CLI from a '
+                f'process named by the pid in {record}, then start an agent CLI from a '
                 'shell that loads .env.local.',
             )
             return
