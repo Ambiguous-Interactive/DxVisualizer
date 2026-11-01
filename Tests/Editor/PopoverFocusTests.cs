@@ -212,7 +212,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         public IEnumerator ShouldFocusTheCreateButtonAfterDeletingTheLastObject()
         {
             using TestCleanupScope cleanup = new();
-            Type type = typeof(TestDataObject);
+            Type type = typeof(LastObjectDeleteData);
             DataVisualizerWindow window = OpenSettingsWindow(
                 cleanup,
                 "PopoverDeleteLastFocus",
@@ -226,7 +226,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             AssetDatabase.CreateFolder("Assets", folder.Substring("Assets/".Length));
             cleanup.Defer(() => AssetDatabase.DeleteAsset(folder));
             string path = folder + "/Only.asset";
-            AssetDatabase.CreateAsset(ScriptableObject.CreateInstance<TestDataObject>(), path);
+            AssetDatabase.CreateAsset(ScriptableObject.CreateInstance<LastObjectDeleteData>(), path);
             AssetDatabase.SaveAssets();
             ReadPrivateField<NamespaceController>(window, "_namespaceController").SelectType(window, type);
             yield return WaitForRefresh(window);
@@ -250,6 +250,12 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 yield return null;
             }
             Assert.That(Display(confirm), Is.EqualTo(DisplayStyle.Flex), "Delete opens the confirmation popover.");
+            /*
+                Key events reach the focused element, and the popover takes focus on a
+                scheduled tick after it becomes visible. Sending the confirm key earlier
+                delivers it to the object list instead of the dialog.
+            */
+            yield return WaitForFocus(window, confirm);
             SendConfirmKey(confirm.Q(className: "popover-drag-handle"));
             yield return WaitForFocus(window, create);
             Assert.That(AssetDatabase.LoadAssetAtPath<ScriptableObject>(path) == null, "The confirmed delete removes the last asset.");
