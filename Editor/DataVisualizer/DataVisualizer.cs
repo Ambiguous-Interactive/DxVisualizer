@@ -4056,7 +4056,7 @@ namespace WallstopStudios.DataVisualizer.Editor
         private void CloseActivePopover(bool restoreFocus)
         {
             VisualElement closingPopover = _activePopover;
-            VisualElement focusTarget = restoreFocus && HasFocusInside(closingPopover) ? _popoverTrigger : null;
+            VisualElement focusTarget = restoreFocus && ShouldRestorePopoverFocus(closingPopover) ? _popoverTrigger : null;
             _popoverTrigger = null;
             _lastActiveFocusArea = FocusArea.None;
             if (_activePopover == _searchPopover)
@@ -4131,15 +4131,16 @@ namespace WallstopStudios.DataVisualizer.Editor
             }
         }
 
-        private bool HasFocusInside(VisualElement element)
+        /*
+            Keyboard dismissal and the popover's own buttons keep focus on the popover,
+            while an outside click on a plain element clears panel focus. Both need the
+            trigger back. A click on another focusable control moves focus there instead,
+            and that choice must win over the closing popover.
+        */
+        private bool ShouldRestorePopoverFocus(VisualElement popover)
         {
-            if (element == null)
-            {
-                return false;
-            }
-
             VisualElement focused = rootVisualElement?.focusController?.focusedElement as VisualElement;
-            return focused != null && (focused == element || element.Contains(focused));
+            return focused == null || popover == null || popover == focused || popover.Contains(focused);
         }
 
         private void HandleButtonPointer(EventBase evt)

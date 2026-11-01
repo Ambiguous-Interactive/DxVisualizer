@@ -72,6 +72,29 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             InvokePrivate(window, "LoadInitialContent");
         }
 
+        private static DataVisualizerWindow OpenSettingsWindow(
+            TestCleanupScope cleanup,
+            string outputName,
+            out PerfWindowStateScope state,
+            Action<PerfWindowStateScope> configure = null
+        )
+        {
+            DocsImageCapture.WindowPreferenceSnapshot preferences = DocsImageCapture.WindowPreferenceSnapshot.Capture();
+            cleanup.Defer(preferences.Restore);
+            preferences.ApplyWidePanes();
+            cleanup.Defer(() => AssetGuidTypeIndex.Shared.Cancel());
+            DataVisualizerSettings settings = ScriptableObject.CreateInstance<DataVisualizerSettings>();
+            cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(settings));
+            string output = "Temp/" + outputName + "-" + Guid.NewGuid().ToString("N");
+            cleanup.Defer(() => System.IO.Directory.Delete(output, recursive: true));
+            state = new PerfWindowStateScope(settings, new DataVisualizerUserState(), output);
+            configure?.Invoke(state);
+            DataVisualizerWindow window = ScriptableObject.CreateInstance<DataVisualizerWindow>();
+            cleanup.Defer(() => EditorSurfaceCapture.CloseWindow(window));
+            CreateShownWindow(window, state);
+            return window;
+        }
+
         private static IEnumerator WaitForRefresh(DataVisualizerWindow window)
         {
             AssetChangeRefreshService service = ReadPrivateField<AssetChangeRefreshService>(window, "_assetChanges");
@@ -102,18 +125,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         public IEnumerator ShouldReturnFocusToTheTriggerWhenAPopoverCloses()
         {
             using TestCleanupScope cleanup = new();
-            DocsImageCapture.WindowPreferenceSnapshot preferences = DocsImageCapture.WindowPreferenceSnapshot.Capture();
-            cleanup.Defer(preferences.Restore);
-            preferences.ApplyWidePanes();
-            cleanup.Defer(() => AssetGuidTypeIndex.Shared.Cancel());
-            DataVisualizerSettings settings = ScriptableObject.CreateInstance<DataVisualizerSettings>();
-            cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(settings));
-            string output = "Temp/PopoverFocus-" + Guid.NewGuid().ToString("N");
-            cleanup.Defer(() => System.IO.Directory.Delete(output, recursive: true));
-            using PerfWindowStateScope state = new(settings, new DataVisualizerUserState(), output);
-            DataVisualizerWindow window = ScriptableObject.CreateInstance<DataVisualizerWindow>();
-            cleanup.Defer(() => EditorSurfaceCapture.CloseWindow(window));
-            CreateShownWindow(window, state);
+            using PerfWindowStateScope state = OpenSettingsWindow(cleanup, "PopoverFocus", out DataVisualizerWindow window);
             yield return null;
 
             Button trigger = ReadPrivateField<Button>(window, "_settingsButton");
@@ -134,21 +146,49 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         }
 
         [UnityTest]
+        public IEnumerator ShouldReturnFocusToTheTriggerWhenAnOutsideClickClearsFocus()
+        {
+            using TestCleanupScope cleanup = new();
+            using PerfWindowStateScope state = OpenSettingsWindow(cleanup, "PopoverOutsideClick", out DataVisualizerWindow window);
+            yield return null;
+
+            Button trigger = ReadPrivateField<Button>(window, "_settingsButton");
+            VisualElement popover = ReadPrivateField<VisualElement>(window, "_settingsPopover");
+            trigger.Focus();
+            yield return null;
+            InvokePrivate(window, "TogglePopover", popover, trigger);
+            yield return WaitForFocus(window, popover);
+            Assert.That(Focused(window), Is.SameAs(popover), "An open popover owns focus.");
+
+            // A pointer press on a plain element clears panel focus, and the press then closes the popover.
+            popover.Blur();
+            Assert.That(Focused(window) == null, "A plain outside element leaves no focused control.");
+            using (PointerDownEvent outside = PointerDownEvent.GetPooled(new Event { type = EventType.MouseDown, button = 0 }))
+            {
+                outside.target = window.rootVisualElement;
+                window.rootVisualElement.SendEvent(outside);
+            }
+
+            yield return WaitForFocus(window, trigger);
+            Assert.That(Display(popover), Is.EqualTo(DisplayStyle.None));
+            Assert.That(Focused(window), Is.SameAs(trigger), "An outside click that clears focus returns it to the trigger.");
+        }
+
+        [UnityTest]
         public IEnumerator ShouldKeepFocusInTheObjectListAfterAConfirmedDelete()
         {
             using TestCleanupScope cleanup = new();
-            DocsImageCapture.WindowPreferenceSnapshot preferences = DocsImageCapture.WindowPreferenceSnapshot.Capture();
-            cleanup.Defer(preferences.Restore);
-            preferences.ApplyWidePanes();
-            cleanup.Defer(() => AssetGuidTypeIndex.Shared.Cancel());
-            DataVisualizerSettings settings = ScriptableObject.CreateInstance<DataVisualizerSettings>();
-            cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(settings));
-            string output = "Temp/PopoverDeleteFocus-" + Guid.NewGuid().ToString("N");
-            cleanup.Defer(() => System.IO.Directory.Delete(output, recursive: true));
-            using PerfWindowStateScope state = new(settings, new DataVisualizerUserState(), output);
             Type type = typeof(TestDataObject);
-            state.UserState.managedTypeNames.Add(type.FullName);
-            state.Settings.HydrateFrom(state.UserState);
+            using PerfWindowStateScope state = OpenSettingsWindow(
+                cleanup,
+                "PopoverDeleteFocus",
+                out DataVisualizerWindow window,
+                scope =>
+                {
+                    scope.UserState.managedTypeNames.Add(type.FullName);
+                    scope.Settings.HydrateFrom(scope.UserState);
+                }
+            );
             string folder = "Assets/PopoverDeleteFocus_" + Guid.NewGuid().ToString("N");
             AssetDatabase.CreateFolder("Assets", folder.Substring("Assets/".Length));
             cleanup.Defer(() => AssetDatabase.DeleteAsset(folder));
@@ -158,9 +198,6 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 AssetDatabase.CreateAsset(ScriptableObject.CreateInstance<TestDataObject>(), path);
             }
             AssetDatabase.SaveAssets();
-            DataVisualizerWindow window = ScriptableObject.CreateInstance<DataVisualizerWindow>();
-            cleanup.Defer(() => EditorSurfaceCapture.CloseWindow(window));
-            CreateShownWindow(window, state);
             ReadPrivateField<NamespaceController>(window, "_namespaceController").SelectType(window, type);
             yield return WaitForRefresh(window);
             EditorSurfaceCapture.SettleLayout(window);
