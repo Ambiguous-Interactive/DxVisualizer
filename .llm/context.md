@@ -200,6 +200,15 @@ Layers: the pre-commit framework hook runs CSharpier, the combined C# source-pol
 process), and the fast `.llm` checks on staged files; `npm run check:fast` is the per-iteration loop; `npm run check:gate` is the review gate; CI (`.github/workflows/llm-lint.yml`)
 runs everything, including the Prettier Markdown check, on ubuntu and windows. CSharpier and member ordering run via the pre-commit config on staged `.cs` files.
 
+### Python environment recovery
+
+`uv` refuses to use `.venv` when that directory exists but is not a virtual environment. An interrupted first `uv run` leaves the partial build behind (on Windows a hardlinked
+`.venv/Scripts/python.exe` with no `pyvenv.cfg`), and every npm script that reaches uv then fails with `failed to locate pyvenv.cfg` before Python starts. Every npm script that
+reaches uv, except `env:check`, runs `uv run --no-project scripts/uv_environment.py --repair` first; the repair deletes the unusable directory, moves it to the gitignored
+`.artifacts/` tree when deletion is refused, or rebuilds in place with `uv venv --allow-existing` when the file system blocks both, then syncs from `uv.lock`. An invalid
+`UV_PROJECT_ENVIRONMENT` that resolves outside the project is rebuilt in place and never deleted, and one that resolves to the project root or a parent is refused.
+`npm run env:check` reports the state and `npm run env:repair` runs the same repair by hand.
+
 ### Testing
 
 - Close every shown temporary `EditorWindow` through `EditorWindow.Close()`, including popup captures and benchmarks. `DestroyImmediate(window)` alone leaves its native host and

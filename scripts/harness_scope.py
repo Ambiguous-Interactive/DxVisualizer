@@ -123,6 +123,11 @@ SUBJECTS_BY_PATH: Dict[str, Tuple[str, ...]] = {
     "scripts/markdown_check.py.meta": ("test_markdown_check.py",),
     "scripts/tests/test_markdown_check.py.meta": ("test_markdown_check.py",),
     "scripts/fast_check.py": ("test_fast_check.py",),
+    # The uv environment preflight gates every npm uv script, so its subject
+    # also covers the package.json preflight contract pinned in that suite.
+    "scripts/uv_environment.py": ("test_uv_environment.py",),
+    "scripts/uv_environment.py.meta": ("test_uv_environment.py",),
+    "scripts/tests/test_uv_environment.py.meta": ("test_uv_environment.py",),
     "scripts/gate.py": ("test_gate.py",),
     "pyproject.toml": ("test_gate.py",),
     "uv.lock": ("test_gate.py",),
