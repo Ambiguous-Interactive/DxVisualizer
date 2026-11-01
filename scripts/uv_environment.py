@@ -224,10 +224,16 @@ def foreign_platform_problem(environment: Path) -> Optional[Message]:
             values.append(value.strip())
 
     def matches(style: Message, value: Message) -> bool:
-        windows_style = bool(re.match(r"^[A-Za-z]:[\\/]", value)) or value.startswith("\\") or value.startswith("//")
+        # A drive letter or a backslash UNC path is Windows-only. A leading
+        # `//` is ambiguous: Windows reads it as a UNC share, and POSIX permits
+        # it as a path, so it only counts as Windows for a Windows host. That
+        # keeps a real Windows environment from reading as foreign there, and
+        # keeps a POSIX `//usr/bin` environment from being rebuilt as foreign.
+        windows_only = bool(re.match(r"^[A-Za-z]:[\\/]", value)) or value.startswith("\\")
+        forward_unc = value.startswith("//") and os.name == "nt"
         if style == "windows":
-            return windows_style
-        return value.startswith("/") and not value.startswith("//")
+            return windows_only or forward_unc
+        return value.startswith("/") and not forward_unc
 
     styles: Dict[Message, bool] = {
         "windows": any(matches("windows", value) for value in values),

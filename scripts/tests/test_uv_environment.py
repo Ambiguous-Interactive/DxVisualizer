@@ -561,19 +561,17 @@ def case_foreign_path_naming_ignores_a_native_unc_path() -> None:
         remove_temp_root(root)
 
 
-def case_forward_slash_unc_path_is_windows_style() -> None:
+def case_forward_slash_double_slash_path_is_never_foreign() -> None:
     root = new_temp_root(prefix="uv-env-unc-forward-")
     try:
         environment = write_valid_environment(root)
-        document = f"home = //server/share/Python\nbase-home = {native_home()}\n"
-        (environment / "pyvenv.cfg").write_text(document, encoding="utf-8")
+        # `//` is a UNC share on Windows and a legal POSIX path, so it must never
+        # justify calling the environment foreign on either platform.
+        (environment / "pyvenv.cfg").write_text("home = //server/share/Python\n", encoding="utf-8")
         report = inspect_project(root)
         message = " ".join(report.problems)
-        if sys.platform.startswith("win"):
-            assert_true(report.state == uv_environment.STATE_VALID, f"a UNC path is native to Windows, got {report.state} ({message})")
-        else:
-            assert_true(report.state == uv_environment.STATE_INVALID, f"a UNC path belongs to Windows, got {report.state}")
-            assert_true("Windows interpreter" in message, f"expected the Windows label, got: {message}")
+        assert_true(report.state == uv_environment.STATE_VALID, f"an ambiguous // path must not be foreign, got {report.state} ({message})")
+        assert_true("another operating system" not in message, f"an ambiguous // path must not be reported foreign, got: {message}")
     finally:
         remove_temp_root(root)
 
@@ -672,7 +670,7 @@ CASES: Sequence[Tuple[str, Callable[[], None]]] = (
     ("environment built by another operating system is invalid", case_environment_built_by_another_operating_system_is_invalid),
     ("mixed-platform pyvenv.cfg is invalid", case_mixed_platform_pyvenv_is_invalid),
     ("foreign path naming ignores a native UNC path", case_foreign_path_naming_ignores_a_native_unc_path),
-    ("forward-slash UNC path is windows style", case_forward_slash_unc_path_is_windows_style),
+    ("forward-slash double-slash path is never foreign", case_forward_slash_double_slash_path_is_never_foreign),
     ("devcontainer keeps its environment outside the checkout", case_devcontainer_keeps_its_environment_outside_the_checkout),
     ("environment with an unresolvable path is refused", case_environment_with_an_unresolvable_path_is_refused),
     ("environment from a dot-dot path is refused", case_environment_from_a_dot_dot_path_is_refused),
