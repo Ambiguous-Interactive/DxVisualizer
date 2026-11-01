@@ -224,9 +224,10 @@ def foreign_platform_problem(environment: Path) -> Optional[Message]:
             values.append(value.strip())
 
     def matches(style: Message, value: Message) -> bool:
+        windows_style = bool(re.match(r"^[A-Za-z]:[\\/]", value)) or value.startswith("\\") or value.startswith("//")
         if style == "windows":
-            return bool(re.match(r"^[A-Za-z]:[\\/]", value)) or value.startswith("\\\\")
-        return value.startswith("/")
+            return windows_style
+        return value.startswith("/") and not value.startswith("//")
 
     styles: Dict[Message, bool] = {
         "windows": any(matches("windows", value) for value in values),
