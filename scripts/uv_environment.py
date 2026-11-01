@@ -222,20 +222,25 @@ def foreign_platform_problem(environment: Path) -> Optional[Message]:
         key, _, value = line.partition("=")
         if key.strip() in ("home", "executable", "base-executable", "base-prefix", "base-home"):
             values.append(value.strip())
+
+    def matches(style: Message, value: Message) -> bool:
+        if style == "windows":
+            return bool(re.match(r"^[A-Za-z]:[\\/]", value)) or value.startswith("\\\\")
+        return value.startswith("/")
+
     styles: Dict[Message, bool] = {
-        "windows": any(re.match(r"^[A-Za-z]:[\\/]", value) or value.startswith("\\\\") for value in values),
-        "posix": any(value.startswith("/") for value in values),
+        "windows": any(matches("windows", value) for value in values),
+        "posix": any(matches("posix", value) for value in values),
     }
     # Any path from the other platform proves the file describes a foreign
-    # interpreter, even when a second key names this platform.
+    # interpreter, even when a second key names this platform. A UNC path is a
+    # Windows path, so it only identifies the Windows style.
     foreign_style = "posix" if os.name == "nt" else "windows"
     if not styles[foreign_style]:
         return None
     names: Dict[Message, Message] = {"windows": "Windows", "posix": "POSIX"}
-    patterns: Dict[Message, Message] = {"windows": r"^[A-Za-z]:[\\/]", "posix": r"^/"}
-    other = names[foreign_style]
-    example = next((value for value in values if re.match(patterns[foreign_style], value) or value.startswith("\\\\")), "")
-    return f"pyvenv.cfg describes a {other} interpreter ('{example}'), so this environment was built on another operating system"
+    example = next((value for value in values if matches(foreign_style, value)), "")
+    return f"pyvenv.cfg describes a {names[foreign_style]} interpreter ('{example}'), so this environment was built on another operating system"
 
 
 def inspect_project_environment(root: Path, environment: Optional[Mapping[str, str]] = None) -> EnvironmentReport:

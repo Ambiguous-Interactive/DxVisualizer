@@ -538,6 +538,29 @@ def case_mixed_platform_pyvenv_is_invalid() -> None:
         remove_temp_root(root)
 
 
+def case_foreign_path_naming_ignores_a_native_unc_path() -> None:
+    root = new_temp_root(prefix="uv-env-unc-")
+    try:
+        environment = write_valid_environment(root)
+        unc = "\\\\server\\share\\Python"
+        (environment / "pyvenv.cfg").write_text(f"home = {unc}\nbase-home = {foreign_home()}\n", encoding="utf-8")
+        report = inspect_project(root)
+        assert_true(report.state == uv_environment.STATE_INVALID, f"a mixed-platform file is unusable, got {report.state}")
+        message = " ".join(report.problems)
+        # The quoted value must belong to the foreign platform. A UNC path is a
+        # Windows path, so Windows must never quote it as the foreign one.
+        assert_true("another operating system" in message, f"expected the foreign-platform reason, got: {message}")
+        if sys.platform.startswith("win"):
+            assert_true(foreign_home() in message, f"expected the POSIX path quoted on Windows, got: {message}")
+            assert_true(unc not in message, f"a Windows path must not be quoted as foreign on Windows, got: {message}")
+        else:
+            assert_true(foreign_home() in message or unc in message, f"expected a Windows path quoted on POSIX, got: {message}")
+            assert_true("Windows interpreter" in message, f"expected the Windows label, got: {message}")
+        assert_true(native_home() not in message, f"a native path must never be quoted as foreign, got: {message}")
+    finally:
+        remove_temp_root(root)
+
+
 def case_cli_check_fails_with_recovery_guidance() -> None:
     root = new_project_root(prefix="uv-env-cli-")
     try:
@@ -631,6 +654,7 @@ CASES: Sequence[Tuple[str, Callable[[], None]]] = (
     ("environment outside the project is rebuilt but never deleted", case_environment_outside_the_project_is_rebuilt_but_never_deleted),
     ("environment built by another operating system is invalid", case_environment_built_by_another_operating_system_is_invalid),
     ("mixed-platform pyvenv.cfg is invalid", case_mixed_platform_pyvenv_is_invalid),
+    ("foreign path naming ignores a native UNC path", case_foreign_path_naming_ignores_a_native_unc_path),
     ("devcontainer keeps its environment outside the checkout", case_devcontainer_keeps_its_environment_outside_the_checkout),
     ("environment with an unresolvable path is refused", case_environment_with_an_unresolvable_path_is_refused),
     ("environment from a dot-dot path is refused", case_environment_from_a_dot_dot_path_is_refused),
