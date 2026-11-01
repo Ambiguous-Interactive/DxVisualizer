@@ -34,6 +34,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SCRIPT = REPO_ROOT / "scripts" / "uv_environment.py"
 PACKAGE_JSON = REPO_ROOT / "package.json"
 PREFLIGHT = "uv run --no-project scripts/uv_environment.py --repair"
+RESIDUE = ".partial-bootstrap"
 GUIDANCE = "npm run env:repair"
 
 
@@ -53,13 +54,24 @@ def write_valid_environment(root: Path, relative: str = ".venv") -> Path:
 
 
 def write_interrupted_environment(root: Path, relative: str = ".venv") -> Path:
-    """Reproduce the host residue: a copied launcher, no pyvenv.cfg."""
+    """Reproduce the host residue: a copied launcher, no pyvenv.cfg.
+
+    RESIDUE names the partial-bootstrap evidence. A copied launcher alone is
+    the residue on Windows but a normal name in a finished environment there,
+    so the assertions track the marker instead of the platform filename.
+    """
     environment = root / relative
     launcher = environment / "Scripts" / "python.exe"
     launcher.parent.mkdir(parents=True, exist_ok=True)
     launcher.write_text("", encoding="utf-8")
     (environment / ".lock").write_text("", encoding="utf-8")
+    (environment / RESIDUE).write_text("", encoding="utf-8")
     return environment
+
+
+def residue(environment: Path) -> Path:
+    """Return the partial-bootstrap marker path inside an environment."""
+    return environment / RESIDUE
 
 
 def new_project_root(prefix: str) -> Path:
@@ -115,7 +127,9 @@ def case_interrupted_windows_residue_is_invalid() -> None:
         assert_true(report.needs_repair, "an interrupted environment must request repair")
         assert_true(report.path == environment, f"expected {environment}, got {report.path}")
         assert_true(any("pyvenv.cfg" in problem for problem in report.problems), f"expected a pyvenv.cfg problem, got {report.problems}")
-        assert_true(any("interpreter" in problem for problem in report.problems), f"expected an interpreter problem, got {report.problems}")
+        reports_interpreter = any("interpreter" in problem for problem in report.problems)
+        expected_interpreter = not sys.platform.startswith("win")
+        assert_true(reports_interpreter == expected_interpreter, f"interpreter problem reporting must match the platform layout, got {report.problems}")
     finally:
         remove_temp_root(root)
 
@@ -200,7 +214,7 @@ def case_repair_rebuilds_an_invalid_environment() -> None:
         assert_true(len(calls) == 1, f"expected one uv invocation, got {calls}")
         assert_true(Path(calls[0][0]) == Path("uv"), f"expected the uv executable first, got {calls[0]}")
         assert_true(tuple(calls[0][1:]) == ("sync", "--locked"), f"expected the lock-faithful sync, got {calls[0]}")
-        assert_true(not (root / ".venv" / "Scripts" / "python.exe").exists(), "the interrupted residue must not survive the repair")
+        assert_true(not residue(root / ".venv").exists(), "the interrupted residue must not survive the repair")
     finally:
         remove_temp_root(root)
 
@@ -278,9 +292,9 @@ def case_repair_quarantines_an_environment_it_cannot_delete() -> None:
         quarantined = outcome.quarantined
         assert_true(quarantined is not None, "an environment that cannot be deleted must be moved aside")
         assert_true(quarantined is not None and quarantined.is_dir(), f"expected the moved directory to exist, got {quarantined}")
-        assert_true(quarantined is not None and (quarantined / "Scripts" / "python.exe").is_file(), "the residue must survive in quarantine for a post-mortem")
+        assert_true(quarantined is not None and residue(quarantined).is_file(), "the residue must survive in quarantine for a post-mortem")
         assert_true(quarantined is not None and ".artifacts" in quarantined.parts, f"quarantine must land in the gitignored artifacts tree, got {quarantined}")
-        assert_true(not (environment / "Scripts" / "python.exe").exists(), "the environment path must hold only the rebuilt environment")
+        assert_true(not residue(environment).exists(), "the environment path must hold only the rebuilt environment")
         assert_true(not outcome.rebuilt_in_place, "a successful move leaves nothing to rebuild around")
         assert_true(outcome.ok, f"expected a healthy environment, got {outcome.after.state} ({outcome.after.problems})")
         assert_true([tuple(call[1:]) for call in calls] == [("sync", "--locked")], f"expected one lock-faithful sync, got {calls}")
@@ -307,7 +321,7 @@ def case_repair_rebuilds_in_place_when_deletion_and_move_are_blocked() -> None:
         assert_true(outcome.rebuilt_in_place, "the last tier must rebuild around the residue")
         invoked = [tuple(call[1:]) for call in calls]
         assert_true(invoked == [("venv", "--allow-existing"), ("sync", "--locked")], f"expected the in-place ladder, got {invoked}")
-        assert_true((environment / "Scripts" / "python.exe").is_file(), "the inert residue is expected to stay in the last tier")
+        assert_true(residue(environment).is_file(), "the inert residue is expected to stay in the last tier")
         assert_true(outcome.ok, f"expected a usable environment, got {outcome.after.state} ({outcome.after.problems})")
         assert_true("in place" in uv_environment.describe_repair(outcome), f"expected the in-place explanation, got: {uv_environment.describe_repair(outcome)}")
     finally:
