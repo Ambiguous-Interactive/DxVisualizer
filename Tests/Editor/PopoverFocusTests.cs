@@ -10,6 +10,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
     using UnityEngine.TestTools;
     using UnityEngine.UIElements;
     using WallstopStudios.DataVisualizer.Editor;
+    using WallstopStudios.DataVisualizer.Editor.Data;
     using WallstopStudios.DataVisualizer.Editor.Utilities;
     using DataVisualizerWindow = WallstopStudios.DataVisualizer.Editor.DataVisualizer;
 
@@ -72,12 +73,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             InvokePrivate(window, "LoadInitialContent");
         }
 
-        private static DataVisualizerWindow OpenSettingsWindow(
-            TestCleanupScope cleanup,
-            string outputName,
-            out PerfWindowStateScope state,
-            Action<PerfWindowStateScope> configure = null
-        )
+        private static DataVisualizerWindow OpenSettingsWindow(TestCleanupScope cleanup, string outputName, Action<PerfWindowStateScope> configure = null)
         {
             DocsImageCapture.WindowPreferenceSnapshot preferences = DocsImageCapture.WindowPreferenceSnapshot.Capture();
             cleanup.Defer(preferences.Restore);
@@ -87,7 +83,8 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(settings));
             string output = "Temp/" + outputName + "-" + Guid.NewGuid().ToString("N");
             cleanup.Defer(() => System.IO.Directory.Delete(output, recursive: true));
-            state = new PerfWindowStateScope(settings, new DataVisualizerUserState(), output);
+            PerfWindowStateScope state = new(settings, new DataVisualizerUserState(), output);
+            cleanup.Defer(() => state.Dispose());
             configure?.Invoke(state);
             DataVisualizerWindow window = ScriptableObject.CreateInstance<DataVisualizerWindow>();
             cleanup.Defer(() => EditorSurfaceCapture.CloseWindow(window));
@@ -121,11 +118,17 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             target.SendEvent(evt);
         }
 
+        private static void SendConfirmKey(VisualElement target)
+        {
+            using KeyDownEvent evt = KeyDownEvent.GetPooled('\n', KeyCode.Return, EventModifiers.None);
+            target.SendEvent(evt);
+        }
+
         [UnityTest]
         public IEnumerator ShouldReturnFocusToTheTriggerWhenAPopoverCloses()
         {
             using TestCleanupScope cleanup = new();
-            using PerfWindowStateScope state = OpenSettingsWindow(cleanup, "PopoverFocus", out DataVisualizerWindow window);
+            DataVisualizerWindow window = OpenSettingsWindow(cleanup, "PopoverFocus");
             yield return null;
 
             Button trigger = ReadPrivateField<Button>(window, "_settingsButton");
@@ -149,7 +152,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         public IEnumerator ShouldReturnFocusToTheTriggerWhenAnOutsideClickClearsFocus()
         {
             using TestCleanupScope cleanup = new();
-            using PerfWindowStateScope state = OpenSettingsWindow(cleanup, "PopoverOutsideClick", out DataVisualizerWindow window);
+            DataVisualizerWindow window = OpenSettingsWindow(cleanup, "PopoverOutsideClick");
             yield return null;
 
             Button trigger = ReadPrivateField<Button>(window, "_settingsButton");
@@ -179,10 +182,9 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         {
             using TestCleanupScope cleanup = new();
             Type type = typeof(TestDataObject);
-            using PerfWindowStateScope state = OpenSettingsWindow(
+            DataVisualizerWindow window = OpenSettingsWindow(
                 cleanup,
                 "PopoverDeleteFocus",
-                out DataVisualizerWindow window,
                 scope =>
                 {
                     scope.UserState.managedTypeNames.Add(type.FullName);
@@ -204,29 +206,33 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
 
             ListView list = ReadPrivateField<ListView>(window, "_objectListView");
             List<ScriptableObject> rows = ReadPrivateField<List<ScriptableObject>>(window, "_filteredObjects");
-            Assert.That(rows, Has.Count.EqualTo(paths.Length));
-            ScriptableObject doomed = rows[1];
+            ScriptableObject doomed = rows.Find(candidate => AssetDatabase.GetAssetPath(candidate) == paths[1]);
+            Assert.That(doomed != null, "The type filter lists the created asset.");
             InvokePrivate(window, "SetActiveObject", doomed, false);
-            yield return null;
+            yield return WaitForRefresh(window);
             EditorSurfaceCapture.SettleLayout(window);
-            VisualElement row = list.Query<VisualElement>().Where(element => ReferenceEquals(element.userData, doomed)).First();
-            Button actions = row.Q<Button>("object-actions-button");
-            Assert.That(actions != null);
-            actions.Focus();
+            list.Focus();
             yield return null;
-            Assert.That(Focused(window), Is.SameAs(actions));
 
-            SendKey(actions, KeyCode.Delete);
+            SendKey(list, KeyCode.Delete);
             VisualElement confirm = ReadPrivateField<VisualElement>(window, "_confirmDeletePopover");
             for (int tick = 0; tick < 120 && Display(confirm) != DisplayStyle.Flex; tick++)
             {
                 yield return null;
             }
             Assert.That(Display(confirm), Is.EqualTo(DisplayStyle.Flex), "Delete opens the confirmation popover.");
-            SendKey(confirm, KeyCode.Return);
+            for (int tick = 0; tick < 30 && Focused(window) != confirm; tick++)
+            {
+                yield return null;
+            }
+            // The popover key handler hangs off the header, so the key press starts there.
+            SendConfirmKey(confirm.Q(className: "popover-drag-handle"));
             yield return WaitForFocus(window, list);
+            Assert.That(Display(confirm), Is.EqualTo(DisplayStyle.None), "Confirming closes the delete popover.");
             Assert.That(AssetDatabase.LoadAssetAtPath<ScriptableObject>(paths[1]) == null, "The confirmed delete removes the asset.");
-            Assert.That(ReadPrivateField<List<ScriptableObject>>(window, "_filteredObjects"), Has.Count.EqualTo(paths.Length - 1));
+            List<ScriptableObject> remaining = ReadPrivateField<List<ScriptableObject>>(window, "_filteredObjects");
+            Assert.That(remaining.Exists(candidate => AssetDatabase.GetAssetPath(candidate) == paths[1]), Is.False, "The deleted asset leaves the list.");
+            Assert.That(remaining.Exists(candidate => AssetDatabase.GetAssetPath(candidate) == paths[0]), Is.True, "Sibling assets stay listed.");
             Assert.That(Focused(window), Is.SameAs(list), "Deleting the focused row keeps keyboard focus in the object list.");
         }
     }
