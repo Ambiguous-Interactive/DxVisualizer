@@ -36,7 +36,8 @@ Secrets live in a gitignored `.env.local` at the workspace root (template: `.env
 into every interactive shell via a marker- delimited `~/.bashrc` block. The gateway launchers additionally **self-load `.env.local`** (workspace root beside the script, then the
 current directory, or `AI_BACKENDS_ENV_FILE`), so agent Bash tools, tasks, and CI — which skip rc files — resolve credentials too. Variables already exported in the environment
 always win over the file. `remoteEnv` additionally forwards `GITHUB_PERSONAL_ACCESS_TOKEN`, `GITHUB_TOKEN`, `ZAI_API_KEY`, and `OPENROUTER_API_KEY` from the host shell as
-fallbacks. Prefer `.env.local`; never commit it.
+fallbacks, and it points `UV_PROJECT_ENVIRONMENT` at `/home/vscode/.venvs/dxvisualizer`. The checkout is a bind mount of the host drive, so a project `.venv` would be shared with
+the host platform and each side would rewrite `pyvenv.cfg` for itself; the container keeps its environment outside the checkout instead. Prefer `.env.local`; never commit it.
 
 Regenerate the machine-local MCP configs any time with `npm run mcp:sync`.
 

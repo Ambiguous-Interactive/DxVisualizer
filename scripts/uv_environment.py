@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep the repository's uv project environment usable (issue #509).
+"""Keep the repository's uv project environment usable (issues #509, #511).
 
 ``uv`` refuses to run a project command when the project environment exists
 but is not a virtual environment. An interrupted first bootstrap (a closed
@@ -44,6 +44,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -203,6 +204,52 @@ class EnvironmentReport:
         }
 
 
+def foreign_platform_problem(environment: Path) -> Optional[Message]:
+    """Name another operating system when it built this environment.
+
+    The repository checkout is shared between the Windows host and the Linux
+    container on developer machines, so `.venv` can flip owners: the last
+    platform to run a command rewrites `pyvenv.cfg` for itself, and the other
+    platform then reports a broken interpreter. Naming the other platform
+    makes that rebuild explainable instead of looking like random corruption.
+    """
+    try:
+        text = (environment / "pyvenv.cfg").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    values: List[Message] = []
+    for line in text.splitlines():
+        key, _, value = line.partition("=")
+        if key.strip() in ("home", "executable", "base-executable", "base-prefix", "base-home"):
+            values.append(value.strip())
+
+    def matches(style: Message, value: Message) -> bool:
+        # A drive letter or a backslash UNC path is Windows-only. A leading
+        # `//` is ambiguous: Windows reads it as a UNC share, and POSIX permits
+        # it as a path, so it only counts as Windows for a Windows host. That
+        # keeps a real Windows environment from reading as foreign there, and
+        # keeps a POSIX `//usr/bin` environment from being rebuilt as foreign.
+        windows_only = bool(re.match(r"^[A-Za-z]:[\\/]", value)) or value.startswith("\\")
+        forward_unc = value.startswith("//") and os.name == "nt"
+        if style == "windows":
+            return windows_only or forward_unc
+        return value.startswith("/") and not forward_unc
+
+    styles: Dict[Message, bool] = {
+        "windows": any(matches("windows", value) for value in values),
+        "posix": any(matches("posix", value) for value in values),
+    }
+    # Any path from the other platform proves the file describes a foreign
+    # interpreter, even when a second key names this platform. A UNC path is a
+    # Windows path, so it only identifies the Windows style.
+    foreign_style = "posix" if os.name == "nt" else "windows"
+    if not styles[foreign_style]:
+        return None
+    names: Dict[Message, Message] = {"windows": "Windows", "posix": "POSIX"}
+    example = next((value for value in values if matches(foreign_style, value)), "")
+    return f"pyvenv.cfg describes a {names[foreign_style]} interpreter ('{example}'), so this environment was built on another operating system"
+
+
 def inspect_project_environment(root: Path, environment: Optional[Mapping[str, str]] = None) -> EnvironmentReport:
     """Report whether uv can use this root's project environment as it stands."""
     environment_path = environment_directory(root, environment)
@@ -228,6 +275,10 @@ def inspect_project_environment(root: Path, environment: Optional[Mapping[str, s
     problems: List[Message] = []
     if not (environment_path / "pyvenv.cfg").is_file():
         problems.append(f"pyvenv.cfg is missing at '{display_path(environment_path / 'pyvenv.cfg')}'")
+    else:
+        foreign = foreign_platform_problem(environment_path)
+        if foreign is not None:
+            problems.append(foreign)
     if not any(candidate.is_file() for candidate in interpreter_candidates(environment_path)):
         problems.append(f"no Python interpreter is present under '{layout_directory()}' (uv reports this as a missing Python executable)")
     state = STATE_INVALID if problems else STATE_VALID
@@ -442,9 +493,10 @@ def check(root: Path, as_json: bool) -> int:
 
 
 def describe_repair(outcome: RepairOutcome) -> str:
-    """Explain what happened to the unusable environment and how it was rebuilt."""
+    """Explain why the environment was rebuilt and how."""
     commands = " && ".join(f"uv {' '.join(command[1:])}" for command in outcome.commands)
-    summary = f"[uv-env] rebuilt '{display_path(outcome.after.path)}' with '{commands}' after it stopped being a usable virtual environment"
+    because = "; ".join(outcome.before.problems) or "it stopped being a usable virtual environment"
+    summary = f"[uv-env] rebuilt '{display_path(outcome.after.path)}' with '{commands}' because {because}"
     if outcome.quarantined is not None:
         return summary + f" (deletion was blocked, so the old directory moved to '{display_path(outcome.quarantined)}')."
     if outcome.rebuilt_in_place:
