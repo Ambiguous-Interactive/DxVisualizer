@@ -1087,6 +1087,25 @@ namespace WallstopStudios.DataVisualizer.Editor
             return null;
         }
 
+        /*
+            A popover that holds a text field exists to collect typed input, so that field
+            takes focus when the popover opens. Container focus swallows the keystrokes
+            that follow the shortcut, which leaves rename, create and the type finder
+            mouse-only. Popovers without a field keep container focus so their own key
+            handling runs.
+        */
+        private static void FocusPopoverEntry(VisualElement popover)
+        {
+            TextField entryField = popover.Q<TextField>();
+            if (entryField == null)
+            {
+                popover.Focus();
+                return;
+            }
+
+            entryField.Focus();
+        }
+
         private static Label CreateHighlightedLabel(
             string fullText,
             IReadOnlyList<string> termsToHighlight,
@@ -4035,7 +4054,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                         {
                             if (shouldFocus)
                             {
-                                popover.Focus();
+                                FocusPopoverEntry(popover);
                             }
                             rootVisualElement.RegisterCallback<PointerDownEvent>(HandleClickOutsidePopover, TrickleDown.TrickleDown);
                         }
@@ -4044,7 +4063,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             }
             else if (_activeNestedPopover == popover && shouldFocus)
             {
-                popover.Focus();
+                FocusPopoverEntry(popover);
             }
         }
 

@@ -29,6 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Focus the name field when the Create, Rename or Search Types popover opens, so typing edits the name or filter immediately (#312).
 - Keep inspector label buttons and keyboard focus in place when you add or remove an asset label (#308).
 - Return keyboard focus to the control that opened a popover, and keep focus in the object list after you delete an asset (#312).
 - Fix delayed window layout replacing the preferred size with a monitor-clamped size. Keep later user resizes saved (#493).

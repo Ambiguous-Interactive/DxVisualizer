@@ -87,6 +87,13 @@ using System.Diagnostics.CodeAnalysis;
 [assembly: SuppressMessage(
     "Sonar Code Smell",
     "S2094",
+    Justification = "Deliberately empty ScriptableObject fixture; the empty body is the tested subject.",
+    Scope = "type",
+    Target = "T:WallstopStudios.DataVisualizer.Tests.Editor.PopoverNameData"
+)]
+[assembly: SuppressMessage(
+    "Sonar Code Smell",
+    "S2094",
     Justification = "Deliberately empty EditorWindow fixture; the empty body is the tested subject.",
     Scope = "type",
     Target = "T:WallstopStudios.DataVisualizer.Tests.Editor.LayoutTestWindow"
