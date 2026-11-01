@@ -464,8 +464,9 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 warning that names its path, so a pointer-only control fails those cases.
             */
             /*
-                The last two cases remap Select to Up Arrow, which also navigates the open
-                popover: only a focused path that owns its selection keys still reveals.
+                The last three cases remap Select onto a key that already navigates the
+                popover or moves focus, so only a focused path that owns its selection keys
+                still reveals.
             */
             string missingFolder = folder + "/Missing";
             (string DataFolderPath, KeyCode Key, KeyCode? SelectKey, bool FolderExists, bool WarnsAboutThePath)[] cases =
@@ -475,6 +476,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 (missingFolder, KeyCode.Space, null, false, true),
                 (missingFolder, KeyCode.UpArrow, null, false, false),
                 (missingFolder, KeyCode.UpArrow, KeyCode.UpArrow, false, true),
+                (missingFolder, KeyCode.Tab, KeyCode.Tab, false, true),
             };
             foreach ((string dataFolderPath, KeyCode key, KeyCode? selectKey, bool folderExists, bool warnsAboutThePath) in cases)
             {

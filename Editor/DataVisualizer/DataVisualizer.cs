@@ -4172,6 +4172,16 @@ namespace WallstopStudios.DataVisualizer.Editor
                 return;
             }
 
+            /*
+                The focused settings data folder path owns its configured selection keys.
+                This check precedes native focus routing and popover navigation, so a
+                selection key remapped onto either still reveals the folder.
+            */
+            if (evt.target is VisualElement pathTarget && pathTarget == _dataFolderPathDisplay && Input.Navigation.IsSelectionKey(evt))
+            {
+                return;
+            }
+
             if (_nativeInput.IsRouting || _objectSelectionInput?.IsRouting == true)
             {
                 return;
@@ -4187,16 +4197,6 @@ namespace WallstopStudios.DataVisualizer.Editor
                     CloseAssetTool();
                     evt.StopPropagation();
                 }
-                return;
-            }
-
-            /*
-                The focused settings data folder path owns its configured selection keys.
-                A selection key that also navigates the popover would otherwise stop here
-                during trickle-down and the focused path would never reveal the folder.
-            */
-            if (evt.target is VisualElement pathTarget && pathTarget == _dataFolderPathDisplay && Input.Navigation.IsSelectionKey(evt))
-            {
                 return;
             }
 
@@ -4774,7 +4774,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             dataFolderPathDisplay.RegisterCallback<KeyDownEvent, DataVisualizer>(
                 static (evt, context) =>
                 {
-                    if (!context.Input.Navigation.IsSelectionKey(evt.keyCode))
+                    if (!context.Input.Navigation.IsSelectionKey(evt))
                     {
                         return;
                     }
