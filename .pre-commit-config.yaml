@@ -1,6 +1,17 @@
 repos:
   - repo: local
     hooks:
+      - id: uv-environment
+        name: Repair the uv project environment
+        entry: uv run --no-project scripts/uv_environment.py --repair
+        language: system
+        always_run: true
+        pass_filenames: false
+        require_serial: true
+        stages:
+          - pre-commit
+          - pre-push
+        description: Rebuilds .venv when an interrupted bootstrap left it unusable, so later hooks that run through uv never die on a missing pyvenv.cfg.
       - id: dotnet-tool-restore
         name: Install .NET tools
         entry: dotnet tool restore
