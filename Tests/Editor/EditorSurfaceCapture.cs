@@ -21,9 +21,12 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         linear RenderTexture through repaint/render cycles, and reads back only that target.
 
         The panel's ValidateLayout, Repaint, and Render members are internal with no public
-        equivalent, so they are invoked reflectively with inherited lookup. A Unity upgrade
-        that removes one fails closed here with an exception instead of silently writing a
-        wrong image.
+        equivalent, so they are invoked reflectively with inherited lookup. Repaint changed
+        shape across editor versions: 2021.3 through 6000.5 take the Repaint Event, and
+        6000.6 takes no argument and reads Event.current instead, so both shapes are
+        resolved and the newer one renders inside an IMGUI container scope. A Unity upgrade
+        that removes the members fails closed here with an exception instead of silently
+        writing a wrong image.
 
         Every graphics global the render touches (active render target, GL.sRGBWrite) is
         restored inside Capture, and every texture it creates is destroyed there too, on
@@ -106,11 +109,10 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                     later cycles draw the settled sets. Stopping early can yield a valid PNG
                     with blank scroll bodies or missing labels.
                 */
-                Event repaintEvent = new() { type = EventType.Repaint };
+                IMGUIContainer imguiScope = window.rootVisualElement.Q<IMGUIContainer>();
                 for (int pass = 0; pass < RenderPassCount; pass++)
                 {
-                    InvokePanelMethod(panel, "Repaint", new object[] { repaintEvent });
-                    InvokePanelMethod(panel, "Render", Array.Empty<object>());
+                    RenderPanelCycle(panel, imguiScope);
                 }
 
                 RectInt crop = new(Mathf.RoundToInt(rootBounds.x), Mathf.RoundToInt(height - rootBounds.yMax), width, height);
@@ -276,6 +278,50 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             return distinct.Count;
         }
 
+        /*
+            One repaint and render cycle. Unity 2021.3 through 6000.5 repaint from a Repaint
+            Event and hand it to IMGUI containers; 6000.6 repaints from Event.current, which
+            only exists inside an IMGUI container scope. Without that scope the IMGUI-backed
+            subtrees (inspector drawers) stay blank while the rest of the panel draws.
+        */
+        private static void RenderPanelCycle(IPanel panel, IMGUIContainer imguiContainer)
+        {
+            Type panelType = panel.GetType();
+            MethodInfo repaintMethod = panelType.GetMethod("Repaint", InheritedInstanceMembers, binder: null, types: new[] { typeof(Event) }, modifiers: null);
+            if (repaintMethod != null)
+            {
+                Event repaintEvent = new() { type = EventType.Repaint };
+                repaintMethod.Invoke(panel, new object[] { repaintEvent });
+                InvokePanelMethod(panel, "Render", Array.Empty<object>());
+                return;
+            }
+
+            repaintMethod = panelType.GetMethod("Repaint", InheritedInstanceMembers, binder: null, types: Type.EmptyTypes, modifiers: null);
+            if (repaintMethod == null)
+            {
+                throw new InvalidOperationException(
+                    $"Panel type {panelType.FullName} exposes no 'Repaint' method taking an Event or no argument; "
+                        + "the offscreen capture cannot drive this editor version's panel."
+                );
+            }
+
+            if (imguiContainer == null)
+            {
+                InvokePanelMethod(panel, "Repaint", Array.Empty<object>());
+                InvokePanelMethod(panel, "Render", Array.Empty<object>());
+                return;
+            }
+
+            PanelImGuiScope imGuiScope = PanelImGuiScope.Open(imguiContainer);
+            using (imGuiScope)
+            {
+                InvokePanelMethod(panel, "Repaint", Array.Empty<object>());
+                InvokePanelMethod(panel, "Render", Array.Empty<object>());
+            }
+
+            imGuiScope.ThrowIfCloseFailed();
+        }
+
         private static string DescribeLayout(VisualElement root)
         {
             StringBuilder description = new();
@@ -286,6 +332,104 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             }
 
             return description.ToString();
+        }
+
+        /*
+            Opens the IMGUIContainer globals scope that makes Event.current a Repaint event
+            for one render cycle. Unity documents the same requirement for its own offscreen
+            capture: IMGUI content only emits outside OnGUI while such a scope is open.
+            Closing restores the container stack and GUI clips on every path.
+        */
+        private sealed class PanelImGuiScope : IDisposable
+        {
+            private const BindingFlags StaticMembers = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+            private const BindingFlags InstanceMembers = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            private static readonly PropertyInfo LayoutCacheProperty = typeof(IMGUIContainer).GetProperty("cache", InstanceMembers);
+            private static readonly MethodInfo BeginContainerGui =
+                LayoutCacheProperty == null
+                    ? null
+                    : typeof(IMGUIContainer).GetMethod(
+                        "BeginContainerGUI",
+                        StaticMembers,
+                        binder: null,
+                        types: new[] { LayoutCacheProperty.PropertyType, typeof(Event), typeof(IMGUIContainer) },
+                        modifiers: null
+                    );
+            private static readonly MethodInfo EndContainerGui = typeof(IMGUIContainer).GetMethod(
+                "EndContainerGUI",
+                StaticMembers,
+                binder: null,
+                types: new[] { typeof(Event), typeof(Rect) },
+                modifiers: null
+            );
+
+            private readonly Event _repaintEvent;
+            private readonly Rect _layoutSize;
+            private Exception _closeFailure;
+            private bool _disposed;
+
+            private PanelImGuiScope(Event repaintEvent, Rect layoutSize)
+            {
+                _repaintEvent = repaintEvent;
+                _layoutSize = layoutSize;
+            }
+
+            internal static PanelImGuiScope Open(IMGUIContainer container)
+            {
+                if (container == null)
+                {
+                    throw new ArgumentNullException(nameof(container));
+                }
+
+                if (BeginContainerGui == null || EndContainerGui == null || LayoutCacheProperty == null)
+                {
+                    throw new InvalidOperationException(
+                        "This editor's IMGUIContainer exposes no container scope taking a Repaint Event; "
+                            + "the offscreen capture cannot drive this editor version's IMGUI content."
+                    );
+                }
+
+                object cache = LayoutCacheProperty.GetValue(container);
+                Event repaintEvent = new() { type = EventType.Repaint };
+                BeginContainerGui.Invoke(null, new object[] { cache, repaintEvent, container });
+                return new PanelImGuiScope(repaintEvent, container.layout);
+            }
+
+            public void Dispose()
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                _disposed = true;
+                try
+                {
+                    EndContainerGui.Invoke(null, new object[] { _repaintEvent, _layoutSize });
+                }
+                catch (Exception exception)
+                {
+                    /*
+                        Dispose must not replace a render exception that is already
+                        propagating. The failure is recorded here and rethrown by
+                        ThrowIfCloseFailed only when the render path completed.
+                    */
+                    _closeFailure = exception;
+                }
+            }
+
+            internal void ThrowIfCloseFailed()
+            {
+                if (_closeFailure == null)
+                {
+                    return;
+                }
+
+                throw new InvalidOperationException(
+                    "The offscreen capture could not close its IMGUI container scope; " + "IMGUI content for the rest of the capture is unreliable.",
+                    _closeFailure
+                );
+            }
         }
     }
 }
