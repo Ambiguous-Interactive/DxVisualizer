@@ -11,6 +11,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
     using UnityEngine.UIElements;
     using WallstopStudios.DataVisualizer.Editor;
     using WallstopStudios.DataVisualizer.Editor.Data;
+    using WallstopStudios.DataVisualizer.Editor.UI;
     using WallstopStudios.DataVisualizer.Editor.Utilities;
     using DataVisualizerWindow = WallstopStudios.DataVisualizer.Editor.DataVisualizer;
 
@@ -462,17 +463,39 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 configured key reaches the reveal command: only a missing folder reports a
                 warning that names its path, so a pointer-only control fails those cases.
             */
+            /*
+                The last two cases remap Select to Up Arrow, which also navigates the open
+                popover: only a focused path that owns its selection keys still reveals.
+            */
             string missingFolder = folder + "/Missing";
-            (string DataFolderPath, KeyCode Key, bool WarnsAboutThePath)[] cases =
+            (string DataFolderPath, KeyCode Key, KeyCode? SelectKey, bool WarnsAboutThePath)[] cases =
             {
-                (folder, KeyCode.Return, false),
-                (missingFolder, KeyCode.Return, true),
-                (missingFolder, KeyCode.Space, true),
+                (folder, KeyCode.Return, null, false),
+                (missingFolder, KeyCode.Return, null, true),
+                (missingFolder, KeyCode.Space, null, true),
+                (missingFolder, KeyCode.UpArrow, null, false),
+                (missingFolder, KeyCode.UpArrow, KeyCode.UpArrow, true),
             };
-            foreach ((string dataFolderPath, KeyCode key, bool warnsAboutThePath) in cases)
+            foreach ((string dataFolderPath, KeyCode key, KeyCode? selectKey, bool warnsAboutThePath) in cases)
             {
                 using TestCleanupScope caseCleanup = new();
-                DataVisualizerWindow window = OpenSettingsWindow(caseCleanup, "PopoverDataFolderReveal", scope => SetDataFolderPath(scope.Settings, dataFolderPath));
+                DataVisualizerWindow window = OpenSettingsWindow(
+                    caseCleanup,
+                    "PopoverDataFolderReveal",
+                    scope =>
+                    {
+                        SetDataFolderPath(scope.Settings, dataFolderPath);
+                        if (!selectKey.HasValue)
+                        {
+                            return;
+                        }
+
+                        DataVisualizerInputProfile profile = ScriptableObject.CreateInstance<DataVisualizerInputProfile>();
+                        caseCleanup.Defer(() => UnityEngine.Object.DestroyImmediate(profile));
+                        profile.Bindings.Navigation.SelectKey = selectKey.Value;
+                        scope.Settings.inputProfile = profile;
+                    }
+                );
                 yield return null;
 
                 VisualElement popover = ReadPrivateField<VisualElement>(window, "_settingsPopover");

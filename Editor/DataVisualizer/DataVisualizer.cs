@@ -4190,6 +4190,16 @@ namespace WallstopStudios.DataVisualizer.Editor
                 return;
             }
 
+            /*
+                The focused settings data folder path owns its configured selection keys.
+                A selection key that also navigates the popover would otherwise stop here
+                during trickle-down and the focused path would never reveal the folder.
+            */
+            if (evt.target is VisualElement pathTarget && pathTarget == _dataFolderPathDisplay && Input.Navigation.IsSelectionKey(evt))
+            {
+                return;
+            }
+
             if (_activePopover == _inspectorLabelSuggestionsPopover)
             {
                 HandleNewLabelInputKeyDown(evt);
@@ -4749,7 +4759,18 @@ namespace WallstopStudios.DataVisualizer.Editor
             };
             dataFolderPathDisplay.AddToClassList("settings-data-folder-path-display");
             dataFolderPathDisplay.AddToClassList(StyleConstants.ClickableClass);
-            dataFolderPathDisplay.RegisterCallback<PointerDownEvent, DataVisualizer>(static (_, context) => context.RevealDataFolder(), this);
+            dataFolderPathDisplay.RegisterCallback<PointerDownEvent, DataVisualizer>(
+                static (evt, context) =>
+                {
+                    if (evt.button != context.Input.Navigation.PointerButton)
+                    {
+                        return;
+                    }
+
+                    context.RevealDataFolder();
+                },
+                this
+            );
             dataFolderPathDisplay.RegisterCallback<KeyDownEvent, DataVisualizer>(
                 static (evt, context) =>
                 {
@@ -4764,6 +4785,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                 },
                 this
             );
+            _dataFolderPathDisplay = dataFolderPathDisplay;
             dataFolderContainer.Add(dataFolderPathDisplay);
             Button selectFolderButton = new(() => SelectDataFolderForPopover(dataFolderPathDisplay)) { text = "Select", name = "settings-data-folder-button" };
             selectFolderButton.SetEnabled(!IsConfigurationEditingPaused);
