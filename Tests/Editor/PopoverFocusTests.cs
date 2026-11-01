@@ -209,6 +209,55 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         }
 
         [UnityTest]
+        public IEnumerator ShouldFocusTheCreateButtonAfterDeletingTheLastObject()
+        {
+            using TestCleanupScope cleanup = new();
+            Type type = typeof(TestDataObject);
+            DataVisualizerWindow window = OpenSettingsWindow(
+                cleanup,
+                "PopoverDeleteLastFocus",
+                scope =>
+                {
+                    scope.UserState.managedTypeNames.Add(type.FullName);
+                    scope.Settings.HydrateFrom(scope.UserState);
+                }
+            );
+            string folder = "Assets/PopoverDeleteLastFocus_" + Guid.NewGuid().ToString("N");
+            AssetDatabase.CreateFolder("Assets", folder.Substring("Assets/".Length));
+            cleanup.Defer(() => AssetDatabase.DeleteAsset(folder));
+            string path = folder + "/Only.asset";
+            AssetDatabase.CreateAsset(ScriptableObject.CreateInstance<TestDataObject>(), path);
+            AssetDatabase.SaveAssets();
+            ReadPrivateField<NamespaceController>(window, "_namespaceController").SelectType(window, type);
+            yield return WaitForRefresh(window);
+            EditorSurfaceCapture.SettleLayout(window);
+
+            ListView list = ReadPrivateField<ListView>(window, "_objectListView");
+            Button create = ReadPrivateField<Button>(window, "_createObjectButton");
+            List<ScriptableObject> rows = ReadPrivateField<List<ScriptableObject>>(window, "_filteredObjects");
+            ScriptableObject doomed = rows.Find(candidate => AssetDatabase.GetAssetPath(candidate) == path);
+            Assert.That(doomed != null, "The type filter lists the created asset.");
+            InvokePrivate(window, "SetActiveObject", doomed, false);
+            yield return WaitForRefresh(window);
+            EditorSurfaceCapture.SettleLayout(window);
+            list.Focus();
+            yield return null;
+
+            SendKey(list, KeyCode.Delete);
+            VisualElement confirm = ReadPrivateField<VisualElement>(window, "_confirmDeletePopover");
+            for (int tick = 0; tick < 120 && Display(confirm) != DisplayStyle.Flex; tick++)
+            {
+                yield return null;
+            }
+            Assert.That(Display(confirm), Is.EqualTo(DisplayStyle.Flex), "Delete opens the confirmation popover.");
+            SendConfirmKey(confirm.Q(className: "popover-drag-handle"));
+            yield return WaitForFocus(window, create);
+            Assert.That(AssetDatabase.LoadAssetAtPath<ScriptableObject>(path) == null, "The confirmed delete removes the last asset.");
+            Assert.That(Display(list), Is.EqualTo(DisplayStyle.None), "The empty list is hidden.");
+            Assert.That(Focused(window), Is.SameAs(create), "An empty list hands focus to the create button.");
+        }
+
+        [UnityTest]
         public IEnumerator ShouldKeepFocusInTheObjectListAfterAConfirmedDelete()
         {
             using TestCleanupScope cleanup = new();

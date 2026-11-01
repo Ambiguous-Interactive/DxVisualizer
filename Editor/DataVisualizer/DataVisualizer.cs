@@ -5293,11 +5293,14 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         /*
             Deleting the focused asset removes the row that held focus. Keep the keyboard in
-            the object list so arrow keys and row shortcuts still work after the refresh.
+            the object list so arrow keys and row shortcuts still work after the refresh, or
+            on the create button when the delete emptied the list and hid it.
         */
         private void FocusObjectList()
         {
-            _objectListView?.FocusAfterLayout();
+            bool listVisible = _objectListView != null && _objectListView.style.display.value != DisplayStyle.None;
+            VisualElement target = listVisible ? _objectListView : _createObjectButton;
+            target?.FocusAfterLayout();
         }
 
         private void TogglePopover(VisualElement popover, VisualElement triggerElement)
