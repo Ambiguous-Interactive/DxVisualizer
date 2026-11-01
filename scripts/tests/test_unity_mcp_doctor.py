@@ -84,6 +84,13 @@ class DoctorTests(unittest.TestCase):
         self.assertNotIn('never-print-this', stream.getvalue())
         self.assertNotIn('No Unity Editor is running', stream.getvalue())
 
+    def test_canary_errors_never_print_inherited_credentials(self) -> None:
+        self.responses['tools/call'] = {'result': {'isError': True, 'content': [{'text': 'Denied for canary-secret'}]}}
+        doctor, code, output = self.run_doctor({'UNITY_MCP_PROJECT': str(self.project), 'UNITY_MCP_TOKEN': 'canary-secret'})
+        self.assertEqual((code, doctor.failures), (1, 1))
+        self.assertIn('Denied for', output)
+        self.assertNotIn('canary-secret', output)
+
     def test_container_can_obtain_the_host_compatibility_remedy_without_editor_tools(self) -> None:
         self.responses['tools/list'] = {'result': {'tools': [{'name': 'unity-cli-status'}, {'name': 'bridge_diagnostics'}]}}
         self.responses['tools/call'] = {'result': {'isError': True, 'content': [{'text': 'No Pipeline instance'}]}}

@@ -113,13 +113,17 @@ class Doctor:
         container_flag = environment.get('DATAVIZ_IN_CONTAINER')
         self.remote = container_flag == '1' if container_flag is not None else Path('/.dockerenv').exists() or Path('/run/.containerenv').exists()
 
+    def redacted(self, text: str) -> str:
+        """Keep inherited credentials out of printed diagnostics."""
+        return redact_credentials(text, credential_values((self.environment, self.local)))
+
     def fail(self, message: str) -> None:
         self.failures += 1
-        print(f'❌ {message}')
+        print('❌ ' + self.redacted(message))
 
     def warn(self, message: str) -> None:
         self.warnings += 1
-        print(f'⚠️  {message}')
+        print('⚠️  ' + self.redacted(message))
 
     def ok(self, message: str) -> None:
         print(f'✅ {message}')
@@ -170,9 +174,7 @@ class Doctor:
                 status = object_value(cast(Json, json.loads(self.command(arguments))))
                 errors = status.get('errors')
                 if isinstance(errors, list):
-                    secrets = credential_values((self.environment, self.local))
-                    reasons = [{key: redact_credentials(str(object_value(error)[key]), secrets)
-                                for key in ('code', 'message') if key in object_value(error)} for error in errors]
+                    reasons = [{key: object_value(error)[key] for key in ('code', 'message') if key in object_value(error)} for error in errors]
                     if reasons:
                         self.warn('Unity ' + arguments[0] + ' discovery: ' + json.dumps(reasons, ensure_ascii=False))
                 data = object_value(status.get('data'))
