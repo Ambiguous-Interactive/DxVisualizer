@@ -321,7 +321,7 @@ namespace WallstopStudios.DataVisualizer.Editor
         private int _nextColorIndex;
 
         private VisualElement _inspectorLabelsSection;
-        private VisualElement _inspectorCurrentLabelsContainer;
+        private InspectorLabelPillsView _inspectorLabels;
         private TextField _inspectorNewLabelInput;
 
         private string _draggedLabelText;
@@ -1623,7 +1623,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                     Label processorButton = new(processorName)
                     {
                         tooltip = processor.Description,
-                        style = { backgroundColor = color, color = IsColorDark(color) ? Color.white : Color.black },
+                        style = { backgroundColor = color, color = InspectorLabelPillsView.IsDarkBackground(color) ? Color.white : Color.black },
                     };
                     processorButton.AddToClassList("processor-button");
                     processorButton.AddToClassList(StyleConstants.ClickableClass);
@@ -6194,11 +6194,6 @@ namespace WallstopStudios.DataVisualizer.Editor
             return Color.HSVToRGB(hue, 0.65f, 0.90f);
         }
 
-        private static bool IsColorDark(Color c)
-        {
-            return 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b < 0.5f; // Luminance check
-        }
-
         private static void UpdateObjectTitleRepresentation(ScriptableObject dataObject, VisualElement element)
         {
             if (dataObject == null || element == null)
@@ -7390,7 +7385,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             {
                 style =
                 {
-                    color = IsColorDark(labelColor) ? Color.white : Color.black,
+                    color = InspectorLabelPillsView.IsDarkBackground(labelColor) ? Color.white : Color.black,
                     marginRight = currentSection == LabelFilterSection.AND || currentSection == LabelFilterSection.OR ? 2 : 0,
                 },
             };
@@ -8178,9 +8173,8 @@ namespace WallstopStudios.DataVisualizer.Editor
                 };
                 _inspectorLabelsSection.Add(sectionHeader);
 
-                _inspectorCurrentLabelsContainer = new VisualElement { name = "inspector-current-labels", style = { marginRight = 6, marginLeft = 6 } };
-                _inspectorCurrentLabelsContainer.AddToClassList("label-pill-container");
-                _inspectorLabelsSection.Add(_inspectorCurrentLabelsContainer);
+                _inspectorLabels = new InspectorLabelPillsView(RemoveLabelFromSelectedAsset, GetColorForLabel, () => _inspectorNewLabelInput);
+                _inspectorLabelsSection.Add(_inspectorLabels);
 
                 VisualElement addLabelRow = new() { name = "inspector-label-entry" };
                 addLabelRow.AddToClassList(StyleConstants.InspectorLabelEntryClass);
@@ -8583,46 +8577,16 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         private void PopulateInspectorLabelsUI()
         {
-            if (_inspectorCurrentLabelsContainer == null || _selectedObject == null)
+            if (_inspectorLabels == null)
             {
-                _inspectorCurrentLabelsContainer?.Clear();
                 return;
             }
-            _inspectorCurrentLabelsContainer.Clear();
-
-            string[] currentLabels = AssetDatabase.GetLabels(_selectedObject);
-            Array.Sort(currentLabels, StringComparer.Ordinal);
-
-            if (currentLabels.Length == 0)
+            if (_selectedObject == null)
             {
-                Label emptyLabel = new("No labels assigned.") { style = { fontSize = 10, unityFontStyleAndWeight = FontStyle.Italic } };
-                emptyLabel.AddToClassList("dataviz-muted");
-                _inspectorCurrentLabelsContainer.Add(emptyLabel);
+                _inspectorLabels.Clear();
                 return;
             }
-
-            foreach (string labelText in currentLabels)
-            {
-                Color backgroundColor = GetColorForLabel(labelText);
-                VisualElement pillContainer = new()
-                {
-                    name = $"inspector-label-pill-{labelText.Replace(" ", "-").ToLowerInvariant()}",
-                    style = { backgroundColor = backgroundColor },
-                };
-                pillContainer.AddToClassList("label-pill");
-                pillContainer.AddToClassList("non-draggable");
-
-                Label labelElement = new(labelText) { style = { color = IsColorDark(backgroundColor) ? Color.white : Color.black } };
-                labelElement.AddToClassList("label-pill-text");
-                pillContainer.Add(labelElement);
-
-                Button removeButton = new(() => RemoveLabelFromSelectedAsset(labelText)) { text = "x", tooltip = $"Remove label '{labelText}'" };
-                removeButton.AddToClassList(StyleConstants.ClickableClass);
-                removeButton.AddToClassList("label-pill-remove-button");
-                removeButton.style.color = labelElement.style.color.value;
-                pillContainer.Add(removeButton);
-                _inspectorCurrentLabelsContainer.Add(pillContainer);
-            }
+            _inspectorLabels.Bind(AssetDatabase.GetLabels(_selectedObject));
         }
 
         private void AddLabelToSelectedAsset()
