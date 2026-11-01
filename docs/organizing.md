@@ -101,8 +101,8 @@ docs capture pipeline._
 - **Input profile** assigns the shared [input bindings](#input-profiles); clear it for defaults.
 - **Select Active Object** mirrors your DxVisualizer selection in Unity's own Inspector, for cross-referencing assets in other editor windows.
 - **Theme** picks the appearance. See [Themes](#themes).
-- **Data Folder** is where new assets are created. Click the path to ping the folder, or **Select** to browse. The target must be inside `Assets`. Clones are unaffected: they stay
-  beside their original.
+- **Data Folder** is where new assets are created. Click the path, or focus it and press Enter, to ping the folder; **Select** browses for one. The target must be inside `Assets`.
+  Clones are unaffected: they stay beside their original.
 
 ## Themes
 

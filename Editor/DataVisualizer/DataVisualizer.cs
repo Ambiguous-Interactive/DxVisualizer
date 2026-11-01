@@ -4740,19 +4740,29 @@ namespace WallstopStudios.DataVisualizer.Editor
             dataFolderLabel.AddToClassList("settings-data-folder-label");
 
             dataFolderContainer.Add(dataFolderLabel);
-            Label dataFolderPathDisplay = new() { text = Settings.DataFolderPath, name = "data-folder-display" };
+            Label dataFolderPathDisplay = new()
+            {
+                text = Settings.DataFolderPath,
+                name = "data-folder-display",
+                focusable = true,
+                tooltip = "Reveal the data folder in the Project window",
+            };
             dataFolderPathDisplay.AddToClassList("settings-data-folder-path-display");
             dataFolderPathDisplay.AddToClassList(StyleConstants.ClickableClass);
-            dataFolderPathDisplay.RegisterCallback<PointerDownEvent, DataVisualizerSettings>(
-                static (_, context) =>
+            dataFolderPathDisplay.RegisterCallback<PointerDownEvent, DataVisualizer>(static (_, context) => context.RevealDataFolder(), this);
+            dataFolderPathDisplay.RegisterCallback<KeyDownEvent, DataVisualizer>(
+                static (evt, context) =>
                 {
-                    Object dataFolderPath = AssetDatabase.LoadAssetAtPath<Object>(context.DataFolderPath);
-                    if (dataFolderPath != null)
+                    if (!context.Input.Navigation.IsSelectionKey(evt.keyCode))
                     {
-                        EditorGUIUtility.PingObject(dataFolderPath);
+                        return;
                     }
+
+                    context.RevealDataFolder();
+                    evt.StopPropagation();
+                    evt.PreventDefaultCompat();
                 },
-                Settings
+                this
             );
             dataFolderContainer.Add(dataFolderPathDisplay);
             Button selectFolderButton = new(() => SelectDataFolderForPopover(dataFolderPathDisplay)) { text = "Select", name = "settings-data-folder-button" };
@@ -4761,6 +4771,30 @@ namespace WallstopStudios.DataVisualizer.Editor
             selectFolderButton.AddToClassList(StyleConstants.ClickableClass);
             dataFolderContainer.Add(selectFolderButton);
             contentWrapper.Add(dataFolderContainer);
+        }
+
+        /*
+            Reveals the configured data folder in the Project window for the pointer and
+            the keyboard alike. A command that cannot reveal reports why, so an unset or
+            moved folder is visible instead of a click that does nothing.
+        */
+        private void RevealDataFolder()
+        {
+            string dataFolderPath = Settings.DataFolderPath;
+            if (string.IsNullOrWhiteSpace(dataFolderPath))
+            {
+                Debug.LogWarning("Data folder is not set; choose one before revealing it.");
+                return;
+            }
+
+            Object dataFolder = AssetDatabase.LoadAssetAtPath<Object>(dataFolderPath);
+            if (dataFolder == null)
+            {
+                Debug.LogWarning($"Data folder '{dataFolderPath}' is not in this project; choose an existing folder.");
+                return;
+            }
+
+            EditorGUIUtility.PingObject(dataFolder);
         }
 
         private void SelectDataFolderForPopover(Label displayField)

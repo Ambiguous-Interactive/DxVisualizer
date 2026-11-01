@@ -1203,6 +1203,11 @@
     border-color: var(--dataviz-muted);
 }
 
+.dataviz-root .settings-data-folder-path-display:focus {
+    color: var(--dataviz-text);
+    border-color: var(--dataviz-accent);
+}
+
 .settings-data-folder-label {
     flex-grow: 0;
     flex-shrink: 0;
