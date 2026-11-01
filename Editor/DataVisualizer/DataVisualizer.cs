@@ -279,6 +279,7 @@ namespace WallstopStudios.DataVisualizer.Editor
         private Label _namespaceColumnLabel;
         private TextField _assetNameTextField;
         private VisualElement _objectColumnElement;
+        private VisualElement _popoverTrigger;
         private Label _objectLoadingIndicator;
 
         private readonly DataVisualizerThemeSelection _themeSelection = new();
@@ -3922,7 +3923,7 @@ namespace WallstopStudios.DataVisualizer.Editor
         {
             if (!isNested)
             {
-                CloseActivePopover();
+                CloseActivePopover(restoreFocus: false);
             }
             else
             {
@@ -3932,6 +3933,11 @@ namespace WallstopStudios.DataVisualizer.Editor
             if (popover == null || triggerElement == null)
             {
                 return;
+            }
+
+            if (!isNested)
+            {
+                _popoverTrigger = triggerElement;
             }
 
             if (popover == _searchPopover)
@@ -4044,6 +4050,14 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         private void CloseActivePopover()
         {
+            CloseActivePopover(restoreFocus: true);
+        }
+
+        private void CloseActivePopover(bool restoreFocus)
+        {
+            VisualElement closingPopover = _activePopover;
+            VisualElement focusTarget = restoreFocus && FocusLeftPopover(closingPopover) ? _popoverTrigger : null;
+            _popoverTrigger = null;
             _lastActiveFocusArea = FocusArea.None;
             if (_activePopover == _searchPopover)
             {
@@ -4085,6 +4099,43 @@ namespace WallstopStudios.DataVisualizer.Editor
 
             _activePopover = null;
             _popoverContext = null;
+            RestorePopoverFocus(focusTarget, closingPopover);
+        }
+
+        /*
+            A popover takes focus while it is open, so closing it must return focus to the
+            control that opened it. Otherwise keyboard users restart from the top of the
+            window. The trigger may be a plain element such as a row label, so walk up to
+            the nearest focusable control that is still visible.
+        */
+        private void RestorePopoverFocus(VisualElement trigger, VisualElement popover)
+        {
+            for (VisualElement current = trigger; current != null; current = current.parent)
+            {
+                if (!current.focusable || current.panel == null || current.resolvedStyle.display == DisplayStyle.None)
+                {
+                    continue;
+                }
+
+                /*
+                    An action that closes the popover may open and focus another panel first,
+                    and that choice wins over the deferred restore.
+                */
+                current.FocusAfterLayout(() => FocusLeftPopover(popover));
+                return;
+            }
+        }
+
+        /*
+            Keyboard dismissal and the popover's own buttons keep focus on the popover,
+            while an outside click on a plain element clears panel focus. Both need the
+            trigger back. A click on another focusable control moves focus there instead,
+            and that choice must win over the closing popover.
+        */
+        private bool FocusLeftPopover(VisualElement popover)
+        {
+            VisualElement focused = rootVisualElement?.focusController?.focusedElement as VisualElement;
+            return focused == null || focused.panel == null || popover == null || popover == focused || popover.Contains(focused);
         }
 
         private void HandleButtonPointer(EventBase evt)
@@ -5177,11 +5228,12 @@ namespace WallstopStudios.DataVisualizer.Editor
             }
 
             ScriptableObject objectToDelete = _popoverContext as ScriptableObject;
-            CloseActivePopover();
+            CloseActivePopover(restoreFocus: false);
 
             if (objectToDelete == null)
             {
                 Debug.LogError("Delete failed: context object lost.");
+                FocusObjectList();
                 return;
             }
 
@@ -5189,6 +5241,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             if (string.IsNullOrWhiteSpace(path))
             {
                 Debug.LogError($"Delete failed: path not found for {objectToDelete.name}");
+                FocusObjectList();
                 return;
             }
 
@@ -5234,6 +5287,31 @@ namespace WallstopStudios.DataVisualizer.Editor
                 Debug.LogError($"Failed delete: {path}");
                 ScheduleRefresh();
             }
+
+            FocusObjectList();
+        }
+
+        /*
+            Deleting the focused asset removes the row that held focus. Keep the keyboard in
+            the object list so arrow keys and row shortcuts still work after the refresh, or
+            on the create button when the delete emptied the list and hid it.
+        */
+        private void FocusObjectList()
+        {
+            VisualElement focusedAtDelete = rootVisualElement?.focusController?.focusedElement as VisualElement;
+            bool listVisible = _objectListView != null && _objectListView.style.display.value != DisplayStyle.None;
+            VisualElement target = listVisible ? _objectListView : _createObjectButton;
+            target?.FocusAfterLayout(() => !FocusMoved(focusedAtDelete));
+        }
+
+        /*
+            A control that took focus after the delete started owns it now, so the deferred
+            list focus must not pull it back.
+        */
+        private bool FocusMoved(VisualElement previous)
+        {
+            VisualElement focused = rootVisualElement?.focusController?.focusedElement as VisualElement;
+            return focused != null && focused.panel != null && focused != previous;
         }
 
         private void TogglePopover(VisualElement popover, VisualElement triggerElement)

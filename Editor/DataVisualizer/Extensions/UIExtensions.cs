@@ -70,6 +70,33 @@ namespace WallstopStudios.DataVisualizer.Editor.Extensions
             }
         }
 
+        /// <summary>
+        /// Focuses the element on the next panel tick, while it is still attached and visible.
+        /// Focus changes made before that tick win, because a control the user reached later
+        /// must keep focus. Pass <paramref name="shouldFocus"/> to veto a stale request.
+        /// </summary>
+        /// <param name="element">Element to focus.</param>
+        /// <param name="shouldFocus">Optional check that runs on the panel tick before focusing.</param>
+        public static void FocusAfterLayout(this VisualElement element, Func<bool> shouldFocus = null)
+        {
+            if (element == null)
+            {
+                throw new ArgumentNullException(nameof(element));
+            }
+
+            element
+                .schedule.Execute(() =>
+                {
+                    bool attached = element.panel != null && element.resolvedStyle.display != DisplayStyle.None;
+                    bool allowed = shouldFocus == null || shouldFocus();
+                    if (attached && allowed)
+                    {
+                        element.Focus();
+                    }
+                })
+                .ExecuteLater(1);
+        }
+
         public static IEnumerable<VisualElement> IterateChildrenRecursively(this VisualElement element)
         {
             foreach (VisualElement child in element.Children())
