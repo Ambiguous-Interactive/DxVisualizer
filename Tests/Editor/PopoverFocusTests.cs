@@ -256,6 +256,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 delivers it to the object list instead of the dialog.
             */
             yield return WaitForFocus(window, confirm);
+            Assert.That(Focused(window), Is.SameAs(confirm), "The delete dialog owns focus before it handles the confirm key.");
             SendConfirmKey(confirm.Q(className: "popover-drag-handle"));
             yield return WaitForFocus(window, create);
             Assert.That(AssetDatabase.LoadAssetAtPath<ScriptableObject>(path) == null, "The confirmed delete removes the last asset.");
