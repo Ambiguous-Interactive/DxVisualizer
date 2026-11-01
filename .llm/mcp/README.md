@@ -42,16 +42,21 @@ A credential rotated in `.env.local` also has to reach already-running agents. T
 2. **OpenCode's background service.** Every `opencode` session attaches to ONE shared server (`opencode serve --service`), discovered via `~/.local/state/opencode/service.json`. It
    inherits the environment of whichever client happened to start it and holds it for its entire life, so **new sessions stay broken too** — the session is fine, the singleton
    behind it is not. `.devcontainer/recycle_stale_opencode_service.py` compares the running service's credentials against `.env.local` and, on a mismatch, recycles it so the next
-   session respawns a healthy one. It is a no-op when the service matches, when there is no `.env.local`, or when no service is running. `post_start.py` runs it on every container
-   start.
+   session respawns a healthy one. It checks that the recorded pid still runs the opencode service before judging anything, because a record can outlive its service and the
+   operating system reuses pids. It is a no-op when the service matches, when there is no `.env.local`, or when no service is running. `post_start.py` runs it on every container
+   start. A service credential that is present but **empty** counts as a mismatch: the devcontainer `remoteEnv` resolves an unset host variable to an empty string, so a service
+   started outside a loaded shell (for example by the VS Code extension host) expands every `{env:VAR}` reference to no credential and its remote servers 401 while `.env.local`,
+   the endpoints, and fresh shells all stay healthy. `post_start.py` therefore warms the service with the `.env.local`-loaded environment, and `npm run mcp:doctor` surfaces the
+   poisoned-service state as a failure with the remedy. A service that names no tracked key is unjudged rather than healthy: the doctor says so and asks the operator to stop the
+   process named in `service.json` and start an agent CLI from a shell that loads `.env.local`, because rerunning the recycler changes nothing there.
 
 ```bash
 python3 .devcontainer/recycle_stale_opencode_service.py --dry-run   # report only
 python3 .devcontainer/recycle_stale_opencode_service.py             # recycle
 ```
 
-Contract tests: `scripts/tests/test_mcp_credentials.py` (credential aliasing, divergence detection, repair), `scripts/tests/test_env_local_precedence.py` (loader precedence), and
-`scripts/tests/test_opencode_service_recycle.py` (service recycling).
+Contract tests: `scripts/tests/test_mcp_credentials.py` (credential aliasing, divergence detection, repair, shared-service health), `scripts/tests/test_env_local_precedence.py`
+(loader precedence), and `scripts/tests/test_opencode_service_recycle.py` (service recycling, including the empty-credential poison shape).
 
 ## One command to wire everything
 

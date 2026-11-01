@@ -21,12 +21,19 @@ on MSYS, where Windows process IDs differ and os.kill(pid, 0) is unsafe.
 
 Safety properties, each covered by a contract test:
 
-* A service whose credential MATCHES .env.local is never touched.
-* A record whose pid is gone is removed (clients must not attach to it).
+* A service whose credential MATCHES .env.local is never touched, and the
+  report names the compared keys so a caller can tell a match from an
+  unjudged key.
+* A record whose pid is gone, or whose pid now belongs to another process,
+  is removed (clients must not attach to it, and a reused pid must never
+  be judged or named to the operator).
 * No .env.local means nothing to compare against, so nothing to do.
 * Credential VALUES are never printed - only variable NAMES.
 * Missing evidence fails safe: an unreadable environment or
   an empty file value leaves a key unjudged, and an unjudged key never kills.
+  A present-but-empty service credential IS judgeable evidence (VS Code
+  devcontainers forward an unset host variable through remoteEnv as an empty
+  string, so a poisoned service genuinely exports ``KEY=``) and recycles.
 
 The recycler is a Linux devcontainer component: it reads the service's
 environment from ``/proc`` and runs its bash children with POSIX paths, which
@@ -49,7 +56,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 from env_local import load_environment
 
@@ -68,6 +75,8 @@ CREDENTIAL_KEYS: Tuple[str, ...] = (
 # or the environment contains can reach a shell parser: pids and paths travel
 # as argv, never as interpolated script text.
 SERVICE_ENVIRON_CHILD = 'cat "/proc/$1/environ" 2>/dev/null'
+
+SERVICE_CMDLINE_CHILD = 'tr "\\0" " " < "/proc/$1/cmdline" 2>/dev/null'
 
 PID_ALIVE_CHILD = 'kill -0 "$1" 2>/dev/null'
 
@@ -109,19 +118,32 @@ def _parse_env_entries(raw: bytes) -> Dict[str, str]:
 
     Values are decoded with ``surrogateescape`` so a byte sequence that is not
     valid UTF-8 survives the round trip instead of being replaced into a
-    different string. Empty values are dropped: the loader's own precedence
-    never produces a meaningful empty credential, and the bash original treated
-    an empty file value as absent.
+    different string. Empty SERVICE values are kept: a present-but-empty
+    credential is judgeable evidence (an exported ``KEY=`` is exactly what a
+    remoteEnv-poisoned start holds), unlike an unreadable environment, which
+    yields no entries at all and must stay unjudged.
     """
     values: Dict[str, str] = {}
     for entry in raw.split(b"\0"):
         key_bytes, separator, value_bytes = entry.partition(b"=")
-        if not separator or not value_bytes:
+        if not separator:
             continue
         key = key_bytes.decode("utf-8", errors="surrogateescape")
         if key in CREDENTIAL_KEYS:
             values[key] = value_bytes.decode("utf-8", errors="surrogateescape")
     return values
+
+
+def is_opencode_service(pid: int) -> bool:
+    """Whether the pid's command line is the opencode service.
+
+    A discovery record can outlive its service, and the operating system may
+    reuse the pid. Reading another process's environment would then invent a
+    credential finding and the doctor would name an unrelated process to stop,
+    so the command line must name the service before anything is judged.
+    """
+    command_line = _bash_child_output(SERVICE_CMDLINE_CHILD, [str(pid)]).decode("utf-8", errors="surrogateescape")
+    return "opencode" in command_line and "serve" in command_line
 
 
 def read_env_file_values(env_file: Path) -> Dict[str, str]:
@@ -131,6 +153,30 @@ def read_env_file_values(env_file: Path) -> Dict[str, str]:
     except OSError:
         return {}
     return {key: value for key, value in values.items() if key in CREDENTIAL_KEYS and value}
+
+
+def stale_credential_keys(file_values: Mapping[str, str], service_values: Mapping[str, str]) -> List[str]:
+    """Tracked keys where the service provably holds a credential the file disagrees with.
+
+    Only keys the service environment itself names are judged:
+
+    * present and different from a non-empty file value - the classic stale
+      singleton after a credential rotation;
+    * present but EMPTY while the file holds a value - a poisoned start. VS
+      Code devcontainers forward an unset host variable through ``remoteEnv``
+      as an empty string, so a service started from that environment expands
+      every ``{env:KEY}`` reference to no credential and its remote MCP
+      servers 401 while .env.local and fresh shells stay healthy.
+
+    An ABSENT key is unjudged and never matches: an unreadable ``/proc``
+    environment yields no entries at all, so absence must not read as a
+    mismatch. An empty FILE value is likewise unjudged.
+    """
+    return [
+        key
+        for key in CREDENTIAL_KEYS
+        if key in service_values and file_values.get(key) and service_values[key] != file_values[key]
+    ]
 
 
 def service_environment(pid: int) -> Dict[str, str]:
@@ -238,22 +284,29 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             remove_record(record)
         return 0
 
+    if not is_opencode_service(pid):
+        print(f"recycle: service pid {pid} is not the opencode service; removing stale discovery record")
+        if not options.dry_run:
+            remove_record(record)
+        return 0
+
     if not env_file.is_file():
         # Nothing to compare against. Never kill on no evidence.
         return 0
 
     file_values = read_env_file_values(env_file)
     service_values = service_environment(pid)
-    stale_keys: List[str] = []
-    for key in CREDENTIAL_KEYS:
-        service_value = service_values.get(key, "")
-        file_value = file_values.get(key, "")
-        # Compare each credential the service holds against .env.local. Report
-        # NAMES only; the values themselves are compared, never displayed.
-        if service_value and file_value and service_value != file_value:
-            stale_keys.append(key)
+    stale_keys = stale_credential_keys(file_values, service_values)
 
     if not stale_keys:
+        compared_keys = [key for key in CREDENTIAL_KEYS if file_values.get(key) and key in service_values]
+        if compared_keys:
+            compared_names = "".join(f" {key}" for key in compared_keys)
+            print(f"recycle: service credentials match .env.local for:{compared_names}")
+        elif service_values:
+            print("recycle: .env.local defines none of the credentials the service names; nothing to compare")
+        else:
+            print(f"recycle: service pid {pid} names no tracked credential; restart it from a shell that loads .env.local")
         return 0
 
     stale_names = "".join(f" {key}" for key in stale_keys)

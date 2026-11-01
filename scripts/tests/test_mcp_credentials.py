@@ -25,6 +25,7 @@ import io
 import json
 import os
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -122,6 +123,12 @@ class Sandbox:
         self.env_file = self.root / ".env.local"
         self.last_exit = -1
         self.stdout = ""
+        # The doctor consults the shared-service recycler in --dry-run mode;
+        # ship the real scripts so that child can execute in the sandbox.
+        devcontainer = self.root / ".devcontainer"
+        devcontainer.mkdir()
+        for name in ("env_local.py", "recycle_stale_opencode_service.py"):
+            shutil.copy(REPO_ROOT / ".devcontainer" / name, devcontainer / name)
 
     def write_env_file(self, content: str) -> None:
         self.env_file.write_bytes(content.encode("utf-8"))
@@ -437,6 +444,178 @@ def case_doctor_never_prints_secret_values() -> None:
     sandbox.destroy()
 
 
+# ---------------------------------------------------------------------------
+# mcp-doctor: the shared opencode service's own credentials
+# ---------------------------------------------------------------------------
+
+
+def _service_fixture_available() -> bool:
+    """Whether the /proc-backed service fixture can run on this host.
+
+    The recycler reads the service environment through /proc and the doctor
+    skips service inspection when /proc is missing, so a host with bash but no
+    /proc would assert against a check that never ran.
+    """
+    return os.name == "posix" and shutil.which("bash") is not None and Path("/proc/self").is_dir()
+
+
+def _spawn_service_fixture(credential_env: Dict[str, str]) -> subprocess.Popen:
+    """A real background process standing in for the shared opencode service.
+
+    The recycler (which the doctor consults) reads the service's environment
+    through /proc, so the stand-in must be a live process with controlled
+    credentials, not a file fixture.
+    """
+    env = dict(os.environ)
+    for key in _SCRUBBED_KEYS:
+        env.pop(key, None)
+    env.update(credential_env)
+    return subprocess.Popen(
+        ["bash", "-c", 'exec -a "opencode serve --service" sleep 60'],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _write_service_record(sandbox: Sandbox, pid: int) -> None:
+    state_dir = sandbox.home / ".local" / "state" / "opencode"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    record = {"id": "00000000-0000-0000-0000-000000000000", "version": "2.0.26", "url": "http://127.0.0.1:1", "pid": pid}
+    (state_dir / "service.json").write_text(json.dumps(record), encoding="utf-8")
+
+
+def case_doctor_flags_a_poisoned_shared_service() -> None:
+    # The 2026-10-31 incident: the shared service held EMPTY canonical
+    # credentials while .env.local, the endpoints, and every fresh shell were
+    # healthy - so the doctor passed while every session's github and
+    # zai-web-search servers 401'd at attach. The doctor must surface the
+    # recycler's finding (names only, never values) as a failure with the remedy.
+    if not _service_fixture_available():
+        print("    SKIP: the service fixture needs a POSIX host with bash and /proc.")
+        return
+    sandbox = Sandbox()
+    sandbox.write_env_file(f"GITHUB_PERSONAL_ACCESS_TOKEN={LIVE}\nZAI_API_KEY={LIVE}\n")
+    service = _spawn_service_fixture({"GITHUB_PERSONAL_ACCESS_TOKEN": ""})
+    try:
+        _write_service_record(sandbox, service.pid)
+        sandbox.run_isolated(
+            DOCTOR,
+            extra_env={"XDG_STATE_HOME": str(sandbox.home / ".local" / "state")},
+        )
+        assert_contains("doctor flags the poisoned credential name", "GITHUB_PERSONAL_ACCESS_TOKEN", sandbox.stdout)
+        assert_contains("doctor reports a failure", "❌", sandbox.stdout)
+        assert_contains("doctor names the recycle remedy", "recycle_stale_opencode_service", sandbox.stdout)
+        assert_not_contains("doctor output omits the file credential", LIVE, sandbox.stdout)
+    finally:
+        service.terminate()
+        service.wait(timeout=10)
+        sandbox.destroy()
+
+
+def case_doctor_passes_a_healthy_shared_service() -> None:
+    # A service whose tracked credentials match .env.local must not be flagged;
+    # the doctor's only service finding is the all-clear.
+    if not _service_fixture_available():
+        print("    SKIP: the service fixture needs a POSIX host with bash and /proc.")
+        return
+    sandbox = Sandbox()
+    sandbox.write_env_file(f"GITHUB_PERSONAL_ACCESS_TOKEN={LIVE}\nZAI_API_KEY={LIVE}\n")
+    service = _spawn_service_fixture({"GITHUB_PERSONAL_ACCESS_TOKEN": LIVE})
+    try:
+        _write_service_record(sandbox, service.pid)
+        sandbox.run_isolated(
+            DOCTOR,
+            extra_env={"XDG_STATE_HOME": str(sandbox.home / ".local" / "state")},
+        )
+        assert_contains("doctor reports the shared service check", "shared opencode service", sandbox.stdout)
+        assert_not_contains("a healthy service must not be a failure", "❌", sandbox.stdout)
+    finally:
+        service.terminate()
+        service.wait(timeout=10)
+        sandbox.destroy()
+
+
+def case_doctor_explains_how_to_restart_an_unjudged_service() -> None:
+    # A service that names none of the tracked keys is unjudged, not healthy:
+    # the recycler has no common key to compare, so the doctor must not claim
+    # a match it never established. The remedy is a restart from a loaded
+    # shell, because running the recycler again changes nothing.
+    if not _service_fixture_available():
+        print("    SKIP: the service fixture needs a POSIX host with bash and /proc.")
+        return
+    sandbox = Sandbox()
+    sandbox.write_env_file(f"GITHUB_PERSONAL_ACCESS_TOKEN={LIVE}\nZAI_API_KEY=zai-secret-placeholder\n")
+    service = _spawn_service_fixture({})
+    try:
+        _write_service_record(sandbox, service.pid)
+        sandbox.run_isolated(
+            DOCTOR,
+            extra_env={"XDG_STATE_HOME": str(sandbox.home / ".local" / "state")},
+        )
+        assert_contains("doctor reports the shared service check", "shared opencode service", sandbox.stdout)
+        assert_contains("doctor names the unjudged service", "names no tracked credential", sandbox.stdout)
+        assert_contains("doctor gives the service-stop remedy", "Stop the process named by the pid", sandbox.stdout)
+        assert_not_contains("an unjudged service must not read as a match", "tracked credentials match", sandbox.stdout)
+        assert_not_contains("an unjudged service is not a failure", "❌", sandbox.stdout)
+    finally:
+        service.terminate()
+        service.wait(timeout=10)
+        sandbox.destroy()
+
+
+def case_doctor_rejects_a_record_for_an_unrelated_live_pid() -> None:
+    # A reused pid must not become a stop instruction: the doctor reports the
+    # stale record instead of asking the operator to kill an unrelated process.
+    if not _service_fixture_available():
+        print("    SKIP: the service fixture needs a POSIX host with bash and /proc.")
+        return
+    sandbox = Sandbox()
+    sandbox.write_env_file(f"GITHUB_PERSONAL_ACCESS_TOKEN={LIVE}\nZAI_API_KEY=zai-secret-placeholder\n")
+    unrelated = subprocess.Popen(
+        ["bash", "-c", "exec sleep 60"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        _write_service_record(sandbox, unrelated.pid)
+        sandbox.run_isolated(
+            DOCTOR,
+            extra_env={"XDG_STATE_HOME": str(sandbox.home / ".local" / "state")},
+        )
+        assert_contains("doctor rejects the unrelated pid", "not the opencode service", sandbox.stdout)
+        assert_not_contains("an unrelated process must not be named for a stop", "Stop the process named by the pid", sandbox.stdout)
+        assert_not_contains("an unrelated process is not a failure", "❌", sandbox.stdout)
+    finally:
+        unrelated.terminate()
+        unrelated.wait(timeout=10)
+        sandbox.destroy()
+
+
+def case_doctor_reports_nothing_to_compare() -> None:
+    # The file defines no credential the service names, so no pair exists to
+    # judge: the doctor reports that, not a match and not a restart remedy.
+    if not _service_fixture_available():
+        print("    SKIP: the service fixture needs a POSIX host with bash and /proc.")
+        return
+    sandbox = Sandbox()
+    sandbox.write_env_file("ZAI_API_KEY=zai-secret-placeholder\n")
+    service = _spawn_service_fixture({"GITHUB_PERSONAL_ACCESS_TOKEN": LIVE})
+    try:
+        _write_service_record(sandbox, service.pid)
+        sandbox.run_isolated(
+            DOCTOR,
+            extra_env={"XDG_STATE_HOME": str(sandbox.home / ".local" / "state")},
+        )
+        assert_contains("doctor says nothing could be compared", "nothing to compare", sandbox.stdout)
+        assert_not_contains("a disjoint pair must not read as a match", "tracked credentials match", sandbox.stdout)
+        assert_not_contains("a disjoint pair needs no restart", "Stop the process named by the pid", sandbox.stdout)
+    finally:
+        service.terminate()
+        service.wait(timeout=10)
+        sandbox.destroy()
+
+
 def case_stub_handles_an_idle_connection_without_blocking_probes() -> None:
     stub = StubEndpoint(LIVE)
     idle = socket.create_connection(("127.0.0.1", stub.port), timeout=2)
@@ -479,6 +658,11 @@ CASES = (
     case_doctor_names_the_credential_source_it_used,
     case_doctor_flags_divergence_before_probing,
     case_doctor_never_prints_secret_values,
+    case_doctor_flags_a_poisoned_shared_service,
+    case_doctor_passes_a_healthy_shared_service,
+    case_doctor_explains_how_to_restart_an_unjudged_service,
+    case_doctor_reports_nothing_to_compare,
+    case_doctor_rejects_a_record_for_an_unrelated_live_pid,
     case_repair_reconciles_divergent_github_pair,
     case_repair_refuses_when_neither_credential_authenticates,
     case_repair_respects_reverse_divergence,
