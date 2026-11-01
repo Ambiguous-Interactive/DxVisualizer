@@ -468,15 +468,15 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 popover: only a focused path that owns its selection keys still reveals.
             */
             string missingFolder = folder + "/Missing";
-            (string DataFolderPath, KeyCode Key, KeyCode? SelectKey, bool WarnsAboutThePath)[] cases =
+            (string DataFolderPath, KeyCode Key, KeyCode? SelectKey, bool FolderExists, bool WarnsAboutThePath)[] cases =
             {
-                (folder, KeyCode.Return, null, false),
-                (missingFolder, KeyCode.Return, null, true),
-                (missingFolder, KeyCode.Space, null, true),
-                (missingFolder, KeyCode.UpArrow, null, false),
-                (missingFolder, KeyCode.UpArrow, KeyCode.UpArrow, true),
+                (folder, KeyCode.Return, null, true, false),
+                (missingFolder, KeyCode.Return, null, false, true),
+                (missingFolder, KeyCode.Space, null, false, true),
+                (missingFolder, KeyCode.UpArrow, null, false, false),
+                (missingFolder, KeyCode.UpArrow, KeyCode.UpArrow, false, true),
             };
-            foreach ((string dataFolderPath, KeyCode key, KeyCode? selectKey, bool warnsAboutThePath) in cases)
+            foreach ((string dataFolderPath, KeyCode key, KeyCode? selectKey, bool folderExists, bool warnsAboutThePath) in cases)
             {
                 using TestCleanupScope caseCleanup = new();
                 DataVisualizerWindow window = OpenSettingsWindow(
@@ -517,6 +517,16 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                     Is.EqualTo(warnsAboutThePath),
                     warnsAboutThePath ? "A missing data folder reports its configured path." : "An existing data folder reveals without a warning."
                 );
+
+                /*
+                    Project-window highlighting has no readable result, so the reveal reports
+                    the folder it resolves. An existing folder resolves to that folder object.
+                */
+                object[] resolved = { null };
+                bool isResolved = (bool)InvokePrivate(window, "TryResolveDataFolder", resolved);
+                Assert.That(isResolved, Is.EqualTo(folderExists), "Only an existing data folder resolves for a reveal.");
+                UnityEngine.Object expectedFolder = folderExists ? AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(dataFolderPath) : null;
+                Assert.That(resolved[0] as UnityEngine.Object == expectedFolder, "The reveal resolves the configured folder.");
             }
         }
     }

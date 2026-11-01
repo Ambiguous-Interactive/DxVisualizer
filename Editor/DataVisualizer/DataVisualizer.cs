@@ -4802,21 +4802,34 @@ namespace WallstopStudios.DataVisualizer.Editor
         */
         private void RevealDataFolder()
         {
+            if (TryResolveDataFolder(out Object dataFolder))
+            {
+                EditorGUIUtility.PingObject(dataFolder);
+            }
+        }
+
+        /*
+            Resolves the configured data folder for a reveal. Project-window highlighting
+            has no readable result, so the lookup reports what a reveal would show.
+        */
+        private bool TryResolveDataFolder(out Object dataFolder)
+        {
             string dataFolderPath = Settings.DataFolderPath;
             if (string.IsNullOrWhiteSpace(dataFolderPath))
             {
                 Debug.LogWarning("Data folder is not set; choose one before revealing it.");
-                return;
+                dataFolder = null;
+                return false;
             }
 
-            Object dataFolder = AssetDatabase.LoadAssetAtPath<Object>(dataFolderPath);
+            dataFolder = AssetDatabase.LoadAssetAtPath<Object>(dataFolderPath);
             if (dataFolder == null)
             {
                 Debug.LogWarning($"Data folder '{dataFolderPath}' is not in this project; choose an existing folder.");
-                return;
+                return false;
             }
 
-            EditorGUIUtility.PingObject(dataFolder);
+            return true;
         }
 
         private void SelectDataFolderForPopover(Label displayField)
