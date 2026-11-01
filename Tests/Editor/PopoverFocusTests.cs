@@ -59,6 +59,24 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             }
         }
 
+        private static bool FocusIsWithin(DataVisualizerWindow window, VisualElement container)
+        {
+            VisualElement focused = Focused(window);
+            return focused != null && (focused == container || container.Contains(focused));
+        }
+
+        private static IEnumerator WaitForFocusWithin(DataVisualizerWindow window, VisualElement container)
+        {
+            for (int tick = 0; tick < 120; tick++)
+            {
+                if (FocusIsWithin(window, container))
+                {
+                    yield break;
+                }
+                yield return null;
+            }
+        }
+
         private static void CreateShownWindow(DataVisualizerWindow window, PerfWindowStateScope state)
         {
             SetPrivateField(window, "_settings", state.Settings);
@@ -321,6 +339,108 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(remaining.Exists(candidate => AssetDatabase.GetAssetPath(candidate) == paths[1]), Is.False, "The deleted asset leaves the list.");
             Assert.That(remaining.Exists(candidate => AssetDatabase.GetAssetPath(candidate) == paths[0]), Is.True, "Sibling assets stay listed.");
             Assert.That(Focused(window), Is.SameAs(list), "Deleting the focused row keeps keyboard focus in the object list.");
+        }
+
+        [UnityTest]
+        public IEnumerator ShouldFocusTheRenameNameFieldWhenTheRenamePopoverOpens()
+        {
+            using TestCleanupScope cleanup = new();
+            Type type = typeof(PopoverNameData);
+            DataVisualizerWindow window = OpenSettingsWindow(
+                cleanup,
+                "PopoverRenameFocus",
+                scope =>
+                {
+                    scope.UserState.managedTypeNames.Add(type.FullName);
+                    scope.Settings.HydrateFrom(scope.UserState);
+                }
+            );
+            string folder = "Assets/PopoverRenameFocus_" + Guid.NewGuid().ToString("N");
+            AssetDatabase.CreateFolder("Assets", folder.Substring("Assets/".Length));
+            cleanup.Defer(() => AssetDatabase.DeleteAsset(folder));
+            string path = folder + "/Renamed.asset";
+            AssetDatabase.CreateAsset(ScriptableObject.CreateInstance<PopoverNameData>(), path);
+            AssetDatabase.SaveAssets();
+            ReadPrivateField<NamespaceController>(window, "_namespaceController").SelectType(window, type);
+            ScriptableObject target = AssetDatabase.LoadAssetAtPath<ScriptableObject>(path);
+            Assert.That(target != null, "The fixture asset loads.");
+            InvokePrivate(window, "SetActiveObject", target, false);
+            yield return null;
+
+            ListView list = ReadPrivateField<ListView>(window, "_objectListView");
+            list.Focus();
+            yield return null;
+
+            SendKey(list, KeyCode.F2);
+            VisualElement rename = ReadPrivateField<VisualElement>(window, "_renamePopover");
+            for (int tick = 0; tick < 120 && Display(rename) != DisplayStyle.Flex; tick++)
+            {
+                yield return null;
+            }
+            Assert.That(Display(rename), Is.EqualTo(DisplayStyle.Flex), "Rename opens the popover.");
+            TextField nameField = rename.Q<TextField>(name: "rename-textfield");
+            Assert.That(nameField != null, "The rename popover holds a name field.");
+            /*
+                The field takes focus so the keystrokes that follow the shortcut edit
+                the name. While the popover container holds focus, typed characters
+                never reach the field.
+            */
+            yield return WaitForFocusWithin(window, nameField);
+            Assert.That(FocusIsWithin(window, nameField), "The rename name field takes typing focus.");
+        }
+
+        [UnityTest]
+        public IEnumerator ShouldFocusTheCreateNameFieldWhenTheCreatePopoverOpens()
+        {
+            using TestCleanupScope cleanup = new();
+            Type type = typeof(PopoverNameData);
+            DataVisualizerWindow window = OpenSettingsWindow(
+                cleanup,
+                "PopoverCreateFocus",
+                scope =>
+                {
+                    scope.UserState.managedTypeNames.Add(type.FullName);
+                    scope.Settings.HydrateFrom(scope.UserState);
+                }
+            );
+            ReadPrivateField<NamespaceController>(window, "_namespaceController").SelectType(window, type);
+            yield return null;
+
+            Button create = ReadPrivateField<Button>(window, "_createObjectButton");
+            using (NavigationSubmitEvent submit = NavigationSubmitEvent.GetPooled())
+            {
+                submit.target = create;
+                create.SendEvent(submit);
+            }
+            VisualElement popover = ReadPrivateField<VisualElement>(window, "_createPopover");
+            for (int tick = 0; tick < 120 && Display(popover) != DisplayStyle.Flex; tick++)
+            {
+                yield return null;
+            }
+            Assert.That(Display(popover), Is.EqualTo(DisplayStyle.Flex), "The create button opens the create popover.");
+            TextField nameField = popover.Q<TextField>(name: "create-textfield");
+            Assert.That(nameField != null, "The create popover holds a name field.");
+            yield return WaitForFocusWithin(window, nameField);
+            Assert.That(FocusIsWithin(window, nameField), "The create name field takes typing focus.");
+        }
+
+        [UnityTest]
+        public IEnumerator ShouldFocusTheTypeSearchFieldWhenTheTypePopoverOpens()
+        {
+            using TestCleanupScope cleanup = new();
+            DataVisualizerWindow window = OpenSettingsWindow(cleanup, "PopoverTypeSearchFocus");
+            yield return null;
+
+            window.OpenTypeSearchPopover();
+            VisualElement popover = ReadPrivateField<VisualElement>(window, "_typeAddPopover");
+            for (int tick = 0; tick < 120 && Display(popover) != DisplayStyle.Flex; tick++)
+            {
+                yield return null;
+            }
+            Assert.That(Display(popover), Is.EqualTo(DisplayStyle.Flex), "The type finder opens.");
+            TextField searchField = ReadPrivateField<TextField>(window, "_typeAddSearchField");
+            yield return WaitForFocusWithin(window, searchField);
+            Assert.That(FocusIsWithin(window, searchField), "The type finder search field takes typing focus.");
         }
     }
 }

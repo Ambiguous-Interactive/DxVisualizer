@@ -1087,6 +1087,28 @@ namespace WallstopStudios.DataVisualizer.Editor
             return null;
         }
 
+        /*
+            A popover that holds a text field exists to collect typed input, so that field
+            takes focus when the popover opens and its current value starts selected. A
+            delayed select-all races the first typed character, so the selection is set
+            here before input is accepted. Container focus swallows the keystrokes that
+            follow the shortcut, which leaves rename, create and the type finder
+            mouse-only. Popovers without a field keep container focus so their own key
+            handling runs.
+        */
+        private static void FocusPopoverEntry(VisualElement popover)
+        {
+            TextField entryField = popover.Q<TextField>();
+            if (entryField == null)
+            {
+                popover.Focus();
+                return;
+            }
+
+            entryField.Focus();
+            entryField.SelectAll();
+        }
+
         private static Label CreateHighlightedLabel(
             string fullText,
             IReadOnlyList<string> termsToHighlight,
@@ -4035,7 +4057,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                         {
                             if (shouldFocus)
                             {
-                                popover.Focus();
+                                FocusPopoverEntry(popover);
                             }
                             rootVisualElement.RegisterCallback<PointerDownEvent>(HandleClickOutsidePopover, TrickleDown.TrickleDown);
                         }
@@ -4044,7 +4066,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             }
             else if (_activeNestedPopover == popover && shouldFocus)
             {
-                popover.Focus();
+                FocusPopoverEntry(popover);
             }
         }
 
@@ -4861,7 +4883,6 @@ namespace WallstopStudios.DataVisualizer.Editor
             contentWrapper.Add(createLabel);
             TextField nameTextField = new() { value = Path.GetFileNameWithoutExtension(NamespaceController.GetTypeDisplayName(type)), name = "create-textfield" };
             nameTextField.AddToClassList("create-text-field");
-            nameTextField.schedule.Execute(() => nameTextField.SelectAll()).ExecuteLater(50);
             contentWrapper.Add(nameTextField);
             Label errorLabel = new() { name = "error-label", style = { height = 18, display = DisplayStyle.None } };
             errorLabel.AddToClassList("dataviz-error");
@@ -4915,7 +4936,6 @@ namespace WallstopStudios.DataVisualizer.Editor
             contentWrapper.Add(renameLabel);
             TextField nameTextField = new() { value = Path.GetFileNameWithoutExtension(originalName), name = "rename-textfield" };
             nameTextField.AddToClassList("rename-text-field");
-            nameTextField.schedule.Execute(() => nameTextField.SelectAll()).ExecuteLater(50);
             contentWrapper.Add(nameTextField);
             Label errorLabel = new() { name = "error-label", style = { height = 18, display = DisplayStyle.None } };
             errorLabel.AddToClassList("dataviz-error");
