@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import socket
+import subprocess
 import os
 import sys
 import threading
 import unittest
+from typing import cast
 from unittest.mock import Mock, patch
 from urllib.error import URLError
 
@@ -42,6 +45,39 @@ class StartupTests(unittest.TestCase):
             response = bridge.request({'id': 1, 'method': 'mutate'})
         self.assertIn('Bridge stopped', response['error']['message'])
         spawn.assert_not_called()
+
+    def test_diagnostics_reports_probe_failures_without_raising(self) -> None:
+        bridge = host.Bridge(settings())
+        self.addCleanup(bridge.close)
+        failures = (FileNotFoundError('unity'), PermissionError('denied'), subprocess.TimeoutExpired(['unity'], 15))
+        for failure in failures:
+            with self.subTest(failure=type(failure).__name__), patch.object(host.subprocess, 'run', side_effect=failure):
+                report = bridge.diagnostics()
+                self.assertIn(type(failure).__name__, report['probeError'])
+                self.assertNotIn('discoveryErrors', report)
+        completed = subprocess.CompletedProcess(['unity'], 1, stdout='account denied', stderr='')
+        with patch.object(host.subprocess, 'run', return_value=completed):
+            report = bridge.diagnostics()
+        self.assertEqual(report['statusExitCode'], 1)
+        self.assertIn('probeError', report)
+        self.assertNotIn('discoveryErrors', report)
+
+    def test_diagnostics_redacts_inherited_credentials(self) -> None:
+        values = settings()
+        values['token'] = 'bridge-token'
+        bridge = host.Bridge(values)
+        self.addCleanup(bridge.close)
+        status = {'success': False, 'errors': [{'code': 'STATUS_PIPELINE_LOAD_PENDING', 'message': 'Denied for inherited-key and bridge-token'}]}
+        completed = subprocess.CompletedProcess(['unity'], 1, stdout=json.dumps(status), stderr='')
+        with patch.dict(host.os.environ, {'UNITY_MCP_API_KEY': 'inherited-key'}), patch.object(host.subprocess, 'run', return_value=completed):
+            report = bridge.diagnostics()
+            response = cast(host.JsonMap, bridge.handle({'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call',
+                                                         'params': {'name': 'bridge_diagnostics', 'arguments': {}}}))
+        self.assertEqual(report['discoveryErrors'][0]['message'], 'Denied for <redacted> and <redacted>')
+        text = response['result']['content'][0]['text']
+        self.assertIn('STATUS_PIPELINE_LOAD_PENDING', text)
+        self.assertNotIn('inherited-key', text)
+        self.assertNotIn('bridge-token', text)
 
     def test_shutdown_leaves_pipe_closure_to_the_writer(self) -> None:
         bridge = host.Bridge(settings())

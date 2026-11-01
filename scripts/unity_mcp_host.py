@@ -21,14 +21,14 @@ import sys
 import threading
 import time
 from types import FrameType
-from typing import Any, Dict, Generator, Optional, Sequence, cast
+from typing import Any, Dict, Generator, List, Optional, Sequence, cast
 from urllib.error import URLError
 from urllib.parse import urlsplit
 from urllib.request import ProxyHandler, build_opener
 import uuid
 
 sys.dont_write_bytecode = True
-from unity_mcp_settings import BridgeSettings, resolve_settings
+from unity_mcp_settings import BridgeSettings, credential_values, redact_credentials, resolve_settings
 
 JsonMap = Dict[str, Any]
 ROOT = Path(__file__).resolve().parent.parent
@@ -236,10 +236,15 @@ class Bridge:
             return rpc_error(message['id'], -32000, f"Timed out after {self.settings['timeout']}ms waiting for Unity CLI.")
         return pending.response or rpc_error(message['id'], -32000, 'Unity CLI returned no response.')
 
+    def secrets(self) -> List[str]:
+        """Return the credential values the pinned CLI inherits from this process."""
+        return credential_values((os.environ, {'UNITY_MCP_TOKEN': self.settings['token']}))
+
     def diagnostics(self) -> JsonMap:
         arguments = [self.settings['cliCommand'], 'status', '--format', 'json']
         if self.settings['projectPath']:
             arguments.extend(('--project-path', self.settings['projectPath']))
+        secrets = self.secrets()
         report: JsonMap = {'health': self.health()}
         try:
             result = subprocess.run(arguments, capture_output=True, text=True, encoding='utf-8', timeout=15, check=False)
@@ -249,7 +254,7 @@ class Bridge:
             reasons = status.get('errors', [])
             entries = cast(list[object], reasons) if isinstance(reasons, list) else []
             report['discoveryErrors'] = [
-                {key: cast(JsonMap, reason)[key] for key in ('code', 'message') if key in cast(JsonMap, reason)}
+                {key: redact_credentials(str(cast(JsonMap, reason)[key]), secrets) for key in ('code', 'message') if key in cast(JsonMap, reason)}
                 for reason in entries if isinstance(reason, dict)
             ]
             report['statusSuccess'] = status.get('success')
@@ -277,9 +282,7 @@ class Bridge:
             return None
         params = request.get('params', {})
         if request.get('method') == 'tools/call' and isinstance(params, dict) and cast(JsonMap, params).get('name') == 'bridge_diagnostics':
-            text = json.dumps(self.diagnostics(), ensure_ascii=False)
-            if self.settings['token']:
-                text = text.replace(self.settings['token'], '<redacted>')
+            text = redact_credentials(json.dumps(self.diagnostics(), ensure_ascii=False), self.secrets())
             return {'jsonrpc': '2.0', 'id': request['id'], 'result': {'content': [{'type': 'text', 'text': text}]}}
         response = self.request(request)
         if request.get('method') == 'tools/list' and isinstance(response.get('result'), dict):

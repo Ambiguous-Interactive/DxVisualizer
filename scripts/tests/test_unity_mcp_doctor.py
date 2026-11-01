@@ -99,6 +99,23 @@ class DoctorTests(unittest.TestCase):
         self.assertIn('Pinned host diagnosis', output.getvalue())
         self.assertIn('Update to 6000.5.3f1', output.getvalue())
 
+    def test_every_failed_readiness_check_requests_pinned_diagnostics(self) -> None:
+        self.responses['tools/list'] = {'result': {'tools': [{'name': 'editor_status'}, {'name': 'bridge_diagnostics'}]}}
+        original = self.request
+        def request(url: str, headers: Dict[str, str], payload: Optional[JsonObject]) -> JsonObject:
+            if payload and payload.get('params') == {'name': 'bridge_diagnostics', 'arguments': {}}:
+                details = {'discoveryErrors': [{'code': 'STATUS_PIPELINE_LOAD_PENDING', 'message': 'Update to 6000.5.3f1'}]}
+                return {'result': {'content': [{'text': json.dumps(details)}]}}
+            return original(url, headers, payload)
+        for label, status in {'missing project path': {'ready': False}, 'wrong editor': {'projectPath': str(self.root)}}.items():
+            with self.subTest(label=label):
+                self.responses['tools/call'] = {'result': {'content': [{'text': json.dumps(status)}]}}
+                doctor = Doctor(self.root, self.root, {'UNITY_MCP_PROJECT': str(self.project), 'DATAVIZ_IN_CONTAINER': '0'}, self.command, request)
+                with contextlib.redirect_stdout(io.StringIO()) as output:
+                    self.assertEqual(doctor.run(), 1)
+                self.assertIn('Pinned host diagnosis', output.getvalue())
+                self.assertIn('Update to 6000.5.3f1', output.getvalue())
+
     def test_unavailable_cli_catalog_uses_its_diagnostic_tool_and_preserves_reason(self) -> None:
         self.responses['tools/list'] = {'result': {'tools': [{'name': 'unity-cli-status'}]}}
         self.responses['tools/call'] = {'result': {'isError': True, 'content': [{'type': 'text', 'text': 'Pipeline discovery denied for this account'}]}}

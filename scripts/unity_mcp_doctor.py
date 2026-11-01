@@ -13,6 +13,8 @@ from typing import Callable, Dict, List, Mapping, Optional, Protocol, Union, cas
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+from unity_mcp_settings import credential_values, redact_credentials
+
 Json = Union[None, bool, int, float, str, List['Json'], Dict[str, 'Json']]
 JsonObject = Dict[str, Json]
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -168,14 +170,11 @@ class Doctor:
                 status = object_value(cast(Json, json.loads(self.command(arguments))))
                 errors = status.get('errors')
                 if isinstance(errors, list):
-                    reasons = [{key: object_value(error)[key] for key in ('code', 'message') if key in object_value(error)} for error in errors]
-                    diagnostic = json.dumps(reasons, ensure_ascii=False)
-                    for source in (self.environment, self.local):
-                        for name, value in source.items():
-                            if value and any(part in name.upper() for part in ('TOKEN', 'SECRET', 'PASSWORD', 'API_KEY')):
-                                diagnostic = diagnostic.replace(value, '<redacted>')
+                    secrets = credential_values((self.environment, self.local))
+                    reasons = [{key: redact_credentials(str(object_value(error)[key]), secrets)
+                                for key in ('code', 'message') if key in object_value(error)} for error in errors]
                     if reasons:
-                        self.warn('Unity ' + arguments[0] + ' discovery: ' + diagnostic)
+                        self.warn('Unity ' + arguments[0] + ' discovery: ' + json.dumps(reasons, ensure_ascii=False))
                 data = object_value(status.get('data'))
                 rows = data.get('items', data.get('instances'))
                 if isinstance(rows, list):
@@ -249,6 +248,7 @@ class Doctor:
                 self.ok(f'tools/list: {count} tools available.')
         except (OSError, ValueError) as error:
             self.fail(f'tools/list failed: {error}')
+        readiness_failed = False
         try:
             call = rpc(3, 'tools/call', {'name': canary, 'arguments': {}})
             content = object_value(call.get('result')).get('content')
@@ -275,20 +275,29 @@ class Doctor:
                 else:
                     self.fail(f"WRONG EDITOR: the MCP server drives '{actual}' but the pinned project is "
                               f"'{expected}'. Restart the bridge after fixing UNITY_MCP_PROJECT.")
+                    readiness_failed = True
             else:
                 self.fail('editor_status did not establish project readiness: '
                           + ' '.join(text[:200].split()))
+                readiness_failed = True
         except (OSError, ValueError) as error:
             self.fail(f'editor_status canary failed: {error}')
-            if 'bridge_diagnostics' in names:
-                try:
-                    diagnostic = object_value(rpc(4, 'tools/call', {'name': 'bridge_diagnostics', 'arguments': {}}).get('result'))
-                    entries = diagnostic.get('content')
-                    raw = object_value(entries[0]).get('text') if isinstance(entries, list) and entries else ''
-                    details = object_value(cast(Json, json.loads(raw))) if isinstance(raw, str) else {}
-                    self.warn('Pinned host diagnosis: ' + json.dumps(details.get('discoveryErrors', details.get('probeError', 'No structured host result.'))))
-                except (OSError, ValueError) as diagnostic_error:
-                    self.warn('Pinned host diagnosis failed: ' + str(diagnostic_error))
+            readiness_failed = True
+        if readiness_failed:
+            self.report_pinned_diagnostics(rpc, names)
+
+    def report_pinned_diagnostics(self, rpc: Callable[[int, str, JsonObject], JsonObject], names: List[Json]) -> None:
+        """Surface the pinned host's own discovery errors and recovery reason."""
+        if 'bridge_diagnostics' not in names:
+            return
+        try:
+            diagnostic = object_value(rpc(4, 'tools/call', {'name': 'bridge_diagnostics', 'arguments': {}}).get('result'))
+            entries = diagnostic.get('content')
+            raw = object_value(entries[0]).get('text') if isinstance(entries, list) and entries else ''
+            details = object_value(cast(Json, json.loads(raw))) if isinstance(raw, str) else {}
+            self.warn('Pinned host diagnosis: ' + json.dumps(details.get('discoveryErrors', details.get('probeError', 'No structured host result.'))))
+        except (OSError, ValueError) as error:
+            self.warn('Pinned host diagnosis failed: ' + str(error))
 
 
     def run(self) -> int:
