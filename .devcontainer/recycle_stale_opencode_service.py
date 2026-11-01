@@ -21,7 +21,9 @@ on MSYS, where Windows process IDs differ and os.kill(pid, 0) is unsafe.
 
 Safety properties, each covered by a contract test:
 
-* A service whose credential MATCHES .env.local is never touched.
+* A service whose credential MATCHES .env.local is never touched, and the
+  report names the compared keys so a caller can tell a match from an
+  unjudged key.
 * A record whose pid is gone is removed (clients must not attach to it).
 * No .env.local means nothing to compare against, so nothing to do.
 * Credential VALUES are never printed - only variable NAMES.
@@ -275,6 +277,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     stale_keys = stale_credential_keys(file_values, service_values)
 
     if not stale_keys:
+        compared_keys = [key for key in CREDENTIAL_KEYS if file_values.get(key) and key in service_values]
+        if compared_keys:
+            compared_names = "".join(f" {key}" for key in compared_keys)
+            print(f"recycle: service credentials match .env.local for:{compared_names}")
+        else:
+            print("recycle: no tracked credential is in both the service and .env.local; nothing to compare")
         return 0
 
     stale_names = "".join(f" {key}" for key in stale_keys)

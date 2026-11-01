@@ -367,6 +367,41 @@ def case_post_start_warms_opencode_with_loaded_credentials() -> None:
         sandbox.cleanup()
 
 
+def case_post_start_warms_with_repaired_credentials() -> None:
+    """A repaired credential must reach the service, not the rejected one.
+
+    The doctor's --repair rewrites .env.local in place before the warm attach.
+    Warming from the pre-repair environment would start the singleton with the
+    value the repair just replaced, so post_start reloads the file first.
+    """
+    sandbox = Sandbox()
+    try:
+        env_file = sandbox.ws / ".env.local"
+        env_file.write_text("GITHUB_PERSONAL_ACCESS_TOKEN=rejected-value\n")
+        sandbox.env["GITHUB_PERSONAL_ACCESS_TOKEN"] = "rejected-value"
+        repair_stub = (
+            "#!/usr/bin/env bash\n"
+            'printf "%s\\n" "GITHUB_PERSONAL_ACCESS_TOKEN=repaired-value" > "$REPAIR_TARGET"\n'
+            'printf "STUB node| repair\\n" >> "$MARKER"\n'
+            "exit 0\n"
+        )
+        sandbox.write_stub(sandbox.stubs / "node", repair_stub)
+        sandbox.env["REPAIR_TARGET"] = str(env_file)
+        sandbox.write_stub(sandbox.stubs / "opencode", STUB_RECORD)
+        code, output = sandbox.run("post_start.py")
+        assert_exit_code(0, "post_start should succeed in a sandbox", code)
+        warm_calls = [line for line in sandbox.marker_lines() if line.startswith("STUB opencode|")]
+        assert_true(len(warm_calls) == 2, f"the warm attach should call `opencode mcp list` twice, got {warm_calls}")
+        for line in warm_calls:
+            assert_true(
+                "GITHUB_PERSONAL_ACCESS_TOKEN=repaired-value;" in line,
+                f"the warm attach must carry the repaired credential, got: {line}",
+            )
+        print(output)
+    finally:
+        sandbox.cleanup()
+
+
 def case_update_content_restores_and_syncs_only_when_present() -> None:
     sandbox = Sandbox()
     try:
@@ -428,6 +463,7 @@ def main() -> int:
         ("PostCreate_InstallsPreCommitHooksBestEffort", case_post_create_installs_pre_commit_hooks),
         ("PostStart_ReplacesBashrcBlockAndLoadsEnvWithFilePrecedence", case_post_start_replaces_block_and_loads_env),
         ("PostStart_WarmsOpencodeWithLoadedCredentials", case_post_start_warms_opencode_with_loaded_credentials),
+        ("PostStart_WarmsWithRepairedCredentials", case_post_start_warms_with_repaired_credentials),
         ("UpdateContent_RestoresAndSyncsOnlyWhenPresent", case_update_content_restores_and_syncs_only_when_present),
         ("Lifecycle_MissingWorkspaceFailsForEveryEntry", case_missing_workspace_fails_for_every_entry),
     ])

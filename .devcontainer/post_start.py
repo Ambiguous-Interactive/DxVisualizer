@@ -204,7 +204,10 @@ def main(argv: Sequence[str]) -> int:
 
     if shutil.which("opencode") is not None:
         recycle_stale_service(workspace)
-        warm_opencode_service(env)
+        # The repair above may rewrite .env.local in place, and the service keeps
+        # the warm attach's environment for its whole life. Reload the file so a
+        # repaired credential reaches the singleton instead of the rejected one.
+        warm_opencode_service(child_env_with_env_local(workspace))
 
     print("✅ Data Visualizer dev container ready.")
     return 0

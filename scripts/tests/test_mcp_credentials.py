@@ -449,6 +449,16 @@ def case_doctor_never_prints_secret_values() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _service_fixture_available() -> bool:
+    """Whether the /proc-backed service fixture can run on this host.
+
+    The recycler reads the service environment through /proc and the doctor
+    skips service inspection when /proc is missing, so a host with bash but no
+    /proc would assert against a check that never ran.
+    """
+    return os.name == "posix" and shutil.which("bash") is not None and Path("/proc/self").is_dir()
+
+
 def _spawn_service_fixture(credential_env: Dict[str, str]) -> subprocess.Popen:
     """A real background process standing in for the shared opencode service.
 
@@ -481,8 +491,8 @@ def case_doctor_flags_a_poisoned_shared_service() -> None:
     # healthy - so the doctor passed while every session's github and
     # zai-web-search servers 401'd at attach. The doctor must surface the
     # recycler's finding (names only, never values) as a failure with the remedy.
-    if os.name != "posix" or not shutil.which("bash"):
-        print("    SKIP: the service fixture needs a POSIX host with bash.")
+    if not _service_fixture_available():
+        print("    SKIP: the service fixture needs a POSIX host with bash and /proc.")
         return
     sandbox = Sandbox()
     sandbox.write_env_file(f"GITHUB_PERSONAL_ACCESS_TOKEN={LIVE}\nZAI_API_KEY={LIVE}\n")
@@ -506,8 +516,8 @@ def case_doctor_flags_a_poisoned_shared_service() -> None:
 def case_doctor_passes_a_healthy_shared_service() -> None:
     # A service whose tracked credentials match .env.local must not be flagged;
     # the doctor's only service finding is the all-clear.
-    if os.name != "posix" or not shutil.which("bash"):
-        print("    SKIP: the service fixture needs a POSIX host with bash.")
+    if not _service_fixture_available():
+        print("    SKIP: the service fixture needs a POSIX host with bash and /proc.")
         return
     sandbox = Sandbox()
     sandbox.write_env_file(f"GITHUB_PERSONAL_ACCESS_TOKEN={LIVE}\nZAI_API_KEY={LIVE}\n")
@@ -520,6 +530,32 @@ def case_doctor_passes_a_healthy_shared_service() -> None:
         )
         assert_contains("doctor reports the shared service check", "shared opencode service", sandbox.stdout)
         assert_not_contains("a healthy service must not be a failure", "❌", sandbox.stdout)
+    finally:
+        service.terminate()
+        service.wait(timeout=10)
+        sandbox.destroy()
+
+
+def case_doctor_reports_a_service_it_could_not_compare() -> None:
+    # A service that names none of the tracked keys is unjudged, not healthy:
+    # the recycler has no common key to compare, so the doctor must not claim
+    # a match it never established.
+    if not _service_fixture_available():
+        print("    SKIP: the service fixture needs a POSIX host with bash and /proc.")
+        return
+    sandbox = Sandbox()
+    sandbox.write_env_file(f"GITHUB_PERSONAL_ACCESS_TOKEN={LIVE}\nZAI_API_KEY=zai-secret-placeholder\n")
+    service = _spawn_service_fixture({})
+    try:
+        _write_service_record(sandbox, service.pid)
+        sandbox.run_isolated(
+            DOCTOR,
+            extra_env={"XDG_STATE_HOME": str(sandbox.home / ".local" / "state")},
+        )
+        assert_contains("doctor reports the shared service check", "shared opencode service", sandbox.stdout)
+        assert_contains("doctor says the credentials were not compared", "could not be compared", sandbox.stdout)
+        assert_not_contains("an unjudged service must not read as a match", "tracked credentials match", sandbox.stdout)
+        assert_not_contains("an unjudged service is not a failure", "❌", sandbox.stdout)
     finally:
         service.terminate()
         service.wait(timeout=10)
@@ -570,6 +606,7 @@ CASES = (
     case_doctor_never_prints_secret_values,
     case_doctor_flags_a_poisoned_shared_service,
     case_doctor_passes_a_healthy_shared_service,
+    case_doctor_reports_a_service_it_could_not_compare,
     case_repair_reconciles_divergent_github_pair,
     case_repair_refuses_when_neither_credential_authenticates,
     case_repair_respects_reverse_divergence,

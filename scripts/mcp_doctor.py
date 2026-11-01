@@ -248,7 +248,14 @@ class Doctor:
         if completed.returncode != 0:
             self.report('ℹ️', f'shared opencode service: recycler dry run exited {completed.returncode}; run it manually for depth.')
             return
-        self.report('✅', 'shared opencode service: tracked credentials match .env.local.')
+        if 'service credentials match' in output:
+            self.report('✅', 'shared opencode service: tracked credentials match .env.local.')
+            return
+        self.report(
+            'ℹ️',
+            'shared opencode service: credentials could not be compared with .env.local '
+            '(no tracked key is in both); run the recycler manually for detail.',
+        )
 
     def run(self, repair: bool) -> int:
         container = self.environment.get('DATAVIZ_IN_CONTAINER') == '1' or Path('/.dockerenv').exists() or Path('/run/.containerenv').exists()

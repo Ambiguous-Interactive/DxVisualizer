@@ -56,10 +56,10 @@ def _posix_bash_available() -> bool:
 
     The fixture needs bash children, POSIX permission semantics, and a
     /proc-based process view, and the recycler itself is a Linux devcontainer
-    component; non-POSIX hosts skip the fixture-backed cases the same way the
-    devcontainer lifecycle suite does.
+    component; hosts without any of them skip the fixture-backed cases the same
+    way the devcontainer lifecycle suite does.
     """
-    return os.name == "posix" and shutil.which("bash") is not None
+    return os.name == "posix" and shutil.which("bash") is not None and Path("/proc/self").is_dir()
 
 # Synthetic, obviously-fake placeholders. NOT credentials.
 STALE = "ghp_0000000000000000000000000000000000"
@@ -388,6 +388,50 @@ def case_dry_run_reports_without_killing(python: str) -> None:
         fixture.cleanup()
 
 
+def case_reports_when_nothing_was_compared(python: str) -> None:
+    # A service that names none of the tracked keys leaves every key unjudged.
+    # The report must say so instead of claiming a match it never established.
+    fixture = _ServiceFixture()
+    try:
+        # The file and the service name disjoint tracked keys, so no pair exists to judge.
+        fixture.write_env_file("ZAI_API_KEY=zai-placeholder\n")
+        fixture.start(LIVE)
+        fixture.write_record()
+        fixture.require_live()
+        output, exit_code = run_recycle(python, fixture, "--dry-run")
+        assert_exit_code(0, "an unjudged service must exit zero", exit_code)
+        assert_true(fixture.alive(), "an unjudged service must be left running")
+        assert_true(
+            "nothing to compare" in output,
+            f"the report must admit the credentials were not compared: {output}",
+        )
+        assert_true(
+            "credentials match" not in output,
+            f"an unjudged service must not read as a match: {output}",
+        )
+    finally:
+        fixture.cleanup()
+
+
+def case_reports_the_compared_credentials_on_a_match(python: str) -> None:
+    # The doctor reports an all-clear to the operator, so the recycler must name
+    # the evidence behind it: the tracked keys it actually compared.
+    fixture = _ServiceFixture()
+    try:
+        fixture.write_env_file(f"GITHUB_PERSONAL_ACCESS_TOKEN={LIVE}\n")
+        fixture.start(LIVE)
+        fixture.write_record()
+        fixture.require_live()
+        output, exit_code = run_recycle(python, fixture, "--dry-run")
+        assert_exit_code(0, "a matching service must exit zero", exit_code)
+        assert_true(
+            "credentials match" in output and "GITHUB_PERSONAL_ACCESS_TOKEN" in output,
+            f"the report must name the compared credential: {output}",
+        )
+    finally:
+        fixture.cleanup()
+
+
 def case_missing_service_record_is_a_no_op(python: str) -> None:
     fixture = _ServiceFixture()
     try:
@@ -514,6 +558,8 @@ def main() -> int:
         ("Removes_StaleDiscoveryRecord", lambda: case_removes_stale_discovery_record(python)),
         ("Leaves_MatchingServiceAlone", lambda: case_leaves_matching_service_alone(python)),
         ("DryRun_ReportsWithoutKilling", lambda: case_dry_run_reports_without_killing(python)),
+        ("Reports_WhenNothingWasCompared", lambda: case_reports_when_nothing_was_compared(python)),
+        ("Reports_TheComparedCredentialsOnAMatch", lambda: case_reports_the_compared_credentials_on_a_match(python)),
         ("MissingServiceRecord_IsANoOp", lambda: case_missing_service_record_is_a_no_op(python)),
         ("DeadPid_IsCleanedUp", lambda: case_dead_pid_is_cleaned_up(python)),
         ("NoEnvFile_IsANoOp", lambda: case_no_env_file_is_a_no_op(python)),
