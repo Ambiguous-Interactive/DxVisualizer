@@ -121,7 +121,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         private static readonly char[] WhitespaceSeparators = { ' ' };
 
-        private static readonly ReusableDisposalScope<(DataVisualizer window, HashSet<VisualElement> typeElements)> TypeSearchCleanupScopes = new(FinalizeTypeSearch);
+        private static readonly ReusableDisposalScope<(DataVisualizer window, bool filtering)> TypeSearchCleanupScopes = new(FinalizeTypeSearch);
 
         private static readonly ReusableDisposalScope<(DataVisualizer window, string filter)> TypePopoverCleanupScopes = new(FinalizeTypePopover);
 
@@ -368,6 +368,8 @@ namespace WallstopStudios.DataVisualizer.Editor
         private Label _emptyObjectLabel;
         private Label _emptyTypeListLabel;
         private ScrollView _namespaceScrollView;
+        private readonly List<(int Start, int Length)> _typeSearchTerms = new();
+        private string _typeSearchText = string.Empty;
         private Button _createObjectButton;
         private Button _settingsButton;
         private Label _pausedIndicator;
@@ -3299,40 +3301,48 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         private void PerformTypeSearch(string searchText)
         {
+            bool filtering = TryParseTypeFilter(searchText);
             if (_namespaceController.VirtualizedView != null)
             {
-                _namespaceController.VirtualizedView.Filter(string.Equals(searchText, TypeFilterPlaceholder, StringComparison.Ordinal) ? null : searchText);
+                _namespaceController.VirtualizedView.Filter(filtering ? searchText : null);
                 HiddenNamespaces = _scriptableObjectTypes.Count - _namespaceController.VirtualizedView.VisibleNamespaceCount;
-                UpdateEmptyTypeListLabel(searchText);
+                UpdateEmptyTypeListLabel(filtering);
                 return;
             }
 
-            HashSet<VisualElement> typeElements = new();
-            using (ReusableDisposalLease<(DataVisualizer window, HashSet<VisualElement> typeElements)> cleanup = TypeSearchCleanupScopes.Acquire((this, typeElements)))
+            using (ReusableDisposalLease<(DataVisualizer window, bool filtering)> cleanup = TypeSearchCleanupScopes.Acquire((this, filtering)))
             {
-                if (string.IsNullOrWhiteSpace(searchText) || string.Equals(TypeFilterPlaceholder, searchText, StringComparison.Ordinal))
+                foreach (KeyValuePair<Type, VisualElement> entry in _namespaceController._namespaceCache)
                 {
-                    foreach (VisualElement typeItem in _namespaceController._namespaceCache.Values)
-                    {
-                        typeElements.Add(typeItem);
-                        typeItem.style.display = DisplayStyle.Flex;
-                    }
-                }
-                else
-                {
-                    string[] searchTerms = searchText.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-
-                    foreach (KeyValuePair<Type, VisualElement> entry in _namespaceController._namespaceCache)
-                    {
-                        typeElements.Add(entry.Value);
-                        string typeDisplayName = NamespaceController.GetTypeDisplayName(entry.Key);
-                        bool shouldDisplay = Array.TrueForAll(searchTerms, term => typeDisplayName.Contains(term, StringComparison.OrdinalIgnoreCase));
-                        entry.Value.style.display = shouldDisplay ? DisplayStyle.Flex : DisplayStyle.None;
-                    }
+                    entry.Value.style.display = !filtering || MatchesTypeFilter(entry.Key) ? DisplayStyle.Flex : DisplayStyle.None;
                 }
             }
 
-            UpdateEmptyTypeListLabel(searchText);
+            UpdateEmptyTypeListLabel(filtering);
+        }
+
+        /*
+            The filter runs for every managed type on each keystroke, so it parses the terms once
+            into reusable ranges instead of splitting strings, and CatalogNameFilter matches them
+            with spans. The virtualized catalog uses the same helper so both paths agree.
+        */
+        private bool TryParseTypeFilter(string searchText)
+        {
+            _typeSearchTerms.Clear();
+            _typeSearchText = string.Empty;
+            if (string.IsNullOrWhiteSpace(searchText) || string.Equals(searchText, TypeFilterPlaceholder, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            _typeSearchText = searchText;
+            CatalogNameFilter.ParseTerms(searchText, 0, searchText.Length, _typeSearchTerms);
+            return 0 < _typeSearchTerms.Count;
+        }
+
+        private bool MatchesTypeFilter(Type type)
+        {
+            return CatalogNameFilter.MatchesAll(NamespaceController.GetTypeDisplayName(type), _typeSearchText, _typeSearchTerms);
         }
 
         /*
@@ -3341,14 +3351,13 @@ namespace WallstopStudios.DataVisualizer.Editor
             namespace count through HiddenNamespaces, so the message stays consistent. An empty
             catalog under an active filter is the same state and gets the same answer.
         */
-        private void UpdateEmptyTypeListLabel(string searchText)
+        private void UpdateEmptyTypeListLabel(bool filtering)
         {
             if (_emptyTypeListLabel == null)
             {
                 return;
             }
 
-            bool filtering = !string.IsNullOrWhiteSpace(searchText) && !string.Equals(searchText, TypeFilterPlaceholder, StringComparison.Ordinal);
             bool nothingMatches = filtering && HiddenNamespaces == _scriptableObjectTypes.Count;
             _emptyTypeListLabel.text = nothingMatches ? "No types match the current filter." : string.Empty;
             _emptyTypeListLabel.style.display = nothingMatches ? DisplayStyle.Flex : DisplayStyle.None;
@@ -6449,44 +6458,65 @@ namespace WallstopStudios.DataVisualizer.Editor
             return 0 <= indexB ? 1 : string.Compare(keyA, keyB, StringComparison.OrdinalIgnoreCase);
         }
 
-        private static void FinalizeTypeSearch((DataVisualizer window, HashSet<VisualElement> typeElements) state)
+        /*
+            Every managed group is visited, including groups that hold no type row: an empty
+            namespace is hidden by any active filter, so a count built only from cached type
+            elements would under-report the hidden groups and could hide the empty-filter
+            explanation. Without a filter every group stays visible and nothing is hidden.
+        */
+        private static void FinalizeTypeSearch((DataVisualizer window, bool filtering) state)
         {
-            HashSet<VisualElement> namespaceParents = new();
-            foreach (VisualElement typeElement in state.window._namespaceController._namespaceCache.Values)
+            VisualElement namespaceList = state.window._namespaceListContainer;
+            if (namespaceList == null)
             {
-                VisualElement namespaceParent = typeElement.parent?.parent;
-                if (namespaceParent != null)
-                {
-                    namespaceParents.Add(namespaceParent);
-                }
+                return;
             }
 
-            int hiddenNamespaces = 0;
-            foreach (VisualElement parent in namespaceParents)
+            int visibleNamespaces = 0;
+            for (int groupIndex = 0; groupIndex < namespaceList.childCount; groupIndex++)
             {
+                VisualElement group = namespaceList[groupIndex];
                 bool allInvisible = true;
-                foreach (VisualElement child in parent.IterateChildrenRecursively())
+                for (int childIndex = 0; childIndex < group.childCount; childIndex++)
                 {
-                    if (!state.typeElements.Contains(child))
+                    VisualElement child = group[childIndex];
+                    if (!child.ClassListContains(StyleConstants.TypesContainerClass))
                     {
                         continue;
                     }
 
-                    if (child.style.display != DisplayStyle.None)
+                    for (int typeIndex = 0; typeIndex < child.childCount; typeIndex++)
                     {
-                        allInvisible = false;
-                        break;
+                        if (child[typeIndex].style.display != DisplayStyle.None)
+                        {
+                            allInvisible = false;
+                            break;
+                        }
                     }
+
+                    break;
                 }
 
-                parent.style.display = allInvisible ? DisplayStyle.None : DisplayStyle.Flex;
-                if (allInvisible)
+                if (!allInvisible)
                 {
-                    hiddenNamespaces++;
+                    visibleNamespaces++;
                 }
+                group.style.display = state.filtering && allInvisible ? DisplayStyle.None : DisplayStyle.Flex;
             }
 
-            state.window.HiddenNamespaces = hiddenNamespaces;
+            if (!state.filtering)
+            {
+                state.window.HiddenNamespaces = 0;
+                return;
+            }
+
+            /*
+                Groups that were never rebuilt (a catalog of empty namespaces only) have no row to
+                scan, so subtracting the visible groups from the managed namespace count keeps the
+                hidden total equal to every namespace the filter hides.
+            */
+            int hiddenNamespaces = state.window._scriptableObjectTypes.Count - visibleNamespaces;
+            state.window.HiddenNamespaces = hiddenNamespaces < 0 ? 0 : hiddenNamespaces;
         }
 
         private static void FinalizeTypePopover((DataVisualizer window, string filter) state)

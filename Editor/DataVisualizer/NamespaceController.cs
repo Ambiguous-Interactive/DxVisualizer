@@ -555,8 +555,14 @@ namespace WallstopStudios.DataVisualizer.Editor
                 namespaceListContainer.style.height = StyleKeyword.Auto;
             }
 
+            /*
+                The rendered groups must also match the managed namespace count: an empty
+                namespace contributes no cached type, so a type-only comparison would leave its
+                header unrendered after it was added.
+            */
             HashSet<Type> currentTypes = CollectManagedTypes(_managedTypes);
-            if (currentTypes.SetEquals(_namespaceCache.Keys))
+            int renderedNamespaces = namespaceListContainer == null ? 0 : namespaceListContainer.childCount;
+            if (currentTypes.SetEquals(_namespaceCache.Keys) && renderedNamespaces == _managedTypes.Count)
             {
                 return;
             }
