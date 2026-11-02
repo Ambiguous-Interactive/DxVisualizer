@@ -6287,8 +6287,9 @@ namespace WallstopStudios.DataVisualizer.Editor
             */
             int shown = _filteredObjects?.Count ?? 0;
             int hidden = Mathf.Max(0, (_selectedObjects?.Count ?? 0) - shown);
-            _labelFilterHeaderSummary.text = $"{_labelFilterEditor.ExpressionText} · {shown} shown · {hidden} hidden";
-            _labelFilterHeaderSummary.tooltip = "Active label filter. Expanded controls change it.";
+            string summary = $"{_labelFilterEditor.ExpressionText} · {shown} shown · {hidden} hidden";
+            _labelFilterHeaderSummary.text = summary;
+            _labelFilterHeaderSummary.tooltip = summary;
             _labelFilterHeaderSummary.style.display = DisplayStyle.Flex;
         }
 
