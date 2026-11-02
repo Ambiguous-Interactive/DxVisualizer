@@ -14,7 +14,7 @@ metadata:
 | `Editor/DataVisualizer/DataVisualizer.cs` | Main `EditorWindow`; ~9.3k lines - always search (`rg`) before editing |
 | `Editor/DataVisualizer/NamespaceController.cs` | Namespace/type catalog, drag-drop ordering |
 | `Editor/DataVisualizer/Data/` | Persisted models: `DataVisualizerUserState`, `DataVisualizerSettings`, `TypeObjectOrder`, `NamespaceTypeOrder`, `NamespaceCollapseState`, `LastObjectSelectionEntry`, `TypeLabelFilterConfig`, `ProcessorState`, plus pure logic (`LabelFilterEvaluator`) |
-| `Editor/DataVisualizer/Search/` | Global search matching: `MatchSource`, `MatchDetail`, `SearchResultMatchInfo` |
+| `Editor/DataVisualizer/Search/` | Global search matching: `MatchSource`, `MatchDetail`, `SearchResultMatchInfo`; catalog name filtering: `CatalogNameFilter` |
 | `Editor/DataVisualizer/UI/` | Reusable controls: `HorizontalToggle`, `ActionButtonToggle` |
 | `Editor/DataVisualizer/Styles/` | `StyleConstants.cs` + `DataVisualizerStyles.uss` |
 | `Editor/DataVisualizer/Unity/` | `DataVisualizerAssetPostprocessor` |
@@ -139,6 +139,16 @@ metadata:
 
 ## Filtering and Search
 
+- The catalog type filter runs for every managed type on every keystroke. Parse the
+  text once into reusable term ranges with `CatalogNameFilter.ParseTerms`, then match
+  with `CatalogNameFilter.MatchesAll` (span-based, ordinal ignore case). Do not
+  `Split`, capture per-item lambdas, build a per-item `HashSet`, or walk rows with a
+  recursive iterator; the virtualized catalog and the compact window share this
+  helper so their results cannot diverge.
+- Filter-derived counts must include the entries the UI cache omits. An empty managed
+  namespace, or a catalog that never rebuilt because it holds no type, is still a
+  namespace the filter hides; pass the filter state into the finalize step and count
+  from the managed namespace total rather than from rendered rows alone.
 - Label filtering is config-driven (`TypeLabelFilterConfig` with AND/OR combination
   via `LabelCombinationType`) and evaluated by the pure `LabelFilterEvaluator` -
   extend the evaluator, not the UI, when adding filter semantics.

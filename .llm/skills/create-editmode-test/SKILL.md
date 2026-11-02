@@ -57,8 +57,14 @@ See the full template: [EditModeTestTemplate.cs](../../code-samples/EditModeTest
 
 `InternalsVisibleTo` is NOT honored for the editor->tests assembly pair in Unity's
 compilation. If a test needs an internal helper, make the helper `public` in the
-editor assembly (precedent: `ObjectIdExtensions`, `LabelFilterEvaluator`). Never
-use reflection in tests to reach internals.
+editor assembly (precedent: `ObjectIdExtensions`, `LabelFilterEvaluator`). Prefer a
+public helper over reflection.
+
+Window-integration tests keep a narrow exception: seeding the managed catalog and
+applying a filter have no public entry point, so they read `_scriptableObjectTypes`
+and call `BuildNamespaceView`/`PerformTypeSearch` through local reflection helpers.
+Assert that every lookup resolves, so a rename fails loudly, and do not add public
+test-only window API for that purpose.
 
 ## Input Regression Coverage
 
@@ -81,6 +87,10 @@ callbacks and asset-state persistence.
 
 ## UI Toolkit State Assertions
 
+- An unshown window has no panel, so assigning `TextField.value` does not dispatch
+  its `ChangeEvent`. Drive the handler the field's callback runs (such as
+  `PerformTypeSearch`) and assert the resulting visual state; host the window when
+  the event routing itself is the behavior under test.
 - `resolvedStyle` is only meaningful after the element sits in a hosted panel and
   layout has settled; host the tree in an `EditorWindow` (the capture suite's
   `EditorSurfaceCaptureHostWindow` pattern) and settle layout before asserting.

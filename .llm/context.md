@@ -143,6 +143,13 @@ lands there as annotated, stdlib-first Python; `uvx pyright` validates types loc
     `CatalogInputSettings`, `DataVisualizerInputSettings`, or the documented `NativeInputRouter` compatibility boundary. New controls accept an owner-supplied input provider; hints
     read current bindings. See [input routing](./skills/modify-data-visualizer/SKILL.md#input-routing) before adding or changing interaction handlers.
 
+37. Catalog filters run for every managed type on every keystroke, so they must not allocate per type: parse the text once into reusable term ranges through `CatalogNameFilter`
+    (shared with the virtualized catalog), match with `ReadOnlySpan<char>.IndexOf`, and prefer index loops over element accessors that build enumerators or iterators. Do not use
+    `Split`, `Array.TrueForAll`, per-item lambdas, per-item `HashSet`s, or recursive iterator helpers in a filter path.
+
+38. Counts derived from a UI cache must include the entries the cache omits. `HiddenNamespaces` counts every managed namespace, including namespaces with no type row and catalogs
+    that never rebuilt, and an empty namespace counts as hidden only while a filter is active. Pass the filter state into the finalize step instead of inferring it from the rows.
+
 ### Skills Discipline
 
 - Skills live at `.llm/skills/<kebab-name>/SKILL.md` (standard Agent Skills format); see [manage-skills](./skills/manage-skills/SKILL.md) before creating or editing one.
@@ -221,6 +228,8 @@ and rebuilt.
 
 - Unity Test Framework; EditMode specs live in `Tests/Editor`, grouped by feature (`NamespaceOrderingTests`, `SelectionPersistenceTests`); name methods
   `ShouldExpectationWhenCondition`.
+- An unshown window has no panel, so assigning a `TextField.value` does not dispatch its change event. Drive the handler the field's callback runs (such as `PerformTypeSearch`) and
+  assert the resulting visual state; use a shown window when the event routing itself is the behavior under test.
 - Gate pull requests on both EditMode and PlayMode suites; aim for coverage on ordering, filtering, and cloning paths before tagging a release.
 - Add PlayMode coverage for `BaseDataObject` lifecycle callbacks and asset-state persistence in a sibling `Tests/Runtime` folder mirroring Unity's layout.
 
