@@ -7,6 +7,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
     using UnityEngine;
     using UnityEngine.TestTools;
     using UnityEngine.UIElements;
+    using WallstopStudios.DataVisualizer.Editor.Styles;
     using WallstopStudios.DataVisualizer.Editor.UI;
 
     public sealed class ResponsivePaneLayoutTests
@@ -100,6 +101,46 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         }
 
         [UnityTest]
+        public IEnumerator ShouldPaintTheSelectedCompactPaneButton()
+        {
+            using TestCleanupScope cleanup = new();
+            LayoutTestWindow window = ScriptableObject.CreateInstance<LayoutTestWindow>();
+            cleanup.Defer(window.Close);
+            window.position = new Rect(40, 40, 600, 600);
+            VisualElement root = window.rootVisualElement;
+            root.AddToClassList("dataviz-root");
+            root.styleSheets.Add(AssetDatabase.LoadAssetAtPath<StyleSheet>("Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/Styles/DataVisualizerStyles.uss"));
+            root.styleSheets.Add(AssetDatabase.LoadAssetAtPath<StyleSheet>("Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/Styles/Dx.uss"));
+            VisualElement navigation = new() { style = { flexDirection = FlexDirection.Row } };
+            navigation.AddToClassList("pane-navigation");
+            Button active = new() { text = "Types" };
+            active.AddToClassList(StyleConstants.SelectedClass);
+            Button inactive = new() { text = "Objects" };
+            navigation.Add(active);
+            navigation.Add(inactive);
+            root.Add(navigation);
+            window.ShowUtility();
+            yield return null;
+            EditorSurfaceCapture.SettleLayout(window);
+            Assert.That(
+                active.resolvedStyle.borderLeftColor,
+                Is.Not.EqualTo(inactive.resolvedStyle.borderLeftColor),
+                "the selected pane button must paint the themed selection border"
+            );
+            Assert.That(
+                active.resolvedStyle.backgroundColor,
+                Is.Not.EqualTo(inactive.resolvedStyle.backgroundColor),
+                "the selected pane button must paint the themed selection fill"
+            );
+            Color selectedBorder = active.resolvedStyle.borderLeftColor;
+            active.Focus();
+            yield return null;
+            EditorSurfaceCapture.SettleLayout(window);
+            Assert.That(active.focusController.focusedElement, Is.SameAs(active), "the selected button must own focus");
+            Assert.That(active.resolvedStyle.borderLeftColor, Is.Not.EqualTo(selectedBorder), "focus must repaint the selected pane button border");
+        }
+
+        [UnityTest]
         public IEnumerator ShouldRestorePreferredWidthsAfterRepeatedClampingAndNavigation()
         {
             using TestCleanupScope cleanup = new();
@@ -167,6 +208,21 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                         Assert.That(visible.resolvedStyle.width, Is.EqualTo(width).Within(1f));
                         Assert.That(visible.resolvedStyle.display, Is.EqualTo(DisplayStyle.Flex));
                         Assert.That(root.focusController.focusedElement, Is.SameAs(visible));
+                        Assert.That(
+                            navigation.Q<Button>("show-types-button").ClassListContains(StyleConstants.SelectedClass),
+                            Is.EqualTo(pane == PaneNavigation.Types),
+                            "only the visible pane button is selected in compact navigation"
+                        );
+                        Assert.That(
+                            navigation.Q<Button>("show-objects-button").ClassListContains(StyleConstants.SelectedClass),
+                            Is.EqualTo(pane == PaneNavigation.Objects),
+                            "only the visible pane button is selected in compact navigation"
+                        );
+                        Assert.That(
+                            navigation.Q<Button>("show-inspector-button").ClassListContains(StyleConstants.SelectedClass),
+                            Is.EqualTo(pane == PaneNavigation.Inspector),
+                            "only the visible pane button is selected in compact navigation"
+                        );
                     }
                     Assert.That(customField.value, Is.EqualTo("The value must survive pane changes"));
                 }
@@ -177,6 +233,21 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 Assert.That(layout.CanSaveWidths, Is.True);
                 Assert.That(types.resolvedStyle.width, Is.EqualTo(preferred.x).Within(1f));
                 Assert.That(objects.resolvedStyle.width, Is.EqualTo(preferred.y).Within(1f));
+                Assert.That(
+                    navigation.Q<Button>("show-types-button").ClassListContains(StyleConstants.SelectedClass),
+                    Is.False,
+                    "expanded navigation shows several panes, so no button marks one as current"
+                );
+                Assert.That(
+                    navigation.Q<Button>("show-objects-button").ClassListContains(StyleConstants.SelectedClass),
+                    Is.False,
+                    "expanded navigation shows several panes, so no button marks one as current"
+                );
+                Assert.That(
+                    navigation.Q<Button>("show-inspector-button").ClassListContains(StyleConstants.SelectedClass),
+                    Is.False,
+                    "expanded navigation shows several panes, so no button marks one as current"
+                );
                 layout.Show(PaneNavigation.Types);
                 EditorSurfaceCapture.SettleLayout(window);
                 Assert.That(types.resolvedStyle.display, Is.EqualTo(DisplayStyle.None));

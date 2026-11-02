@@ -3,6 +3,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
     using System;
     using UnityEngine;
     using UnityEngine.UIElements;
+    using WallstopStudios.DataVisualizer.Editor.Styles;
 
     /// <summary>Owns temporary pane visibility and clamping without changing preferred widths.</summary>
     public sealed class ResponsivePaneLayout
@@ -169,9 +170,14 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             _typesButton.tooltip = compact ? "Show the type catalog" : "Toggle the type catalog without changing preferred widths";
             _objectsButton.tooltip = compact ? "Show the object list" : "Toggle the object list without changing preferred widths";
             _inspectorButton.tooltip = "Give the inspector the available width";
-            _typesButton.EnableInClassList("selected", typesVisible);
-            _objectsButton.EnableInClassList("selected", objectsVisible);
-            _inspectorButton.EnableInClassList("selected", inspectorVisible);
+            /*
+                Only compact mode shows one pane, so the selected class marks the current pane
+                there. Expanded mode shows several panes at once, and a selected button would
+                tell the viewer nothing.
+            */
+            _typesButton.EnableInClassList(StyleConstants.SelectedClass, compact && typesVisible);
+            _objectsButton.EnableInClassList(StyleConstants.SelectedClass, compact && objectsVisible);
+            _inspectorButton.EnableInClassList(StyleConstants.SelectedClass, compact && inspectorVisible);
 
             VisualElement destination =
                 typesVisible ? _outer[0]

@@ -1721,6 +1721,18 @@
     min-width: 75px;
 }
 
+/* Only compact navigation shows one pane, so its selected button marks the current pane. */
+.pane-navigation > .unity-button.selected {
+    color: var(--dataviz-selection-text);
+    background-color: var(--dataviz-selected-row);
+    border-color: var(--dataviz-selection);
+}
+
+/* The accent and selection colors match in shipped themes, so focus needs its own border. */
+.pane-navigation > .unity-button.selected:focus {
+    border-color: var(--dataviz-selection-text);
+}
+
 .label-filter-controls {
     flex-direction: row;
     flex-wrap: wrap;

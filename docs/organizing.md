@@ -62,8 +62,9 @@ The two splitters save preferred widths per user in Unity's editor preferences, 
 Use **Hide types** and **Hide list** above the panes to give the inspector more space. Their buttons change to **Show types** and **Show list** so you can restore them.
 **Inspector** collapses both browsing panes. These controls keep your selection and preferred splitter widths.
 
-Below 912 points, the window shows one pane at a time. Use **Types**, **Objects**, and **Inspector** to move between them. Choosing a type opens its object list; selecting an asset
-opens its inspector. Return with **Objects** or **Types**. Search results also open the inspector. The window can narrow to 360 points without undocking.
+Below 912 points, the window shows one pane at a time. Use **Types**, **Objects**, and **Inspector** to move between them; the button for the pane you are viewing stays
+highlighted. Choosing a type opens its object list; selecting an asset opens its inspector. Return with **Objects** or **Types**. Search results also open the inspector. The window
+can narrow to 360 points without undocking.
 
 Temporary clamping and pane navigation do not overwrite preferred widths. Expand the window to restore them; splitter changes save when all three panes fit at their preferred
 widths. The window also keeps its preferred size separately from operating-system placement constraints.
