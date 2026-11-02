@@ -11,6 +11,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
     using UnityEngine.UIElements;
     using WallstopStudios.DataVisualizer.Editor;
     using WallstopStudios.DataVisualizer.Editor.Data;
+    using WallstopStudios.DataVisualizer.Editor.UI;
     using WallstopStudios.DataVisualizer.Editor.Utilities;
     using DataVisualizerWindow = WallstopStudios.DataVisualizer.Editor.DataVisualizer;
 
@@ -35,6 +36,13 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             MethodInfo method = typeof(DataVisualizerWindow).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
             Assert.That(method != null, $"The {methodName} method must exist.");
             return method.Invoke(window, arguments);
+        }
+
+        private static void SetDataFolderPath(DataVisualizerSettings settings, string dataFolderPath)
+        {
+            FieldInfo field = typeof(DataVisualizerSettings).GetField("_dataFolderPath", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(field != null, "The settings asset holds a data folder path.");
+            field.SetValue(settings, dataFolderPath);
         }
 
         private static DisplayStyle Display(VisualElement element)
@@ -441,6 +449,87 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             TextField searchField = ReadPrivateField<TextField>(window, "_typeAddSearchField");
             yield return WaitForFocusWithin(window, searchField);
             Assert.That(FocusIsWithin(window, searchField), "The type finder search field takes typing focus.");
+        }
+
+        [UnityTest]
+        public IEnumerator ShouldRevealTheDataFolderWhenThePathDisplayTakesTheConfirmKey()
+        {
+            using TestCleanupScope cleanup = new();
+            string folder = "Assets/PopoverDataFolderReveal_" + Guid.NewGuid().ToString("N");
+            AssetDatabase.CreateFolder("Assets", folder.Substring("Assets/".Length));
+            cleanup.Defer(() => AssetDatabase.DeleteAsset(folder));
+            /*
+                A configured folder either exists or does not. Each case proves that a
+                configured key reaches the reveal command: only a missing folder reports a
+                warning that names its path, so a pointer-only control fails those cases.
+            */
+            /*
+                The last three cases remap Select onto a key that already navigates the
+                popover or moves focus, so only a focused path that owns its selection keys
+                still reveals.
+            */
+            string missingFolder = folder + "/Missing";
+            (string DataFolderPath, KeyCode Key, KeyCode? SelectKey, bool FolderExists, bool WarnsAboutThePath)[] cases =
+            {
+                (folder, KeyCode.Return, null, true, false),
+                (missingFolder, KeyCode.Return, null, false, true),
+                (missingFolder, KeyCode.Space, null, false, true),
+                (missingFolder, KeyCode.UpArrow, null, false, false),
+                (missingFolder, KeyCode.UpArrow, KeyCode.UpArrow, false, true),
+                (missingFolder, KeyCode.Tab, KeyCode.Tab, false, true),
+            };
+            foreach ((string dataFolderPath, KeyCode key, KeyCode? selectKey, bool folderExists, bool warnsAboutThePath) in cases)
+            {
+                using TestCleanupScope caseCleanup = new();
+                DataVisualizerWindow window = OpenSettingsWindow(
+                    caseCleanup,
+                    "PopoverDataFolderReveal",
+                    scope =>
+                    {
+                        SetDataFolderPath(scope.Settings, dataFolderPath);
+                        if (!selectKey.HasValue)
+                        {
+                            return;
+                        }
+
+                        DataVisualizerInputProfile profile = ScriptableObject.CreateInstance<DataVisualizerInputProfile>();
+                        caseCleanup.Defer(() => UnityEngine.Object.DestroyImmediate(profile));
+                        profile.Bindings.Navigation.SelectKey = selectKey.Value;
+                        scope.Settings.inputProfile = profile;
+                    }
+                );
+                yield return null;
+
+                VisualElement popover = ReadPrivateField<VisualElement>(window, "_settingsPopover");
+                InvokePrivate(window, "TogglePopover", popover, ReadPrivateField<Button>(window, "_settingsButton"));
+                yield return WaitForFocus(window, popover);
+                EditorSurfaceCapture.SettleLayout(window);
+                Label display = popover.Q<Label>("data-folder-display");
+                Assert.That(display != null, "The settings popover shows the data folder path.");
+                Assert.That(display.focusable, "The data folder path takes keyboard focus.");
+                display.Focus();
+                yield return null;
+                Assert.That(Focused(window), Is.SameAs(display), "The data folder path holds focus.");
+
+                using ConsoleCapture capture = new();
+                SendKey(display, key);
+                yield return null;
+                Assert.That(
+                    capture.Contains(dataFolderPath),
+                    Is.EqualTo(warnsAboutThePath),
+                    warnsAboutThePath ? "A missing data folder reports its configured path." : "An existing data folder reveals without a warning."
+                );
+
+                /*
+                    Project-window highlighting has no readable result, so the reveal reports
+                    the folder it resolves. An existing folder resolves to that folder object.
+                */
+                object[] resolved = { null };
+                bool isResolved = (bool)InvokePrivate(window, "TryResolveDataFolder", resolved);
+                Assert.That(isResolved, Is.EqualTo(folderExists), "Only an existing data folder resolves for a reveal.");
+                UnityEngine.Object expectedFolder = folderExists ? AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(dataFolderPath) : null;
+                Assert.That(resolved[0] as UnityEngine.Object == expectedFolder, "The reveal resolves the configured folder.");
+            }
         }
     }
 }

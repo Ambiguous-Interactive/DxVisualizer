@@ -4172,6 +4172,16 @@ namespace WallstopStudios.DataVisualizer.Editor
                 return;
             }
 
+            /*
+                The focused settings data folder path owns its configured selection keys.
+                This check precedes native focus routing and popover navigation, so a
+                selection key remapped onto either still reveals the folder.
+            */
+            if (evt.target is VisualElement pathTarget && pathTarget == _dataFolderPathDisplay && Input.Navigation.IsSelectionKey(evt))
+            {
+                return;
+            }
+
             if (_nativeInput.IsRouting || _objectSelectionInput?.IsRouting == true)
             {
                 return;
@@ -4740,20 +4750,42 @@ namespace WallstopStudios.DataVisualizer.Editor
             dataFolderLabel.AddToClassList("settings-data-folder-label");
 
             dataFolderContainer.Add(dataFolderLabel);
-            Label dataFolderPathDisplay = new() { text = Settings.DataFolderPath, name = "data-folder-display" };
+            Label dataFolderPathDisplay = new()
+            {
+                text = Settings.DataFolderPath,
+                name = "data-folder-display",
+                focusable = true,
+                tooltip = "Reveal the data folder in the Project window",
+            };
             dataFolderPathDisplay.AddToClassList("settings-data-folder-path-display");
             dataFolderPathDisplay.AddToClassList(StyleConstants.ClickableClass);
-            dataFolderPathDisplay.RegisterCallback<PointerDownEvent, DataVisualizerSettings>(
-                static (_, context) =>
+            dataFolderPathDisplay.RegisterCallback<PointerDownEvent, DataVisualizer>(
+                static (evt, context) =>
                 {
-                    Object dataFolderPath = AssetDatabase.LoadAssetAtPath<Object>(context.DataFolderPath);
-                    if (dataFolderPath != null)
+                    if (evt.button != context.Input.Navigation.PointerButton)
                     {
-                        EditorGUIUtility.PingObject(dataFolderPath);
+                        return;
                     }
+
+                    context.RevealDataFolder();
                 },
-                Settings
+                this
             );
+            dataFolderPathDisplay.RegisterCallback<KeyDownEvent, DataVisualizer>(
+                static (evt, context) =>
+                {
+                    if (!context.Input.Navigation.IsSelectionKey(evt))
+                    {
+                        return;
+                    }
+
+                    context.RevealDataFolder();
+                    evt.StopPropagation();
+                    evt.PreventDefaultCompat();
+                },
+                this
+            );
+            _dataFolderPathDisplay = dataFolderPathDisplay;
             dataFolderContainer.Add(dataFolderPathDisplay);
             Button selectFolderButton = new(() => SelectDataFolderForPopover(dataFolderPathDisplay)) { text = "Select", name = "settings-data-folder-button" };
             selectFolderButton.SetEnabled(!IsConfigurationEditingPaused);
@@ -4761,6 +4793,43 @@ namespace WallstopStudios.DataVisualizer.Editor
             selectFolderButton.AddToClassList(StyleConstants.ClickableClass);
             dataFolderContainer.Add(selectFolderButton);
             contentWrapper.Add(dataFolderContainer);
+        }
+
+        /*
+            Reveals the configured data folder in the Project window for the pointer and
+            the keyboard alike. A command that cannot reveal reports why, so an unset or
+            moved folder is visible instead of a click that does nothing.
+        */
+        private void RevealDataFolder()
+        {
+            if (TryResolveDataFolder(out Object dataFolder))
+            {
+                EditorGUIUtility.PingObject(dataFolder);
+            }
+        }
+
+        /*
+            Resolves the configured data folder for a reveal. Project-window highlighting
+            has no readable result, so the lookup reports what a reveal would show.
+        */
+        private bool TryResolveDataFolder(out Object dataFolder)
+        {
+            string dataFolderPath = Settings.DataFolderPath;
+            if (string.IsNullOrWhiteSpace(dataFolderPath))
+            {
+                Debug.LogWarning("Data folder is not set; choose one before revealing it.");
+                dataFolder = null;
+                return false;
+            }
+
+            dataFolder = AssetDatabase.LoadAssetAtPath<Object>(dataFolderPath);
+            if (dataFolder == null)
+            {
+                Debug.LogWarning($"Data folder '{dataFolderPath}' is not in this project; choose an existing folder.");
+                return false;
+            }
+
+            return true;
         }
 
         private void SelectDataFolderForPopover(Label displayField)
