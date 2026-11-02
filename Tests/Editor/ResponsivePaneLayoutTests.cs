@@ -110,6 +110,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             VisualElement root = window.rootVisualElement;
             root.AddToClassList("dataviz-root");
             root.styleSheets.Add(AssetDatabase.LoadAssetAtPath<StyleSheet>("Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/Styles/DataVisualizerStyles.uss"));
+            root.styleSheets.Add(AssetDatabase.LoadAssetAtPath<StyleSheet>("Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/Styles/Dx.uss"));
             VisualElement navigation = new() { style = { flexDirection = FlexDirection.Row } };
             navigation.AddToClassList("pane-navigation");
             Button active = new() { text = "Types" };
@@ -126,6 +127,17 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 Is.Not.EqualTo(inactive.resolvedStyle.borderLeftColor),
                 "the selected pane button must paint the themed selection border"
             );
+            Assert.That(
+                active.resolvedStyle.backgroundColor,
+                Is.Not.EqualTo(inactive.resolvedStyle.backgroundColor),
+                "the selected pane button must paint the themed selection fill"
+            );
+            Color selectedBorder = active.resolvedStyle.borderLeftColor;
+            active.Focus();
+            yield return null;
+            EditorSurfaceCapture.SettleLayout(window);
+            Assert.That(active.focusController.focusedElement, Is.SameAs(active), "the selected button must own focus");
+            Assert.That(active.resolvedStyle.borderLeftColor, Is.Not.EqualTo(selectedBorder), "focus must repaint the selected pane button border");
         }
 
         [UnityTest]

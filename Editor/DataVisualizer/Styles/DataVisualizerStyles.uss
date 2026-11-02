@@ -1728,6 +1728,11 @@
     border-color: var(--dataviz-selection);
 }
 
+/* The accent and selection colors match in shipped themes, so focus needs its own border. */
+.pane-navigation > .unity-button.selected:focus {
+    border-color: var(--dataviz-selection-text);
+}
+
 .label-filter-controls {
     flex-direction: row;
     flex-wrap: wrap;
