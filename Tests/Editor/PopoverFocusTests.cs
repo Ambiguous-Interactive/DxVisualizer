@@ -11,6 +11,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
     using UnityEngine.UIElements;
     using WallstopStudios.DataVisualizer.Editor;
     using WallstopStudios.DataVisualizer.Editor.Data;
+    using WallstopStudios.DataVisualizer.Editor.Styles;
     using WallstopStudios.DataVisualizer.Editor.UI;
     using WallstopStudios.DataVisualizer.Editor.Utilities;
     using DataVisualizerWindow = WallstopStudios.DataVisualizer.Editor.DataVisualizer;
@@ -530,6 +531,65 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 UnityEngine.Object expectedFolder = folderExists ? AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(dataFolderPath) : null;
                 Assert.That(resolved[0] as UnityEngine.Object == expectedFolder, "The reveal resolves the configured folder.");
             }
+        }
+
+        [UnityTest]
+        public IEnumerator ShouldAlignSettingsLabelsAndControlsInOneColumn()
+        {
+            using TestCleanupScope cleanup = new();
+            DataVisualizerWindow window = OpenSettingsWindow(cleanup, "PopoverSettingsAlignment");
+            yield return null;
+
+            Button trigger = ReadPrivateField<Button>(window, "_settingsButton");
+            VisualElement popover = ReadPrivateField<VisualElement>(window, "_settingsPopover");
+            InvokePrivate(window, "TogglePopover", popover, trigger);
+            for (int tick = 0; tick < 120 && Display(popover) != DisplayStyle.Flex; tick++)
+            {
+                yield return null;
+            }
+            Assert.That(Display(popover), Is.EqualTo(DisplayStyle.Flex), "The settings popover opens.");
+            yield return null;
+            yield return null;
+            EditorSurfaceCapture.SettleLayout(window);
+
+            ActionButtonToggle persistence = popover.Q<ActionButtonToggle>("settings-persistence-toggle");
+            ActionButtonToggle selection = popover.Q<ActionButtonToggle>("settings-selection-toggle");
+            Label themeLabel = popover.Q(name: "theme-row").Q<Label>(className: "settings-data-folder-label");
+            Label folderLabel = popover.Q(name: "data-folder-display").parent.Q<Label>(className: "settings-data-folder-label");
+            Assert.That(persistence != null && selection != null && themeLabel != null && folderLabel != null, "Every settings row renders.");
+            Assert.That(popover.worldBound.width, Is.Positive, "The settings popover lays out before the columns are compared.");
+
+            /*
+                The switches carry their own right-aligned labels while the theme and folder
+                rows start at the popover edge, so one row reads as a different column. All
+                four rows must share the same left edge for their labels.
+            */
+            float[] labelLefts =
+            {
+                persistence.Q<Label>(className: ActionButtonToggle.LabelClassName).worldBound.xMin,
+                selection.Q<Label>(className: ActionButtonToggle.LabelClassName).worldBound.xMin,
+                themeLabel.worldBound.xMin,
+                folderLabel.worldBound.xMin,
+            };
+            foreach (float labelLeft in labelLefts)
+            {
+                Assert.That(labelLeft, Is.Positive, "Every settings label starts inside the popover.");
+            }
+            for (int index = 1; index < labelLefts.Length; index++)
+            {
+                Assert.That(labelLefts[index], Is.EqualTo(labelLefts[0]).Within(1f), $"Settings label {index} starts at the label column.");
+            }
+
+            Button persistenceButton = persistence.Q<Button>(className: ActionButtonToggle.ButtonClassName);
+            Button selectionButton = selection.Q<Button>(className: ActionButtonToggle.ButtonClassName);
+            Button resetTheme = popover.Q<Button>(name: StyleConstants.ThemeResetButtonClass);
+            Button selectFolder = popover.Q<Button>(name: "settings-data-folder-button");
+            Assert.That(resetTheme != null && selectFolder != null, "The theme and folder rows render their trailing controls.");
+            float controlRight = resetTheme.worldBound.xMax;
+            Assert.That(controlRight, Is.Positive, "The trailing controls lay out before the columns are compared.");
+            Assert.That(selectFolder.worldBound.xMax, Is.EqualTo(controlRight).Within(1f), "Theme and folder controls share the trailing column.");
+            Assert.That(persistenceButton.worldBound.xMax, Is.EqualTo(controlRight).Within(1f), "The persistence switch ends at the trailing column.");
+            Assert.That(selectionButton.worldBound.xMax, Is.EqualTo(controlRight).Within(1f), "The selection switch ends at the trailing column.");
         }
     }
 }
