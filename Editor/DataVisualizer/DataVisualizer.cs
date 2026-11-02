@@ -3338,7 +3338,8 @@ namespace WallstopStudios.DataVisualizer.Editor
         /*
             A filter that hides every namespace leaves an unexplained blank pane, so the catalog
             replaces its list with one muted explanation. Both catalog paths report their hidden
-            namespace count through HiddenNamespaces, so the message stays consistent.
+            namespace count through HiddenNamespaces, so the message stays consistent. An empty
+            catalog under an active filter is the same state and gets the same answer.
         */
         private void UpdateEmptyTypeListLabel(string searchText)
         {
@@ -3348,7 +3349,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             }
 
             bool filtering = !string.IsNullOrWhiteSpace(searchText) && !string.Equals(searchText, TypeFilterPlaceholder, StringComparison.Ordinal);
-            bool nothingMatches = filtering && 0 < _scriptableObjectTypes.Count && HiddenNamespaces == _scriptableObjectTypes.Count;
+            bool nothingMatches = filtering && HiddenNamespaces == _scriptableObjectTypes.Count;
             _emptyTypeListLabel.text = nothingMatches ? "No types match the current filter." : string.Empty;
             _emptyTypeListLabel.style.display = nothingMatches ? DisplayStyle.Flex : DisplayStyle.None;
             if (_namespaceScrollView != null)
