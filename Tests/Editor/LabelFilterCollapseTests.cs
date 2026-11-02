@@ -160,6 +160,12 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             ListView list = window.rootVisualElement.Q<ListView>("object-listview");
             Assert.That(list.itemsSource.Count, Is.EqualTo(1), "The collapsed filter still narrows the object list.");
             Assert.That(((ScriptableObject)list.itemsSource[0]).name, Is.EqualTo("Urgent"));
+
+            InvokePrivate(window, "ToggleLabelsCollapsed", false);
+            yield return null;
+            EditorSurfaceCapture.SettleLayout(window);
+            Assert.That(summary.resolvedStyle.display, Is.EqualTo(DisplayStyle.None), "Expanded controls carry the summary themselves.");
+            Assert.That(editor.resolvedStyle.display, Is.EqualTo(DisplayStyle.Flex));
         }
 
         [UnityTest]
