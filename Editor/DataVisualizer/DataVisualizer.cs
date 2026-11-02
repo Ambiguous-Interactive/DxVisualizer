@@ -7359,8 +7359,23 @@ namespace WallstopStudios.DataVisualizer.Editor
             }
             Type selectedType = _namespaceController.SelectedType;
 
+            /*
+                No type is selected, so there is no object list to describe. Naming the catalog's
+                null-type display name here used to print "No objects of type 'No Type' found.",
+                which reads as a broken type instead of the next action.
+            */
+            if (selectedType == null)
+            {
+                _filteredObjects.Clear();
+                _objectListView.RefreshItems();
+                _objectListView.style.display = DisplayStyle.None;
+                _emptyObjectLabel.text = "Select a type to list its objects.";
+                _emptyObjectLabel.style.display = DisplayStyle.Flex;
+                return;
+            }
+
             // Nothing loaded yet (or still loading): show the empty/loading overlay, hide the list.
-            if (selectedType != null && _selectedObjects.Count == 0)
+            if (_selectedObjects.Count == 0)
             {
                 _filteredObjects.Clear();
                 _objectListView.RefreshItems();
@@ -7368,19 +7383,20 @@ namespace WallstopStudios.DataVisualizer.Editor
                 _emptyObjectLabel.text =
                     _isLoadingObjectsAsync && _asyncLoadTargetType == selectedType
                         ? "Loading objects..."
-                        : $"No objects of type '{selectedType.Name}' found.\nUse the '+' button above to create one.";
+                        : $"No objects of type '{NamespaceController.GetTypeDisplayName(selectedType)}' found.\nUse the '+' button above to create one.";
                 _emptyObjectLabel.style.display = DisplayStyle.Flex;
                 return;
             }
 
+            /*
+                Objects exist for the selected type, so an empty filtered list means the active
+                label filter hides every one of them.
+            */
             if (_filteredObjects.Count == 0)
             {
                 _objectListView.RefreshItems();
                 _objectListView.style.display = DisplayStyle.None;
-                _emptyObjectLabel.text =
-                    0 < _selectedObjects.Count
-                        ? $"No objects of type '{NamespaceController.GetTypeDisplayName(selectedType)}' match the current label filter."
-                        : $"No objects of type '{NamespaceController.GetTypeDisplayName(selectedType)}' found.";
+                _emptyObjectLabel.text = $"No objects of type '{NamespaceController.GetTypeDisplayName(selectedType)}' match the current label filter.";
                 _emptyObjectLabel.style.display = DisplayStyle.Flex;
                 return;
             }
