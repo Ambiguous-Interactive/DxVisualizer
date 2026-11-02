@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Highlight the button for the pane you are viewing in narrow single-pane layouts (#312).
 - Show "No types match the current filter." when the type filter hides every type, instead of a blank catalog pane (#312).
 - Collapse the Labels controls while a filter is active; the collapsed header keeps the filter expression and the shown/hidden counts visible (#314).
 - Add keyboard access to the Settings data folder path: Enter reveals the folder, and a missing folder reports itself (#312).
