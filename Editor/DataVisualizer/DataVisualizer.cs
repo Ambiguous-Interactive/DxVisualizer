@@ -366,6 +366,8 @@ namespace WallstopStudios.DataVisualizer.Editor
         [SerializeField]
         private EditorAssetSelection processorSelection = new();
         private Label _emptyObjectLabel;
+        private Label _emptyTypeListLabel;
+        private ScrollView _namespaceScrollView;
         private Button _createObjectButton;
         private Button _settingsButton;
         private Label _pausedIndicator;
@@ -3301,6 +3303,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             {
                 _namespaceController.VirtualizedView.Filter(string.Equals(searchText, TypeFilterPlaceholder, StringComparison.Ordinal) ? null : searchText);
                 HiddenNamespaces = _scriptableObjectTypes.Count - _namespaceController.VirtualizedView.VisibleNamespaceCount;
+                UpdateEmptyTypeListLabel(searchText);
                 return;
             }
 
@@ -3314,18 +3317,43 @@ namespace WallstopStudios.DataVisualizer.Editor
                         typeElements.Add(typeItem);
                         typeItem.style.display = DisplayStyle.Flex;
                     }
-                    return;
                 }
-
-                string[] searchTerms = searchText.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-
-                foreach (KeyValuePair<Type, VisualElement> entry in _namespaceController._namespaceCache)
+                else
                 {
-                    typeElements.Add(entry.Value);
-                    string typeDisplayName = NamespaceController.GetTypeDisplayName(entry.Key);
-                    bool shouldDisplay = Array.TrueForAll(searchTerms, term => typeDisplayName.Contains(term, StringComparison.OrdinalIgnoreCase));
-                    entry.Value.style.display = shouldDisplay ? DisplayStyle.Flex : DisplayStyle.None;
+                    string[] searchTerms = searchText.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+                    foreach (KeyValuePair<Type, VisualElement> entry in _namespaceController._namespaceCache)
+                    {
+                        typeElements.Add(entry.Value);
+                        string typeDisplayName = NamespaceController.GetTypeDisplayName(entry.Key);
+                        bool shouldDisplay = Array.TrueForAll(searchTerms, term => typeDisplayName.Contains(term, StringComparison.OrdinalIgnoreCase));
+                        entry.Value.style.display = shouldDisplay ? DisplayStyle.Flex : DisplayStyle.None;
+                    }
                 }
+            }
+
+            UpdateEmptyTypeListLabel(searchText);
+        }
+
+        /*
+            A filter that hides every namespace leaves an unexplained blank pane, so the catalog
+            replaces its list with one muted explanation. Both catalog paths report their hidden
+            namespace count through HiddenNamespaces, so the message stays consistent.
+        */
+        private void UpdateEmptyTypeListLabel(string searchText)
+        {
+            if (_emptyTypeListLabel == null)
+            {
+                return;
+            }
+
+            bool filtering = !string.IsNullOrWhiteSpace(searchText) && !string.Equals(searchText, TypeFilterPlaceholder, StringComparison.Ordinal);
+            bool nothingMatches = filtering && 0 < _scriptableObjectTypes.Count && HiddenNamespaces == _scriptableObjectTypes.Count;
+            _emptyTypeListLabel.text = nothingMatches ? "No types match the current filter." : string.Empty;
+            _emptyTypeListLabel.style.display = nothingMatches ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_namespaceScrollView != null)
+            {
+                _namespaceScrollView.style.display = nothingMatches ? DisplayStyle.None : DisplayStyle.Flex;
             }
         }
 
@@ -5527,9 +5555,14 @@ namespace WallstopStudios.DataVisualizer.Editor
             ScrollView namespaceScrollView = new(ScrollViewMode.Vertical) { name = "namespace-scrollview" };
             namespaceScrollView.AddToClassList("namespace-scrollview");
             namespaceScrollView.contentContainer.style.flexGrow = 1;
+            _namespaceScrollView = namespaceScrollView;
             _namespaceListContainer ??= new VisualElement { name = "namespace-list" };
             namespaceScrollView.Add(_namespaceListContainer);
             namespaceColumn.Add(namespaceScrollView);
+
+            _emptyTypeListLabel = new Label { name = "empty-type-list-label", style = { display = DisplayStyle.None, alignSelf = Align.Center } };
+            _emptyTypeListLabel.AddToClassList("empty-object-list-label");
+            namespaceColumn.Add(_emptyTypeListLabel);
             return namespaceColumn;
         }
 
