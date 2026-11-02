@@ -16,14 +16,6 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
 
     public sealed class LabelFilterCollapseTests
     {
-        private static void CloseWindows()
-        {
-            foreach (DataVisualizerWindow window in Resources.FindObjectsOfTypeAll<DataVisualizerWindow>())
-            {
-                window.Close();
-            }
-        }
-
         private static T ReadPrivateField<T>(DataVisualizerWindow window, string fieldName)
         {
             FieldInfo field = typeof(DataVisualizerWindow).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
@@ -132,7 +124,6 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         public IEnumerator ShouldKeepTheActiveFilterVisibleWhenLabelControlsCollapse()
         {
             using TestCleanupScope cleanup = new();
-            cleanup.Defer(CloseWindows);
             Type type = typeof(TestDataObject);
             DataVisualizerWindow window = OpenLabelledWindow(cleanup, type, out TypeLabelFilterConfig config);
             yield return WaitForRefresh(window);
@@ -175,7 +166,6 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         public IEnumerator ShouldHideTheHeaderSummaryWhenNoFilterIsActive()
         {
             using TestCleanupScope cleanup = new();
-            cleanup.Defer(CloseWindows);
             Type type = typeof(TestDataObject);
             DataVisualizerWindow window = OpenLabelledWindow(cleanup, type, out TypeLabelFilterConfig config);
             yield return WaitForRefresh(window);
