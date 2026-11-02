@@ -62,6 +62,13 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             VisualElement catalog = null;
             controller.Build(owner, ref catalog);
             Assert.That(catalog != null, "The static catalog must build its tree.");
+            foreach (string namespaceKey in managed.Keys)
+            {
+                Label namespaceLabel = catalog.Q<Label>("namespace-name-" + namespaceKey);
+                Assert.That(namespaceLabel != null, "The static catalog must render its namespace label.");
+                Assert.That(namespaceLabel.displayTooltipWhenElided, Is.False, "The explicit namespace hint must not be replaced by the elision tooltip.");
+                Assert.That(namespaceLabel.tooltip, Is.EqualTo(namespaceKey), "A namespace label keeps its key hint.");
+            }
             Dictionary<Type, VisualElement> rows = new();
             CollectTypeRows(catalog, rows);
             Dictionary<Type, string> hints = new();
@@ -82,6 +89,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             VirtualizedTypeCatalogView view = new(owner, controller, managed, order);
             Assert.That(view.List.itemsSource.Count, Is.Positive, "The virtualized catalog must render rows.");
             HashSet<string> typeHints = new(StringComparer.Ordinal);
+            bool sawNamespaceHeader = false;
             VisualElement slot = view.List.makeItem();
             for (int index = 0; index < view.List.itemsSource.Count; index++)
             {
@@ -91,6 +99,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 Assert.That(label.displayTooltipWhenElided, Is.False, "The explicit identity hint must not be replaced by the elision tooltip.");
                 if (string.Equals(label.text, namespaceKey, StringComparison.Ordinal))
                 {
+                    sawNamespaceHeader = true;
                     Assert.That(label.tooltip, Is.EqualTo(namespaceKey), "A namespace header keeps its key hint.");
                 }
                 else
@@ -98,6 +107,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                     typeHints.Add(label.tooltip);
                 }
             }
+            Assert.That(sawNamespaceHeader, Is.True, "The virtualized catalog must render its namespace header.");
             return typeHints;
         }
 
