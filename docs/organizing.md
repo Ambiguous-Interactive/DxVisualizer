@@ -15,7 +15,8 @@ Drag a namespace header to another header to place it before or after that group
 
 ### Types
 
-Each type row has **↑** and **↓** with the same top-and-bottom behavior, scoped to its own namespace. Drag a type within its namespace to change its order.
+Each type row has **↑** and **↓** with the same top-and-bottom behavior, scoped to its own namespace. Drag a type within its namespace to change its order. Hover a row to read the
+full namespace-qualified type name, so rows that share a short name or use a custom display name stay distinguishable.
 
 ### Objects
 

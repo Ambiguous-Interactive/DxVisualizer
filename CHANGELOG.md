@@ -34,6 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Show the exact namespace-qualified type name on hover for catalogs of 128 types or fewer, matching large catalogs and keeping duplicate short names distinguishable (#312).
 - Ask you to select a type when the Objects pane has none, instead of reporting "No objects of type 'No Type' found." (#312).
 - Focus the name field when the Create, Rename or Search Types popover opens, so typing edits the name or filter immediately (#312).
 - Keep inspector label buttons and keyboard focus in place when you add or remove an asset label (#308).

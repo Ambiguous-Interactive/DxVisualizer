@@ -212,6 +212,22 @@ namespace WallstopStudios.DataVisualizer.Editor
             return type.Name;
         }
 
+        /*
+            Catalog rows truncate long names, and a custom display name hides the CLR type
+            behind it. Both catalog renderers show this one hint so a viewer can always read
+            the exact namespace-qualified identity, including duplicate short names.
+        */
+        internal static string GetTypeIdentityHint(Type type)
+        {
+            if (type == null)
+            {
+                return string.Empty;
+            }
+
+            string displayName = GetTypeDisplayName(type);
+            return string.Equals(displayName, type.Name, StringComparison.Ordinal) ? type.FullName : displayName + "\n" + type.FullName;
+        }
+
         internal static bool IsNamespaceCollapsed(DataVisualizer owner, string key) => GetIsNamespaceCollapsed(owner, key);
 
         private static bool GetIsNamespaceCollapsed(DataVisualizer dataVisualizer, string namespaceKey)
@@ -682,7 +698,12 @@ namespace WallstopStudios.DataVisualizer.Editor
                 ProtectCatalogAction(namespaceGoDownButton);
                 header.Add(namespaceGoDownButton);
 
-                Label namespaceLabel = new(key) { name = $"namespace-name-{key}" };
+                Label namespaceLabel = new(key)
+                {
+                    name = $"namespace-name-{key}",
+                    displayTooltipWhenElided = false,
+                    tooltip = key,
+                };
                 namespaceLabel.AddToClassList(StyleConstants.BoldClass);
                 namespaceLabel.AddToClassList(StyleConstants.NamespaceLabelClass);
                 namespaceLabel.AddToClassList(StyleConstants.ClickableClass);
@@ -826,7 +847,12 @@ namespace WallstopStudios.DataVisualizer.Editor
                     ProtectCatalogAction(goDownButton);
                     typeItem.Add(goDownButton);
 
-                    Label typeLabel = new(GetTypeDisplayName(type)) { name = TypeItemLabelName };
+                    Label typeLabel = new(GetTypeDisplayName(type))
+                    {
+                        name = TypeItemLabelName,
+                        displayTooltipWhenElided = false,
+                        tooltip = GetTypeIdentityHint(type),
+                    };
                     typeLabel.AddToClassList(StyleConstants.TypeLabelClass);
                     typeLabel.AddToClassList(StyleConstants.ClickableClass);
                     typeItem.Add(typeLabel);

@@ -718,10 +718,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             row.EnableInClassList(StyleConstants.NamespaceHeaderClass, header);
             Label label = row.TitleLabel;
             label.text = title;
-            label.tooltip =
-                header ? entry.NamespaceKey
-                : string.Equals(title, entry.Type.Name, StringComparison.Ordinal) ? entry.Type.FullName
-                : title + "\n" + entry.Type.FullName;
+            label.tooltip = header ? entry.NamespaceKey : NamespaceController.GetTypeIdentityHint(entry.Type);
             label.EnableInClassList(StyleConstants.BoldClass, header);
             Button collapse = row.CollapseButton;
             collapse.style.display = header ? DisplayStyle.Flex : DisplayStyle.None;
