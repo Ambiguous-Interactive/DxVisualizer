@@ -1,7 +1,6 @@
 namespace WallstopStudios.DataVisualizer.Editor.Extensions
 {
     using System;
-    using System.Collections.Generic;
     using Styles;
     using UnityEngine.UIElements;
 
@@ -95,18 +94,6 @@ namespace WallstopStudios.DataVisualizer.Editor.Extensions
                     }
                 })
                 .ExecuteLater(1);
-        }
-
-        public static IEnumerable<VisualElement> IterateChildrenRecursively(this VisualElement element)
-        {
-            foreach (VisualElement child in element.Children())
-            {
-                yield return child;
-                foreach (VisualElement grandChild in IterateChildrenRecursively(child))
-                {
-                    yield return grandChild;
-                }
-            }
         }
     }
 }

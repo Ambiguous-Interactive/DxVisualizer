@@ -3,6 +3,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
     using System;
     using System.Collections.Generic;
     using Extensions;
+    using Search;
     using Styles;
     using UnityEngine;
     using UnityEngine.UIElements;
@@ -130,21 +131,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             _filterText = source;
             _filterStart = start;
             _filterLength = end - start;
-            _terms.Clear();
-            for (int index = start; index < end; )
-            {
-                if (source[index] == ' ')
-                {
-                    index++;
-                    continue;
-                }
-                int termStart = index++;
-                while (index < end && source[index] != ' ')
-                {
-                    index++;
-                }
-                _terms.Add((termStart, index - termStart));
-            }
+            CatalogNameFilter.ParseTerms(source, start, end, _terms);
             Refresh();
             return true;
         }
@@ -494,19 +481,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         private bool MatchesFilter(Type type)
         {
-            if (_terms.Count == 0)
-            {
-                return true;
-            }
-            string title = NamespaceController.GetTypeDisplayName(type);
-            foreach ((int Start, int Length) term in _terms)
-            {
-                if (title.AsSpan().IndexOf(_filterText.AsSpan(term.Start, term.Length), StringComparison.OrdinalIgnoreCase) < 0)
-                {
-                    return false;
-                }
-            }
-            return true;
+            return _terms.Count == 0 || CatalogNameFilter.MatchesAll(NamespaceController.GetTypeDisplayName(type), _filterText, _terms);
         }
 
         private bool CheckEntry(string key, Type type, int index)
