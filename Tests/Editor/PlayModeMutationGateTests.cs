@@ -766,9 +766,16 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 }
                 config.andLabels.Add("Keep visible");
                 InvokePrivate(window, "UpdateLabelAreaAndFilter");
-                Assert.That(toggle.enabledInHierarchy, Is.False, "An active filter cannot be hidden.");
+                Assert.That(toggle.enabledInHierarchy, Is.True, "An active filter can be hidden without losing the filter.");
+                InvokePrivate(window, "ToggleLabelsCollapsed", true);
+                yield return null;
+                Assert.That(window.rootVisualElement.Q<LabelFilterEditor>().style.display.value, Is.EqualTo(DisplayStyle.None));
+                Label headerSummary = window.rootVisualElement.Q<Label>("label-filter-header-summary");
+                Assert.That(headerSummary.style.display.value, Is.EqualTo(DisplayStyle.Flex), "The collapsed header keeps the active filter visible.");
+                Assert.That(headerSummary.text, Does.Contain("Keep visible"));
+                InvokePrivate(window, "ToggleLabelsCollapsed", false);
+                yield return null;
                 Assert.That(window.rootVisualElement.Q<LabelFilterEditor>().style.display.value, Is.EqualTo(DisplayStyle.Flex));
-                Assert.That(toggle.tooltip, Does.Contain("Clear"));
             }
         }
 

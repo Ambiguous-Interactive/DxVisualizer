@@ -1411,6 +1411,22 @@
     -unity-font-style: bold;
 }
 
+/*
+    The collapse toggle frees vertical space; this summary keeps the active filter
+    and its shown/hidden counts readable while the controls are hidden.
+*/
+.label-filter-header-summary {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin-left: 8px;
+    margin-top: 6px;
+    margin-right: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .collapse-toggle.unity-button {
     min-width: 22px;
     padding: 0;

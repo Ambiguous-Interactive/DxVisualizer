@@ -12,6 +12,8 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         public const string AnyMode = "Match any label";
         public const string AdvancedMode = "Advanced";
 
+        public string ExpressionText => _config == null ? string.Empty : Expression();
+
         private readonly VisualElement _advanced;
         private readonly Action _changed;
         private readonly DropdownField _mode;

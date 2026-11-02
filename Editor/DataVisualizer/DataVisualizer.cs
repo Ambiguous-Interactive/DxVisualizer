@@ -305,6 +305,7 @@ namespace WallstopStudios.DataVisualizer.Editor
         private HorizontalToggle _andOrToggle;
         private VisualElement _labelFilterSelectionRoot;
         private VisualElement _logicalGrouping;
+        private Label _labelFilterHeaderSummary;
         private VisualElement _availableLabelsContainer;
         private LabelFilterEditor _labelFilterEditor;
         private VisualElement _andLabelsContainer;
@@ -6063,9 +6064,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             _labelCollapseToggle.RegisterCallback<TooltipEvent>(evt =>
             {
                 CatalogInputSettings input = Input.Navigation;
-                evt.tooltip = CanCollapseLabels()
-                    ? $"{_labelCollapseToggle.tooltip} ({input.SelectKey}/{input.AlternateSelectKey}/{input.ToggleKey})"
-                    : _labelCollapseToggle.tooltip;
+                evt.tooltip = $"{_labelCollapseToggle.tooltip} ({input.SelectKey}/{input.AlternateSelectKey}/{input.ToggleKey})";
                 evt.rect = _labelCollapseToggle.worldBound;
                 evt.StopImmediatePropagation();
             });
@@ -6074,6 +6073,10 @@ namespace WallstopStudios.DataVisualizer.Editor
             _labels = new Label("Labels");
             _labels.AddToClassList("labels-label");
             _labelCollapseRow.Add(_labels);
+            _labelFilterHeaderSummary = new Label { name = "label-filter-header-summary", enableRichText = false };
+            _labelFilterHeaderSummary.AddToClassList("label-filter-header-summary");
+            _labelFilterHeaderSummary.AddToClassList("dataviz-muted");
+            _labelCollapseRow.Add(_labelFilterHeaderSummary);
             objectColumn.Add(_labelCollapseRow);
 
             _labelFilterSelectionRoot = new VisualElement { name = "label-filter-section-root" };
@@ -6249,53 +6252,58 @@ namespace WallstopStudios.DataVisualizer.Editor
             return objectColumn;
         }
 
-        private bool CanCollapseLabels()
-        {
-            TypeLabelFilterConfig config = CurrentTypeLabelFilterConfig;
-            if (config == null)
-            {
-                return true;
-            }
-
-            return config.andLabels.Count == 0 && config.orLabels.Count == 0;
-        }
-
         private void UpdateLabelsCollapsedClickableState()
         {
             if (_labelCollapseToggle != null)
             {
-                _labelCollapseToggle.EnableInClassList(StyleConstants.ClickableClass, CanCollapseLabels());
-                _labelCollapseToggle.SetEnabled(CanCollapseLabels());
-
-                bool isCollapsed = (CurrentTypeLabelFilterConfig?.isCollapsed ?? true) && CanCollapseLabels();
+                bool isCollapsed = CurrentTypeLabelFilterConfig?.isCollapsed ?? true;
                 _labelCollapseToggle.text = isCollapsed ? StyleConstants.ArrowCollapsed : StyleConstants.ArrowExpanded;
-
-                if (isCollapsed)
-                {
-                    _labelCollapseToggle.tooltip = "Show label filters";
-                }
-                else if (CanCollapseLabels())
-                {
-                    _labelCollapseToggle.tooltip = "Hide label filters";
-                }
-                else
-                {
-                    _labelCollapseToggle.tooltip = "Clear the active label filter before hiding its controls";
-                }
+                _labelCollapseToggle.tooltip = isCollapsed ? "Show label filters" : "Hide label filters";
             }
+
+            UpdateLabelFilterHeaderSummary();
+        }
+
+        private void UpdateLabelFilterHeaderSummary()
+        {
+            if (_labelFilterHeaderSummary == null)
+            {
+                return;
+            }
+
+            TypeLabelFilterConfig config = CurrentTypeLabelFilterConfig;
+            bool active = config != null && (0 < config.andLabels.Count || 0 < config.orLabels.Count);
+            if (config?.isCollapsed != true || !active || _labelFilterEditor == null)
+            {
+                _labelFilterHeaderSummary.text = string.Empty;
+                _labelFilterHeaderSummary.tooltip = string.Empty;
+                _labelFilterHeaderSummary.style.display = DisplayStyle.None;
+                return;
+            }
+
+            /*
+                A collapsed section hides its controls, so the header keeps the active filter and
+                the neutral shown/hidden counts visible until the section reopens.
+            */
+            int shown = _filteredObjects?.Count ?? 0;
+            int hidden = Mathf.Max(0, (_selectedObjects?.Count ?? 0) - shown);
+            string summary = $"{_labelFilterEditor.ExpressionText} · {shown} shown · {hidden} hidden";
+            _labelFilterHeaderSummary.text = summary;
+            _labelFilterHeaderSummary.tooltip = summary;
+            _labelFilterHeaderSummary.style.display = DisplayStyle.Flex;
         }
 
         private void ToggleLabelsCollapsed(bool isCollapsed)
         {
             TypeLabelFilterConfig config = CurrentTypeLabelFilterConfig;
-            if (config != null && config.isCollapsed != isCollapsed && (!isCollapsed || CanCollapseLabels()))
+            if (config != null && config.isCollapsed != isCollapsed)
             {
                 config.isCollapsed = isCollapsed;
                 SaveLabelFilterConfig(config);
             }
 
             UpdateLabelsCollapsedClickableState();
-            bool collapsed = (config?.isCollapsed ?? true) && CanCollapseLabels();
+            bool collapsed = config?.isCollapsed ?? true;
             if (_labels != null)
             {
                 _labels.text = collapsed ? $"Labels (<b><color=yellow>{_currentUniqueLabelsForType.Count}</color></b>)" : "Labels";
