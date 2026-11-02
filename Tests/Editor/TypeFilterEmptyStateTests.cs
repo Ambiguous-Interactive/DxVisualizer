@@ -13,6 +13,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
     public sealed class TypeFilterEmptyStateTests
     {
         private const string EmptyMessage = "No types match the current filter.";
+        private const string AddTypeMessage = "Choose Add types to add a type.";
 
         private static T ReadPrivateField<T>(DataVisualizerWindow window, string fieldName)
         {
@@ -60,18 +61,6 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             InvokePrivate(window, "BuildNamespaceView");
         }
 
-        private static bool HasTypes(int[] namespaceSizes)
-        {
-            foreach (int size in namespaceSizes)
-            {
-                if (0 < size)
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-
         private static int TotalTypes(int[] namespaceSizes)
         {
             int total = 0;
@@ -100,25 +89,20 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(rendered, Is.EqualTo(expected), "Every managed namespace renders one group header.");
         }
 
-        private static void AssertEmptyState(VisualElement root, bool shown)
+        private static void AssertEmptyState(VisualElement root, string message)
         {
             Label empty = root.Q<Label>("empty-type-list-label");
             VisualElement scroll = root.Q("namespace-scrollview");
+            bool shown = 0 < message.Length;
             Assert.That(empty != null, "The catalog needs an empty-filter label.");
             Assert.That(scroll != null, "The catalog needs its type list container.");
-            Assert.That(empty.text, Is.EqualTo(shown ? EmptyMessage : string.Empty));
+            Assert.That(empty.text, Is.EqualTo(message));
             Assert.That(empty.style.display.value, Is.EqualTo(shown ? DisplayStyle.Flex : DisplayStyle.None));
             Assert.That(scroll.style.display.value, Is.EqualTo(shown ? DisplayStyle.None : DisplayStyle.Flex));
         }
 
-        [TestCase(new int[] { })]
-        [TestCase(new int[] { 0 })]
-        [TestCase(new int[] { 0, 1 })]
-        [TestCase(new int[] { 1 })]
-        [TestCase(new int[] { 129 })]
-        public void ShouldExplainAnEmptyFilterWhenTheCatalogHasNoVisibleType(int[] namespaceSizes)
+        private static DataVisualizerWindow CreateSeededWindow(TestCleanupScope cleanup, int[] namespaceSizes)
         {
-            using TestCleanupScope cleanup = new();
             FieldInfo instance = typeof(DataVisualizerWindow).GetField("Instance", BindingFlags.Static | BindingFlags.NonPublic);
             object previous = instance.GetValue(null);
             cleanup.Defer(() => instance.SetValue(null, previous));
@@ -126,6 +110,33 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             cleanup.Defer(() => Object.DestroyImmediate(window));
             window.CreateGUI();
             SeedCatalog(window, namespaceSizes);
+            return window;
+        }
+
+        [TestCase(new int[] { })]
+        [TestCase(new int[] { 0 })]
+        public void ShouldAskToAddATypeWhenTheCatalogHasNoType(int[] namespaceSizes)
+        {
+            using TestCleanupScope cleanup = new();
+            DataVisualizerWindow window = CreateSeededWindow(cleanup, namespaceSizes);
+            VisualElement root = window.rootVisualElement;
+
+            AssertEmptyState(root, AddTypeMessage);
+
+            ApplyTypeFilter(window, "NoSuchTypeName");
+            AssertEmptyState(root, AddTypeMessage);
+
+            ApplyTypeFilter(window, string.Empty);
+            AssertEmptyState(root, AddTypeMessage);
+        }
+
+        [TestCase(new int[] { 0, 1 })]
+        [TestCase(new int[] { 1 })]
+        [TestCase(new int[] { 129 })]
+        public void ShouldExplainAnEmptyFilterWhenTheCatalogHasNoVisibleType(int[] namespaceSizes)
+        {
+            using TestCleanupScope cleanup = new();
+            DataVisualizerWindow window = CreateSeededWindow(cleanup, namespaceSizes);
 
             VisualElement root = window.rootVisualElement;
             Assert.That(root.Q<TextField>("type-search-field") != null, "The catalog needs its filter field.");
@@ -133,21 +144,18 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             {
                 AssertRenderedGroups(root, namespaceSizes.Length);
             }
-            AssertEmptyState(root, false);
+            AssertEmptyState(root, string.Empty);
 
             ApplyTypeFilter(window, "NoSuchTypeName");
-            AssertEmptyState(root, true);
+            AssertEmptyState(root, EmptyMessage);
 
-            if (HasTypes(namespaceSizes))
-            {
-                ApplyTypeFilter(window, "TestDataObject");
-                AssertEmptyState(root, false);
-                ApplyTypeFilter(window, "NoSuchTypeName");
-                AssertEmptyState(root, true);
-            }
+            ApplyTypeFilter(window, "TestDataObject");
+            AssertEmptyState(root, string.Empty);
+            ApplyTypeFilter(window, "NoSuchTypeName");
+            AssertEmptyState(root, EmptyMessage);
 
             ApplyTypeFilter(window, string.Empty);
-            AssertEmptyState(root, false);
+            AssertEmptyState(root, string.Empty);
         }
 
         [TestCase(new int[] { 1 })]
@@ -155,21 +163,15 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         public void ShouldIgnoreWhitespaceAroundTheTypeFilter(int[] namespaceSizes)
         {
             using TestCleanupScope cleanup = new();
-            FieldInfo instance = typeof(DataVisualizerWindow).GetField("Instance", BindingFlags.Static | BindingFlags.NonPublic);
-            object previous = instance.GetValue(null);
-            cleanup.Defer(() => instance.SetValue(null, previous));
-            DataVisualizerWindow window = ScriptableObject.CreateInstance<DataVisualizerWindow>();
-            cleanup.Defer(() => Object.DestroyImmediate(window));
-            window.CreateGUI();
-            SeedCatalog(window, namespaceSizes);
+            DataVisualizerWindow window = CreateSeededWindow(cleanup, namespaceSizes);
 
             VisualElement root = window.rootVisualElement;
             ApplyTypeFilter(window, "  TestDataObject  ");
-            AssertEmptyState(root, false);
+            AssertEmptyState(root, string.Empty);
             ApplyTypeFilter(window, "TestDataObject\t");
-            AssertEmptyState(root, false);
+            AssertEmptyState(root, string.Empty);
             ApplyTypeFilter(window, "\tNoSuchTypeName\t");
-            AssertEmptyState(root, true);
+            AssertEmptyState(root, EmptyMessage);
         }
     }
 }

@@ -3363,8 +3363,9 @@ namespace WallstopStudios.DataVisualizer.Editor
         /*
             A filter that hides every namespace leaves an unexplained blank pane, so the catalog
             replaces its list with one muted explanation. Both catalog paths report their hidden
-            namespace count through HiddenNamespaces, so the message stays consistent. An empty
-            catalog under an active filter is the same state and gets the same answer.
+            namespace count through HiddenNamespaces, so the message stays consistent. A catalog
+            with no managed type is a different empty state: no filter can reveal a type row, so
+            the pane points at the Add types button instead.
         */
         private void UpdateEmptyTypeListLabel(bool filtering)
         {
@@ -3373,12 +3374,36 @@ namespace WallstopStudios.DataVisualizer.Editor
                 return;
             }
 
-            bool nothingMatches = filtering && HiddenNamespaces == _scriptableObjectTypes.Count;
-            _emptyTypeListLabel.text = nothingMatches ? "No types match the current filter." : string.Empty;
-            _emptyTypeListLabel.style.display = nothingMatches ? DisplayStyle.Flex : DisplayStyle.None;
+            bool catalogHasType = false;
+            foreach (List<Type> types in _scriptableObjectTypes.Values)
+            {
+                if (0 < types.Count)
+                {
+                    catalogHasType = true;
+                    break;
+                }
+            }
+
+            string message;
+            if (!catalogHasType)
+            {
+                message = "Choose Add types to add a type.";
+            }
+            else if (filtering && HiddenNamespaces == _scriptableObjectTypes.Count)
+            {
+                message = "No types match the current filter.";
+            }
+            else
+            {
+                message = string.Empty;
+            }
+
+            bool showMessage = 0 < message.Length;
+            _emptyTypeListLabel.text = message;
+            _emptyTypeListLabel.style.display = showMessage ? DisplayStyle.Flex : DisplayStyle.None;
             if (_namespaceScrollView != null)
             {
-                _namespaceScrollView.style.display = nothingMatches ? DisplayStyle.None : DisplayStyle.Flex;
+                _namespaceScrollView.style.display = showMessage ? DisplayStyle.None : DisplayStyle.Flex;
             }
         }
 
