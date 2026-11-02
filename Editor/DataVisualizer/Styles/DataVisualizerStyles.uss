@@ -1306,7 +1306,16 @@
 }
 
 .action-button-toggle {
-    align-self: flex-end;
+    align-self: stretch;
+    justify-content: space-between;
+}
+
+.action-button-toggle__label {
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .dataviz-root Button.action-button-toggle__button {
