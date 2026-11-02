@@ -4,6 +4,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
     using NUnit.Framework;
     using UnityEngine;
     using UnityEngine.UIElements;
+    using WallstopStudios.DataVisualizer.Editor.Utilities;
     using DataVisualizerWindow = WallstopStudios.DataVisualizer.Editor.DataVisualizer;
     using Object = UnityEngine.Object;
 
@@ -27,6 +28,18 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         public void ShouldAskForATypeInsteadOfNamingANonexistentType()
         {
             using TestCleanupScope cleanup = new();
+            /*
+                A window teardown cancels an incomplete shared index. When another DxVisualizer
+                window is open, its index work must survive this test, so the repair rebuilds it.
+            */
+            bool anotherWindowIsOpen = 0 < Resources.FindObjectsOfTypeAll<DataVisualizerWindow>().Length;
+            cleanup.Defer(() =>
+            {
+                if (anotherWindowIsOpen && !AssetGuidTypeIndex.Shared.IsComplete)
+                {
+                    AssetGuidTypeIndex.Shared.Rebuild();
+                }
+            });
             FieldInfo instance = typeof(DataVisualizerWindow).GetField("Instance", BindingFlags.Static | BindingFlags.NonPublic);
             object previous = instance.GetValue(null);
             cleanup.Defer(() => instance.SetValue(null, previous));
