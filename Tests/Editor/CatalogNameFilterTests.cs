@@ -31,6 +31,13 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(ParseTerms(text), Is.EqualTo(expected));
         }
 
+        [Test]
+        public void ShouldSkipTextOutsideTheGivenBoundsWhenParsingTerms()
+        {
+            CatalogNameFilter.ParseTerms("\tDamage\t", 1, 7, Terms);
+            Assert.That(Terms, Is.EqualTo(new[] { (1, 6) }));
+        }
+
         [TestCase("Damage Table", "damage", true)]
         [TestCase("Damage Table", "TABLE", true)]
         [TestCase("Damage Table", "table damage", true)]

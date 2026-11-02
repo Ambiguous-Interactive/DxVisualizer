@@ -3335,8 +3335,23 @@ namespace WallstopStudios.DataVisualizer.Editor
                 return false;
             }
 
+            /*
+                Trim the bounds instead of the text so the compact catalog ignores the same
+                surrounding whitespace the virtualized catalog does, without a trimmed copy.
+            */
+            int start = 0;
+            int end = searchText.Length;
+            while (start < end && char.IsWhiteSpace(searchText[start]))
+            {
+                start++;
+            }
+            while (start < end && char.IsWhiteSpace(searchText[end - 1]))
+            {
+                end--;
+            }
+
             _typeSearchText = searchText;
-            CatalogNameFilter.ParseTerms(searchText, 0, searchText.Length, _typeSearchTerms);
+            CatalogNameFilter.ParseTerms(searchText, start, end, _typeSearchTerms);
             return 0 < _typeSearchTerms.Count;
         }
 

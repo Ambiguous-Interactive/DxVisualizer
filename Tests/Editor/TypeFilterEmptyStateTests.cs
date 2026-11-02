@@ -149,5 +149,27 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             ApplyTypeFilter(window, string.Empty);
             AssertEmptyState(root, false);
         }
+
+        [TestCase(new int[] { 1 })]
+        [TestCase(new int[] { 129 })]
+        public void ShouldIgnoreWhitespaceAroundTheTypeFilter(int[] namespaceSizes)
+        {
+            using TestCleanupScope cleanup = new();
+            FieldInfo instance = typeof(DataVisualizerWindow).GetField("Instance", BindingFlags.Static | BindingFlags.NonPublic);
+            object previous = instance.GetValue(null);
+            cleanup.Defer(() => instance.SetValue(null, previous));
+            DataVisualizerWindow window = ScriptableObject.CreateInstance<DataVisualizerWindow>();
+            cleanup.Defer(() => Object.DestroyImmediate(window));
+            window.CreateGUI();
+            SeedCatalog(window, namespaceSizes);
+
+            VisualElement root = window.rootVisualElement;
+            ApplyTypeFilter(window, "  TestDataObject  ");
+            AssertEmptyState(root, false);
+            ApplyTypeFilter(window, "TestDataObject\t");
+            AssertEmptyState(root, false);
+            ApplyTypeFilter(window, "\tNoSuchTypeName\t");
+            AssertEmptyState(root, true);
+        }
     }
 }
