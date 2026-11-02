@@ -38,16 +38,17 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         }
 
         /*
-            Seeds the managed catalog directly so the check needs no assets: the compact catalog
-            renders one namespace, the virtualized catalog switches on past 128 managed types.
+            Seeds the managed catalog directly so the check needs no assets. One namespace holds
+            the repeated fixture type: one entry renders the compact catalog, 129 switch it to the
+            virtualized catalog.
         */
-        private static void SeedCatalog(DataVisualizerWindow window, int entriesPerNamespace)
+        private static void SeedCatalog(DataVisualizerWindow window, int entriesInNamespace)
         {
             string namespaceKey = NamespaceController.GetNamespaceKey(typeof(TestDataObject));
             Dictionary<string, List<Type>> managed = ReadPrivateField<Dictionary<string, List<Type>>>(window, "_scriptableObjectTypes");
             managed.Clear();
-            List<Type> types = new(entriesPerNamespace);
-            for (int index = 0; index < entriesPerNamespace; index++)
+            List<Type> types = new(entriesInNamespace);
+            for (int index = 0; index < entriesInNamespace; index++)
             {
                 types.Add(typeof(TestDataObject));
             }
@@ -68,7 +69,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
 
         [TestCase(1)]
         [TestCase(129)]
-        public void ShouldExplainEmptyTypeFiltersInBothCatalogPaths(int entries)
+        public void ShouldExplainAnEmptyFilterWhenEitherCatalogPathHidesEveryType(int entries)
         {
             using TestCleanupScope cleanup = new();
             FieldInfo instance = typeof(DataVisualizerWindow).GetField("Instance", BindingFlags.Static | BindingFlags.NonPublic);
@@ -80,8 +81,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             SeedCatalog(window, entries);
 
             VisualElement root = window.rootVisualElement;
-            TextField filter = root.Q<TextField>("type-search-field");
-            Assert.That(filter != null, "The catalog needs its filter field.");
+            Assert.That(root.Q<TextField>("type-search-field") != null, "The catalog needs its filter field.");
             AssertEmptyState(root, false);
 
             ApplyTypeFilter(window, "NoSuchTypeName");
