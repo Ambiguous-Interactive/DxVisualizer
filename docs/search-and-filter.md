@@ -79,8 +79,8 @@ A display name comes from `[CustomDataVisualization]` when your type sets `TypeN
 
 Labels are Unity asset labels, the same ones you see on an asset in the Project panel.
 
-Focus the arrow beside **Labels** and press Enter or Space to show or hide the controls. Custom input profiles replace these keys; the arrow tooltip shows the current bindings.
-Clear active label constraints before hiding the controls.
+Focus the arrow beside **Labels** and press Enter or Space to show or hide the controls. Custom input profiles replace these keys; the arrow tooltip shows the current bindings. The
+controls collapse at any time; a collapsed header keeps the active filter expression and the shown/hidden counts visible.
 
 1. Choose **Match all labels** to require every selected label, or **Match any label** to accept at least one.
 2. Click a label pill to add it. A selected pill shows **×**; click it again to remove it.
@@ -130,7 +130,8 @@ no labels configured, both modes show every asset.
 
 Labels compare exactly, so `Urgent` and `urgent` are two different labels.
 
-The **Labels** header refuses to collapse while any label is configured, so an active filter stays visible. In Advanced, both clauses remain visible together with their expression.
+The **Labels** header collapses while a filter is active. The collapsed header shows the expression and the neutral shown/hidden counts, so hiding the controls never hides the
+filter. In Advanced, both clauses remain visible together with their expression while the controls are open.
 
 ### What filtering changes
 
