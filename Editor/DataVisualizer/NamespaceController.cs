@@ -215,7 +215,8 @@ namespace WallstopStudios.DataVisualizer.Editor
         /*
             Catalog rows truncate long names, and a custom display name hides the CLR type
             behind it. Both catalog renderers show this one hint so a viewer can always read
-            the exact namespace-qualified identity, including duplicate short names.
+            the exact assembly-qualified identity, including same-named types from different
+            assemblies.
         */
         internal static string GetTypeIdentityHint(Type type)
         {
@@ -225,7 +226,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             }
 
             string displayName = GetTypeDisplayName(type);
-            return string.Equals(displayName, type.Name, StringComparison.Ordinal) ? type.FullName : displayName + "\n" + type.FullName;
+            return string.Equals(displayName, type.Name, StringComparison.Ordinal) ? type.AssemblyQualifiedName : displayName + "\n" + type.AssemblyQualifiedName;
         }
 
         internal static bool IsNamespaceCollapsed(DataVisualizer owner, string key) => GetIsNamespaceCollapsed(owner, key);

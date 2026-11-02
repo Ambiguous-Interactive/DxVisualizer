@@ -762,7 +762,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 Label localizedTitle = localizedRow.Q<Label>("catalog-label");
                 Assert.That(
                     localizedTitle.tooltip,
-                    Is.EqualTo(localizedTitle.text + "\n" + dataset[1997].FullName),
+                    Is.EqualTo(localizedTitle.text + "\n" + dataset[1997].AssemblyQualifiedName),
                     "Custom titles expose both full display text and exact identity."
                 );
                 view.Filter("  OBJET TRÈS   LONG  ");

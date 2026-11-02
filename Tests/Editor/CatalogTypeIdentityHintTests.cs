@@ -17,7 +17,8 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         PR #476 gave the virtualized catalog exact type identity hints but left the static
         catalog (128 types or fewer, the common case) with an empty tooltip and only the
         automatic elision text. Both renderers now read one hint, so a viewer can always
-        tell colliding short names and custom display names apart.
+        tell colliding short names, custom display names and same-named types from different
+        assemblies apart.
     */
     public sealed class CatalogTypeIdentityHintTests
     {
@@ -25,12 +26,29 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
 
         private static DataVisualizerWindow CreateOwner(TestCleanupScope cleanup)
         {
+            /*
+                CreateInstance runs OnEnable, which assigns the shared Instance field. The
+                editor-to-tests assembly pair does not honor InternalsVisibleTo, so the
+                snapshot uses the same local reflection pattern as the other window tests.
+            */
             FieldInfo instance = typeof(DataVisualizerWindow).GetField("Instance", BindingFlags.Static | BindingFlags.NonPublic);
             object previous = instance.GetValue(null);
             cleanup.Defer(() => instance.SetValue(null, previous));
             DataVisualizerWindow owner = ScriptableObject.CreateInstance<DataVisualizerWindow>();
             cleanup.Defer(() => Object.DestroyImmediate(owner));
             return owner;
+        }
+
+        private static void CollectTypeRows(VisualElement element, Dictionary<Type, VisualElement> rows)
+        {
+            foreach (VisualElement child in element.Children())
+            {
+                if (child.userData is Type type)
+                {
+                    rows[type] = child;
+                }
+                CollectTypeRows(child, rows);
+            }
         }
 
         private static Dictionary<Type, string> BuildStaticHints(
@@ -43,13 +61,13 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             NamespaceController controller = new(managed, order);
             VisualElement catalog = null;
             controller.Build(owner, ref catalog);
-            FieldInfo cacheField = typeof(NamespaceController).GetField("_namespaceCache", BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.That(cacheField != null, "The static catalog must keep its type-row cache.");
-            Dictionary<Type, VisualElement> cache = (Dictionary<Type, VisualElement>)cacheField.GetValue(controller);
+            Assert.That(catalog != null, "The static catalog must build its tree.");
+            Dictionary<Type, VisualElement> rows = new();
+            CollectTypeRows(catalog, rows);
             Dictionary<Type, string> hints = new();
             foreach (Type type in types)
             {
-                Assert.That(cache.TryGetValue(type, out VisualElement row), Is.True, type.FullName + " must render a catalog row.");
+                Assert.That(rows.TryGetValue(type, out VisualElement row), Is.True, type.FullName + " must render a catalog row.");
                 Label label = row.Q<Label>("type-item-label");
                 Assert.That(label != null, type.FullName + " must render its type label.");
                 Assert.That(label.displayTooltipWhenElided, Is.False, "The explicit identity hint must not be replaced by the elision tooltip.");
@@ -106,14 +124,14 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
 
             foreach (Type type in new[] { first, second })
             {
-                Assert.That(staticHints[type], Is.EqualTo(type.FullName), "A static row must hint the exact namespace-qualified name.");
+                Assert.That(staticHints[type], Is.EqualTo(type.AssemblyQualifiedName), "A static row must hint the exact assembly-qualified name.");
                 Assert.That(virtualizedHints.Contains(staticHints[type]), Is.True, "Both renderers must agree on the identity hint.");
             }
             Assert.That(staticHints[first], Is.Not.EqualTo(staticHints[second]), "Colliding short names must stay distinguishable by tooltip.");
         }
 
         [Test]
-        public void ShouldPrefixCustomDisplayNamesWithTheirFullTypeName()
+        public void ShouldPrefixCustomDisplayNamesWithTheAssemblyQualifiedName()
         {
             using TestCleanupScope cleanup = new();
             DataVisualizerWindow owner = CreateOwner(cleanup);
@@ -130,7 +148,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
 
             Dictionary<Type, string> hints = BuildStaticHints(owner, managed, order, type);
 
-            Assert.That(hints[type], Is.EqualTo(CustomTitle + "\n" + type.FullName), "A custom display name must keep its exact type identity visible.");
+            Assert.That(hints[type], Is.EqualTo(CustomTitle + "\n" + type.AssemblyQualifiedName), "A custom display name must keep its exact type identity visible.");
         }
 
         [CustomDataVisualization(TypeName = CustomTitle)]
