@@ -557,11 +557,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Label themeLabel = popover.Q(name: "theme-row").Q<Label>(className: "settings-data-folder-label");
             Label folderLabel = popover.Q(name: "data-folder-display").parent.Q<Label>(className: "settings-data-folder-label");
             Assert.That(persistence != null && selection != null && themeLabel != null && folderLabel != null, "Every settings row renders.");
-            Assert.That(
-                popover.worldBound.width,
-                Is.Positive,
-                $"The settings popover lays out before the columns are compared. root={window.rootVisualElement.worldBound} popover={popover.worldBound} display={Display(popover)}"
-            );
+            Assert.That(popover.worldBound.width, Is.Positive, "The settings popover lays out before the columns are compared.");
 
             /*
                 The switches carry their own right-aligned labels while the theme and folder

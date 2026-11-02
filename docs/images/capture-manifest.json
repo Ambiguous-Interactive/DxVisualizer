@@ -51,9 +51,9 @@
         "reviewScope": "Aligned 28-point label field and Add button; inspected at 1180 and 760 points across the default dark UI. Six-theme geometry assertions also pass."
       },
       "settings": {
-        "revision": "6627962e8b5fe67e50a6dfb68384ef5e993cba94",
-        "capturedAt": "2026-10-26",
-        "reviewScope": "Native keyboard-reachable Settings switches, input profile, theme and data folder; inspected at 1180 and 360-point widths after hover and disabled-state repairs. Six-theme geometry, focus, hover and disabled checks pass. Windows dark skin only."
+        "revision": "11f3689a1226eeabaf2a3c18fce27265d3249c4c",
+        "capturedAt": "2026-11-02",
+        "reviewScope": "Native keyboard-reachable Settings switches, input profile, theme and data folder; switch labels now start at the same left edge as the theme and data folder labels, with every trailing control in one column. Inspected at 1180 and 360-point widths. Six-theme geometry, focus, hover and disabled checks pass. Windows dark skin only."
       }
     }
   },
