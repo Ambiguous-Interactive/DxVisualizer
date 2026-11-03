@@ -46,6 +46,10 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             return string.Equals(shortcut, action, StringComparison.OrdinalIgnoreCase) ? null : shortcut;
         }
 
+        /*
+            Builds one caption with at most one intermediate join, so the common paths allocate
+            one string and the two-key path allocates two.
+        */
         private static string Caption(string action, string shortcut, string alternateShortcut)
         {
             if (shortcut == null && alternateShortcut == null)
@@ -54,13 +58,13 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             }
             if (shortcut == null)
             {
-                return action + " (" + alternateShortcut + ")";
+                shortcut = alternateShortcut;
             }
-            if (alternateShortcut == null)
+            else if (alternateShortcut != null)
             {
-                return action + " (" + shortcut + ")";
+                shortcut = shortcut + ", " + alternateShortcut;
             }
-            return action + " (" + shortcut + ", " + alternateShortcut + ")";
+            return $"{action} ({shortcut})";
         }
 
         public bool HandleButton(KeyDownEvent evt, CatalogInputSettings navigation = null)

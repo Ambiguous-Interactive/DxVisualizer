@@ -3535,14 +3535,13 @@ namespace WallstopStudios.DataVisualizer.Editor
                     return true;
                 }
                 Label currentStatus = _searchPopover.Q<Label>("search-status");
+                string indexingSuffix = _isSearchCachePopulated ? string.Empty : " · Indexing…";
                 currentStatus.text =
-                    query.IsPreparing ? $"Ordering {query.RecordCount} available records…"
-                    : arrivalsOnly ? $"Searching {query.ScannedCount} / {query.RecordCount} available records… (updating results)"
-                    : $"{query.Results.Count} matches so far · Searching {query.ScannedCount} / {query.RecordCount} available records…";
-                if (!_isSearchCachePopulated)
-                {
-                    currentStatus.text += " · Indexing…";
-                }
+                    (
+                        query.IsPreparing ? $"Ordering {query.RecordCount} available records…"
+                        : arrivalsOnly ? $"Searching {query.ScannedCount} / {query.RecordCount} available records… (updating results)"
+                        : $"{query.Results.Count} matches so far · Searching {query.ScannedCount} / {query.RecordCount} available records…"
+                    ) + indexingSuffix;
                 return false;
             }
             void PublishSnapshot()
