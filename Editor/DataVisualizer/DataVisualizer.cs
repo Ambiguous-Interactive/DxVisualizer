@@ -6739,7 +6739,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                 name = "object-actions-button",
                 text = "Actions",
             };
-            actionsButton.SetLiveTooltip(Input.AssetActionHint);
+            actionsButton.SetLiveTooltip(() => Input.AssetActionHint());
             ProtectObjectRowAction(actionsButton);
             actionsButton.AddToClassList(StyleConstants.ObjectActionsButtonClass);
             actionsButton.AddToClassList(StyleConstants.ClickableClass);

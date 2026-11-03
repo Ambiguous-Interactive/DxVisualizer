@@ -605,6 +605,14 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 AssertHints(select);
             }
 
+            profileField.SetValue(settings, null);
+            using (TooltipEvent hint = TooltipEvent.GetPooled())
+            {
+                hint.target = actions;
+                actions.SendEvent(hint);
+                Assert.That(hint.tooltip, Does.Contain("Ctrl/Cmd+D"), "The Actions button drops a removed profile without a rebuild.");
+            }
+
             void AssertHints(KeyCode select)
             {
                 using (TooltipEvent hint = TooltipEvent.GetPooled())
