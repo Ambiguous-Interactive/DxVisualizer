@@ -65,6 +65,10 @@ metadata:
   a text input so focus keys cannot enter text or leave backward traversal broken.
 - Read shortcut hints from current bindings when the tooltip/menu opens. Replacing
   or editing a profile must not need row recreation.
+- Native `GenericMenu` labels treat `/` as a submenu separator and cannot right-align
+  a shortcut. Build them from `EditorInputBinding.ToMenuString` (platform key, `+`
+  between modifiers) and name every binding that runs the command, including platform
+  fallbacks such as Backspace for Delete on macOS. Keep tooltip prose separate.
 
 ## Persistence Safety
 

@@ -150,6 +150,11 @@ lands there as annotated, stdlib-first Python; `uvx pyright` validates types loc
 38. Counts derived from a UI cache must include the entries the cache omits. `HiddenNamespaces` counts every managed namespace, including namespaces with no type row and catalogs
     that never rebuilt, and an empty namespace counts as hidden only while a filter is active. Pass the filter state into the finalize step instead of inferring it from the rows.
 
+39. Build one-shot UI text in one expression, with a low operand count: a single interpolation, or a local join before the final caption. Never read a control's text back just to
+    append to it. In loops over unbounded collections append to a `StringBuilder` (reuse the cached one in `SearchHighlightUtility` where it applies); string `+=` in a loop is
+    quadratic. Native `GenericMenu` labels treat `/` as a submenu separator and cannot right-align a shortcut, so build them from `EditorInputBinding.ToMenuString` (platform key,
+    `+` between modifiers) and name every binding that runs the command, including platform fallbacks such as Backspace for Delete on macOS. Keep tooltip prose separate.
+
 ### Skills Discipline
 
 - Skills live at `.llm/skills/<kebab-name>/SKILL.md` (standard Agent Skills format); see [manage-skills](./skills/manage-skills/SKILL.md) before creating or editing one.

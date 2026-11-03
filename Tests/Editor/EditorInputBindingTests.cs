@@ -500,6 +500,63 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         }
 
         [Test]
+        public void ShouldNameActionMenuCommandsWithTheirPlatformBindings()
+        {
+            string actionModifier = Application.platform == RuntimePlatform.OSXEditor ? "Cmd" : "Ctrl";
+            DataVisualizerInputSettings input = new();
+            Assert.That(input.ActionCaption("Clone", input.clone), Is.EqualTo($"Clone ({actionModifier}+D)"), "Menus name the platform key instead of Ctrl/Cmd.");
+            input.clone = new EditorInputBinding(KeyCode.F9, EventModifiers.Shift);
+            Assert.That(input.ActionCaption("Clone", input.clone), Is.EqualTo("Clone (Shift+F9)"));
+            input.clone = new EditorInputBinding(KeyCode.J, EventModifiers.Control);
+            Assert.That(input.ActionCaption("Clone", input.clone), Is.EqualTo("Clone (Control+J)"));
+            input.clone = new EditorInputBinding(KeyCode.F9, EventModifiers.Shift | EventModifiers.Control);
+            Assert.That(input.ActionCaption("Clone", input.clone), Is.EqualTo("Clone (Shift+Control+F9)"), "Menu labels join modifiers with plus signs.");
+            input.clone = new EditorInputBinding(KeyCode.None);
+            Assert.That(input.ActionCaption("Clone", input.clone), Is.EqualTo("Clone"));
+            input.clone = new EditorInputBinding(KeyCode.D, actionModifier: true);
+            input.alternateDeleteOnMacOnly = false;
+            string[] captions =
+            {
+                input.ActionCaption("Clone", input.clone),
+                input.ActionCaption("Move to top", input.moveFirst),
+                input.ActionCaption("Delete", input.delete, input.ActiveAlternateDelete),
+            };
+            foreach (string caption in captions)
+            {
+                Assert.That(caption, Does.Not.Contain("/"), "A menu caption must not open a submenu.");
+            }
+        }
+
+        [Test]
+        public void ShouldKeepActionCaptionsReadableWhenKeysRepeatTheCommand()
+        {
+            DataVisualizerInputSettings input = new();
+            string delete = input.IsAlternateDeleteAvailable ? "Delete (Backspace)" : "Delete";
+            Assert.That(input.ActionCaption("Delete", input.delete), Is.EqualTo("Delete"), "A key named like its command does not repeat it.");
+            Assert.That(input.ActionCaption("Move to top", input.moveFirst), Does.Not.Contain("/"));
+            Assert.That(input.AssetActionHint(), Is.EqualTo($"Clone (Ctrl/Cmd+D), Rename (F2), Move, Order (Ctrl/Cmd+Home/Ctrl/Cmd+End), {delete}. Actions: Shift+F10/Menu."));
+            input.moveFirst = new EditorInputBinding(KeyCode.None);
+            input.clone = new EditorInputBinding(KeyCode.J, EventModifiers.Shift);
+            Assert.That(input.AssetActionHint(), Does.Contain(", Move, Order (Ctrl/Cmd+End),"), "A cleared ordering key keeps the other shortcut.");
+            Assert.That(input.AssetActionHint(), Does.Contain("Clone (Shift+J)"), "The hint reads the current binding.");
+            input.moveFirst = new EditorInputBinding(KeyCode.Home, actionModifier: true);
+            input.moveLast = new EditorInputBinding(KeyCode.None);
+            Assert.That(input.AssetActionHint(), Does.Contain(", Move, Order (Ctrl/Cmd+Home),"), "The first ordering shortcut survives a cleared last key.");
+            input.moveFirst = new EditorInputBinding(KeyCode.None);
+            Assert.That(input.AssetActionHint(), Does.Contain(", Move, Order, "), "Only cleared ordering keys drop the shortcut list.");
+        }
+
+        [Test]
+        public void ShouldNameTheMacDeleteFallbackWithTheDeleteCaption()
+        {
+            DataVisualizerInputSettings input = new() { alternateDeleteOnMacOnly = false };
+            Assert.That(input.ActionCaption("Delete", input.delete, input.ActiveAlternateDelete), Is.EqualTo("Delete (Backspace)"));
+            Assert.That(input.AssetActionHint(), Does.Contain(", Delete (Backspace). Actions:"));
+            input.alternateDelete = new EditorInputBinding(KeyCode.None);
+            Assert.That(input.ActionCaption("Delete", input.delete, input.ActiveAlternateDelete), Is.EqualTo("Delete"));
+        }
+
+        [Test]
         public void ShouldRoundTripCustomInputAndKeepDefaultsIndependent()
         {
             DataVisualizerInputSettings first = new();

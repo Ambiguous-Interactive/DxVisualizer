@@ -3535,14 +3535,13 @@ namespace WallstopStudios.DataVisualizer.Editor
                     return true;
                 }
                 Label currentStatus = _searchPopover.Q<Label>("search-status");
+                string indexingSuffix = _isSearchCachePopulated ? string.Empty : " · Indexing…";
                 currentStatus.text =
-                    query.IsPreparing ? $"Ordering {query.RecordCount} available records…"
-                    : arrivalsOnly ? $"Searching {query.ScannedCount} / {query.RecordCount} available records… (updating results)"
-                    : $"{query.Results.Count} matches so far · Searching {query.ScannedCount} / {query.RecordCount} available records…";
-                if (!_isSearchCachePopulated)
-                {
-                    currentStatus.text += " · Indexing…";
-                }
+                    (
+                        query.IsPreparing ? $"Ordering {query.RecordCount} available records…"
+                        : arrivalsOnly ? $"Searching {query.ScannedCount} / {query.RecordCount} available records… (updating results)"
+                        : $"{query.Results.Count} matches so far · Searching {query.ScannedCount} / {query.RecordCount} available records…"
+                    ) + indexingSuffix;
                 return false;
             }
             void PublishSnapshot()
@@ -5557,14 +5556,19 @@ namespace WallstopStudios.DataVisualizer.Editor
             }
 
             GenericMenu menu = new();
-            menu.AddItem(new GUIContent("Clone", "Duplicate this asset beside its source"), false, () => CloneObject(dataObject));
-            menu.AddItem(new GUIContent("Rename", "Rename this asset"), false, () => OpenRenamePopover(titleLabel, anchor, dataObject));
+            DataVisualizerInputSettings input = Input;
+            menu.AddItem(new GUIContent(input.ActionCaption("Clone", input.clone), "Duplicate this asset beside its source"), false, () => CloneObject(dataObject));
+            menu.AddItem(new GUIContent(input.ActionCaption("Rename", input.rename), "Rename this asset"), false, () => OpenRenamePopover(titleLabel, anchor, dataObject));
             menu.AddItem(new GUIContent("Move", "Move this asset to another folder"), false, () => MoveObjectToFolder(dataObject));
             menu.AddSeparator(string.Empty);
-            menu.AddItem(new GUIContent("Move to top", $"Place this asset first ({Input.moveFirst})"), false, () => MoveObjectToTop(dataObject));
-            menu.AddItem(new GUIContent("Move to bottom", $"Place this asset last ({Input.moveLast})"), false, () => MoveObjectToBottom(dataObject));
+            menu.AddItem(new GUIContent(input.ActionCaption("Move to top", input.moveFirst), "Place this asset first"), false, () => MoveObjectToTop(dataObject));
+            menu.AddItem(new GUIContent(input.ActionCaption("Move to bottom", input.moveLast), "Place this asset last"), false, () => MoveObjectToBottom(dataObject));
             menu.AddSeparator(string.Empty);
-            menu.AddItem(new GUIContent("Delete", "Ask for confirmation before deleting this asset"), false, () => OpenConfirmDeletePopover(anchor, dataObject));
+            menu.AddItem(
+                new GUIContent(input.ActionCaption("Delete", input.delete, input.ActiveAlternateDelete), "Ask for confirmation before deleting this asset"),
+                false,
+                () => OpenConfirmDeletePopover(anchor, dataObject)
+            );
             menu.DropDown(anchor.worldBound);
         }
 
