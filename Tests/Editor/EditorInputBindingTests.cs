@@ -518,8 +518,23 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(input.AssetActionHint(), Is.EqualTo("Clone (Ctrl/Cmd+D), Rename (F2), Move, Order (Ctrl/Cmd+Home/Ctrl/Cmd+End), Delete. Actions: Shift+F10/Menu."));
             input.moveFirst = new EditorInputBinding(KeyCode.None);
             input.clone = new EditorInputBinding(KeyCode.J, EventModifiers.Shift);
-            Assert.That(input.AssetActionHint(), Does.Contain(", Move, Order,"), "A cleared ordering binding drops the shortcut.");
+            Assert.That(input.AssetActionHint(), Does.Contain(", Move, Order (Ctrl/Cmd+End),"), "A cleared ordering key keeps the other shortcut.");
             Assert.That(input.AssetActionHint(), Does.Contain("Clone (Shift+J)"), "The hint reads the current binding.");
+            input.moveFirst = new EditorInputBinding(KeyCode.Home, actionModifier: true);
+            input.moveLast = new EditorInputBinding(KeyCode.None);
+            Assert.That(input.AssetActionHint(), Does.Contain(", Move, Order (Ctrl/Cmd+Home),"), "The first ordering shortcut survives a cleared last key.");
+            input.moveFirst = new EditorInputBinding(KeyCode.None);
+            Assert.That(input.AssetActionHint(), Does.Contain(", Move, Order, "), "Only cleared ordering keys drop the shortcut list.");
+        }
+
+        [Test]
+        public void ShouldNameTheMacDeleteFallbackWithTheDeleteCaption()
+        {
+            DataVisualizerInputSettings input = new() { alternateDeleteOnMacOnly = false };
+            Assert.That(input.ActionCaption("Delete", input.delete, input.ActiveAlternateDelete), Is.EqualTo("Delete (Backspace)"));
+            Assert.That(input.AssetActionHint(), Does.Contain(", Delete (Backspace). Actions:"));
+            input.alternateDelete = new EditorInputBinding(KeyCode.None);
+            Assert.That(input.ActionCaption("Delete", input.delete, input.ActiveAlternateDelete), Is.EqualTo("Delete"));
         }
 
         [Test]

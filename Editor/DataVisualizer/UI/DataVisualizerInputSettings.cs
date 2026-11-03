@@ -11,6 +11,14 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
     {
         public CatalogInputSettings Navigation => navigation ??= new CatalogInputSettings();
 
+        /*
+            macOS keyboards send Backspace for the key labeled Delete, so the alternate binding
+            can also delete there. Captions name every key that runs a command on this platform.
+        */
+        public bool IsAlternateDeleteAvailable => !alternateDeleteOnMacOnly || Application.platform == RuntimePlatform.OSXEditor;
+
+        public EditorInputBinding ActiveAlternateDelete => IsAlternateDeleteAvailable ? alternateDelete : default;
+
         public EditorInputBinding nextFocus = new(KeyCode.Tab);
         public EditorInputBinding previousFocus = new(KeyCode.Tab, EventModifiers.Shift);
         public EditorInputBinding clone = new(KeyCode.D, actionModifier: true);
@@ -27,6 +35,16 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         [SerializeField]
         private CatalogInputSettings navigation = new();
+
+        private static string ShortcutOrNull(string action, EditorInputBinding binding)
+        {
+            if (binding.key == KeyCode.None)
+            {
+                return null;
+            }
+            string shortcut = binding.ToString();
+            return string.Equals(shortcut, action, StringComparison.OrdinalIgnoreCase) ? null : shortcut;
+        }
 
         public bool HandleButton(KeyDownEvent evt, CatalogInputSettings navigation = null)
         {
@@ -53,28 +71,59 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         public bool IsDelete(IKeyboardEvent evt)
         {
-            return delete.Matches(evt) || ((!alternateDeleteOnMacOnly || Application.platform == RuntimePlatform.OSXEditor) && alternateDelete.Matches(evt));
+            return delete.Matches(evt) || (IsAlternateDeleteAvailable && alternateDelete.Matches(evt));
         }
 
         /*
-            Names a command with the key that runs it, so the row menu and the Actions hint show
-            the same shortcut. A binding whose key repeats the command name adds nothing
+            Names a command with every key that runs it, so the row menu and the Actions hint
+            show the same shortcuts. A binding whose key repeats the command name adds nothing
             ("Delete (Delete)"), and a cleared key cannot run the command at all.
         */
-        public string ActionCaption(string action, EditorInputBinding binding)
+        public string ActionCaption(string action, EditorInputBinding binding, EditorInputBinding alternate = default)
         {
-            string shortcut = binding.ToString();
-            if (binding.key == KeyCode.None || string.Equals(shortcut, action, StringComparison.OrdinalIgnoreCase))
+            string shortcut = ShortcutOrNull(action, binding);
+            string alternateShortcut = ShortcutOrNull(action, alternate);
+            if (shortcut == null && alternateShortcut == null)
             {
                 return action;
             }
-            return action + " (" + shortcut + ")";
+            if (shortcut == null)
+            {
+                return action + " (" + alternateShortcut + ")";
+            }
+            if (alternateShortcut == null)
+            {
+                return action + " (" + shortcut + ")";
+            }
+            return action + " (" + shortcut + "/" + alternateShortcut + ")";
         }
 
         public string AssetActionHint()
         {
-            string order = moveFirst.key == KeyCode.None || moveLast.key == KeyCode.None ? "Order" : $"Order ({moveFirst}/{moveLast})";
-            return $"{ActionCaption("Clone", clone)}, {ActionCaption("Rename", rename)}, Move, {order}, {ActionCaption("Delete", delete)}. Actions: {actions}/{alternateActions}.";
+            return $"{ActionCaption("Clone", clone)}, {ActionCaption("Rename", rename)}, Move, {DescribeOrderHint()}, {ActionCaption("Delete", delete, ActiveAlternateDelete)}. Actions: {actions}/{alternateActions}.";
+        }
+
+        /*
+            Names the ordering shortcuts that exist. One cleared ordering key does not hide the
+            other, so the hint still tells the user which move they can make.
+        */
+        private string DescribeOrderHint()
+        {
+            bool hasFirst = moveFirst.key != KeyCode.None;
+            bool hasLast = moveLast.key != KeyCode.None;
+            if (!hasFirst && !hasLast)
+            {
+                return "Order";
+            }
+            if (!hasFirst)
+            {
+                return $"Order ({moveLast})";
+            }
+            if (!hasLast)
+            {
+                return $"Order ({moveFirst})";
+            }
+            return $"Order ({moveFirst}/{moveLast})";
         }
     }
 }

@@ -5566,7 +5566,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             menu.AddItem(new GUIContent(input.ActionCaption("Move to bottom", input.moveLast), "Place this asset last"), false, () => MoveObjectToBottom(dataObject));
             menu.AddSeparator(string.Empty);
             menu.AddItem(
-                new GUIContent(input.ActionCaption("Delete", input.delete), "Ask for confirmation before deleting this asset"),
+                new GUIContent(input.ActionCaption("Delete", input.delete, input.ActiveAlternateDelete), "Ask for confirmation before deleting this asset"),
                 false,
                 () => OpenConfirmDeletePopover(anchor, dataObject)
             );
