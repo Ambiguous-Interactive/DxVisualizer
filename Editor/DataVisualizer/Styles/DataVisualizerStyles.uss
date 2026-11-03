@@ -1845,6 +1845,23 @@
     white-space: normal;
     color: var(--dataviz-warning);
 }
+/*
+    Stands in for an empty result list, so it shares the list box shape and keeps the
+    paging row below at the same place instead of letting it jump when rows arrive.
+*/
+.asset-tool-empty {
+    flex-grow: 1;
+    min-height: 60px;
+    margin-top: 8px;
+    margin-bottom: 8px;
+    padding: 10px;
+    background-color: var(--dataviz-pane);
+    border-width: 1px;
+    border-color: var(--dataviz-border);
+    border-radius: var(--dataviz-control-radius);
+    color: var(--dataviz-muted);
+    white-space: normal;
+}
 
 #header-row {
     flex-wrap: wrap;

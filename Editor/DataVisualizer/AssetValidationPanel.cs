@@ -15,6 +15,7 @@ namespace WallstopStudios.DataVisualizer.Editor
         private Button _cancel;
         private Label _status;
         private Label _selectionMessage;
+        private Label _emptyState;
         private ListView _list;
         private readonly List<AssetValidationFinding> _rows = new();
 
@@ -121,6 +122,26 @@ namespace WallstopStudios.DataVisualizer.Editor
                 }
                 _list.RefreshItems();
             }
+            UpdateResultEmptyState();
+        }
+
+        /*
+            The status line counts findings, but an empty list box also needs to say whether
+            no run started or a run found nothing, so the panel does not read as broken.
+        */
+        private void UpdateResultEmptyState()
+        {
+            bool hasRows = 0 < _rows.Count;
+            _list.style.display = hasRows ? DisplayStyle.Flex : DisplayStyle.None;
+            _emptyState.style.display = hasRows ? DisplayStyle.None : DisplayStyle.Flex;
+            if (hasRows)
+            {
+                return;
+            }
+            _emptyState.text =
+                _validation == null ? "Select Project assets and run a validation to list findings here."
+                : !_validation.IsComplete ? "No findings in the assets checked so far."
+                : "No problems found in the checked assets.";
         }
 
         private void BuildContent()
@@ -146,6 +167,9 @@ namespace WallstopStudios.DataVisualizer.Editor
             _selectionMessage = new Label { name = "validation-selection-message", style = { whiteSpace = WhiteSpace.Normal, display = DisplayStyle.None } };
             root.Add(_selectionMessage);
             _selectionMessage.AddToClassList(StyleConstants.AssetToolMessageClass);
+            _emptyState = new Label { name = "validation-empty-state" };
+            _emptyState.AddToClassList(StyleConstants.AssetToolEmptyClass);
+            root.Add(_emptyState);
             _list = new ListView
             {
                 itemsSource = _rows,
@@ -166,6 +190,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             };
             _list.AddToClassList(StyleConstants.AssetToolResultsClass);
             root.Add(_list);
+            UpdateResultEmptyState();
         }
     }
 }

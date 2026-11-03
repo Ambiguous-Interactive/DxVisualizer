@@ -197,9 +197,49 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             window.CreateGUI();
             window.OpenAssetValidation();
             AssetValidationPanel workspace = window.rootVisualElement.Q<AssetValidationPanel>();
+            Label emptyState = window.rootVisualElement.Q<Label>("validation-empty-state");
+            ListView results = workspace.Q<ListView>();
+            Assert.That(emptyState.text, Is.EqualTo("Select Project assets and run a validation to list findings here."));
+            Assert.That(emptyState.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(results.style.display.value, Is.EqualTo(DisplayStyle.None));
             Selection.objects = new UnityEngine.Object[] { asset };
             workspace.ValidateSelection();
             Assert.That(window.rootVisualElement.Q<Label>("validation-status").text, Is.EqualTo("Complete: 1/1 assets, 0 findings."));
+            Assert.That(emptyState.text, Is.EqualTo("No problems found in the checked assets."));
+            Assert.That(emptyState.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(results.style.display.value, Is.EqualTo(DisplayStyle.None));
+        }
+
+        [UnityTest]
+        public IEnumerator ShouldReplaceTheEmptyStateWithReportedFindings()
+        {
+            using TestCleanupScope cleanup = new();
+            string folder = CreateFolder(cleanup);
+            CreateAsset(folder + "/First.asset", "authored");
+            CreateAsset(folder + "/Second.asset", "authored");
+            AssetDatabase.SaveAssets();
+            UnityEngine.Object[] selection = Selection.objects;
+            cleanup.Defer(() => Selection.objects = selection);
+            DataVisualizer window = ScriptableObject.CreateInstance<DataVisualizer>();
+            cleanup.Defer(() => window.Close());
+            window.Show();
+            window.CreateGUI();
+            window.OpenAssetValidation();
+            AssetValidationPanel workspace = window.rootVisualElement.Q<AssetValidationPanel>();
+            Label status = window.rootVisualElement.Q<Label>("validation-status");
+            Label emptyState = window.rootVisualElement.Q<Label>("validation-empty-state");
+            ListView results = workspace.Q<ListView>();
+            Selection.objects = new[] { AssetDatabase.LoadMainAssetAtPath(folder + "/First.asset"), AssetDatabase.LoadMainAssetAtPath(folder + "/Second.asset") };
+            workspace.ValidateSelection();
+            double deadline = EditorApplication.timeSinceStartup + 3;
+            while (status.text.StartsWith("Processing", StringComparison.Ordinal) && EditorApplication.timeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+            Assert.That(status.text, Does.StartWith("Complete: 2/2 assets, "));
+            Assert.That(emptyState.style.display.value, Is.EqualTo(DisplayStyle.None), "Findings take the place of the empty message.");
+            Assert.That(results.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(results.itemsSource.Count, Is.Positive);
         }
     }
 }

@@ -1,10 +1,12 @@
 namespace WallstopStudios.DataVisualizer.Tests.Editor
 {
     using System;
+    using System.Collections;
     using System.IO;
     using NUnit.Framework;
     using UnityEditor;
     using UnityEngine;
+    using UnityEngine.TestTools;
     using UnityEngine.UIElements;
     using WallstopStudios.DataVisualizer.Editor;
     using WallstopStudios.DataVisualizer.Editor.Data;
@@ -237,6 +239,66 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             workspace.Q<DropdownField>("saved-search-list").index = 0;
             workspace.DeleteSelected();
             Assert.That(owner.CopySavedSearches(), Is.Empty);
+        }
+
+        [Test]
+        public void ShouldExplainWhenNoSavedSearchIsApplied()
+        {
+            using TestCleanupScope cleanup = new();
+            DataVisualizer owner = ScriptableObject.CreateInstance<DataVisualizer>();
+            cleanup.Defer(owner.Close);
+            owner.Show();
+            owner.CreateGUI();
+            var original = owner.CopySavedSearches();
+            cleanup.Defer(() => owner.SaveSearches(original));
+            owner.SaveSearches(new());
+            SavedAssetSearchPanel workspace = owner.OpenSavedSearches();
+            Label emptyState = workspace.Q<Label>("saved-search-empty-state");
+            ListView results = workspace.Q<ListView>();
+            Assert.That(emptyState.text, Does.Contain("No saved search is applied"));
+            Assert.That(emptyState.text, Does.Contain("Save current search"));
+            Assert.That(emptyState.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(results.style.display.value, Is.EqualTo(DisplayStyle.None), "An empty message replaces the empty list box.");
+        }
+
+        [UnityTest]
+        public IEnumerator ShouldExplainASavedSearchWithNoMatches()
+        {
+            using TestCleanupScope cleanup = new();
+            DataVisualizer owner = ScriptableObject.CreateInstance<DataVisualizer>();
+            cleanup.Defer(owner.Close);
+            owner.Show();
+            owner.CreateGUI();
+            var original = owner.CopySavedSearches();
+            cleanup.Defer(() => owner.SaveSearches(original));
+            owner.SaveSearches(
+                new()
+                {
+                    new SavedAssetSearch
+                    {
+                        name = "No matches",
+                        query = "zzzz-no-such-text",
+                        typeIdentity = typeof(TestDataObject).AssemblyQualifiedName,
+                    },
+                }
+            );
+            SavedAssetSearchPanel workspace = owner.OpenSavedSearches();
+            Label status = workspace.Q<Label>("saved-search-status");
+            Label emptyState = workspace.Q<Label>("saved-search-empty-state");
+            ListView results = workspace.Q<ListView>();
+            workspace.Q<DropdownField>("saved-search-list").index = 0;
+            workspace.ApplySelected();
+            Assert.That(emptyState.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+            double deadline = EditorApplication.timeSinceStartup + 10;
+            while (!status.text.StartsWith("Complete", StringComparison.Ordinal) && EditorApplication.timeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+            Assert.That(status.text, Does.StartWith("Complete"));
+            Assert.That(status.text, Does.Contain("0 matches"));
+            Assert.That(emptyState.text, Is.EqualTo("This saved search matches no assets."));
+            Assert.That(emptyState.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(results.style.display.value, Is.EqualTo(DisplayStyle.None));
         }
     }
 }
