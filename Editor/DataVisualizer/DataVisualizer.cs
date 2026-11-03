@@ -6105,7 +6105,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                 catalog row, but narrow single-pane layouts show only this pane, so the row is
                 gone and nothing else said which type the list belongs to.
             */
-            _objectHeaderTypeLabel = new Label { name = "object-header-type-label" };
+            _objectHeaderTypeLabel = new Label { name = "object-header-type-label", displayTooltipWhenElided = false };
             _objectHeaderTypeLabel.AddToClassList("object-header-type-label");
             _objectHeaderTypeLabel.AddToClassList("dataviz-muted");
             _objectHeaderTypeLabel.style.display = DisplayStyle.None;

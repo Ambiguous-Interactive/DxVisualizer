@@ -178,6 +178,17 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(typeName.resolvedStyle.display, Is.EqualTo(DisplayStyle.Flex), "The compact Objects pane still names its type.");
             Assert.That(typeName.text, Is.EqualTo(nameof(TestDataObject)));
             Assert.That(typeName.worldBound.xMax, Is.LessThanOrEqualTo(objectHeader.xMax + 0.5f), "The compact type label stays inside the header.");
+
+            SelectOnlyType(window, typeof(LongTitledData));
+            EditorSurfaceCapture.SettleLayout(window);
+
+            Assert.That(typeName.text, Is.EqualTo(LongTypeTitle), "A compact header reads the long display name.");
+            Assert.That(typeName.resolvedStyle.textOverflow, Is.EqualTo(TextOverflow.Ellipsis), "A compact long name elides instead of overflowing.");
+            Assert.That(typeName.displayTooltipWhenElided, Is.False, "The elision must not replace the exact identity hint.");
+            Vector2 compactNeeded = typeName.MeasureTextSize(LongTypeTitle, 0, VisualElement.MeasureMode.Undefined, 0, VisualElement.MeasureMode.Undefined);
+            Assert.That(typeName.worldBound.width, Is.LessThan(compactNeeded.x), "The compact label must be narrower than its full text.");
+            Assert.That(typeName.worldBound.xMax, Is.LessThanOrEqualTo(create.worldBound.xMin + 0.5f), "The compact type label stays before the create button.");
+            Assert.That(typeName.worldBound.xMax, Is.LessThanOrEqualTo(objectHeader.xMax + 0.5f), "The compact type label stays inside the header.");
         }
 
         [CustomDataVisualization(TypeName = LongTypeTitle)]
