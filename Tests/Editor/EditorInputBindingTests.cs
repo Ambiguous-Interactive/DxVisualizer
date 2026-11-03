@@ -556,5 +556,80 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             profileField.SetValue(settings, null);
             Assert.That(view.Input.NextTypeKey, Is.EqualTo(KeyCode.DownArrow));
         }
+
+        [Test]
+        public void ShouldRefreshHintsThatABuildTimeTooltipWouldShadow()
+        {
+            using TestCleanupScope cleanup = new();
+            FieldInfo instance = typeof(DataVisualizerWindow).GetField("Instance", BindingFlags.Static | BindingFlags.NonPublic);
+            object previous = instance.GetValue(null);
+            cleanup.Defer(() => instance.SetValue(null, previous));
+            DataVisualizerWindow owner = ScriptableObject.CreateInstance<DataVisualizerWindow>();
+            cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(owner));
+            const BindingFlags members = BindingFlags.Instance | BindingFlags.NonPublic;
+            object settings = typeof(DataVisualizerWindow).GetProperty("Settings", members).GetValue(owner);
+            FieldInfo profileField = settings.GetType().GetField("inputProfile");
+            object previousProfile = profileField.GetValue(settings);
+            cleanup.Defer(() => profileField.SetValue(settings, previousProfile));
+            DataVisualizerInputProfile profile = ScriptableObject.CreateInstance<DataVisualizerInputProfile>();
+            cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(profile));
+            profileField.SetValue(settings, profile);
+            const string namespaceKey = "Hints";
+            NamespaceController controller = new(
+                new Dictionary<string, List<Type>>
+                {
+                    {
+                        namespaceKey,
+                        new List<Type> { typeof(TestDataObject) }
+                    },
+                },
+                new Dictionary<string, int>()
+            );
+            VisualElement catalog = null;
+            controller.Build(owner, ref catalog);
+            Button indicator = catalog.Q<Button>("namespace-indicator-" + namespaceKey);
+            VisualElement row = owner.MakeObjectRow();
+            Button actions = row.Q<Button>("object-actions-button");
+            LayoutTestWindow host = ScriptableObject.CreateInstance<LayoutTestWindow>();
+            cleanup.Defer(() => EditorSurfaceCapture.CloseWindow(host));
+            host.rootVisualElement.Add(catalog);
+            host.rootVisualElement.Add(row);
+            EditorSurfaceCapture.ShowPopup(host);
+            EditorSurfaceCapture.SettleLayout(host);
+            Assert.That(indicator.tooltip, Does.Contain("Return/Space"), "The catalog keeps its build-time hint text.");
+            Assert.That(actions.tooltip, Does.Contain("Ctrl/Cmd+D"), "The Actions button keeps its build-time hint text.");
+            foreach (KeyCode select in new[] { KeyCode.F11, KeyCode.F12 })
+            {
+                profile.Bindings.Navigation.SelectKey = select;
+                profile.Bindings.clone = new EditorInputBinding(select);
+                AssertHints(select);
+            }
+
+            profileField.SetValue(settings, null);
+            using (TooltipEvent hint = TooltipEvent.GetPooled())
+            {
+                hint.target = actions;
+                actions.SendEvent(hint);
+                Assert.That(hint.tooltip, Does.Contain("Ctrl/Cmd+D"), "The Actions button drops a removed profile without a rebuild.");
+            }
+
+            void AssertHints(KeyCode select)
+            {
+                using (TooltipEvent hint = TooltipEvent.GetPooled())
+                {
+                    hint.target = indicator;
+                    indicator.SendEvent(hint);
+                    Assert.That(hint.tooltip, Does.Contain(select.ToString()), "The namespace indicator reads the current profile.");
+                    Assert.That(hint.tooltip, Does.Not.Contain("Return/Space"));
+                }
+                using (TooltipEvent hint = TooltipEvent.GetPooled())
+                {
+                    hint.target = actions;
+                    actions.SendEvent(hint);
+                    Assert.That(hint.tooltip, Does.Contain(select.ToString()), "The Actions button reads the current profile.");
+                    Assert.That(hint.tooltip, Does.Not.Contain("Ctrl/Cmd+D"));
+                }
+            }
+        }
     }
 }

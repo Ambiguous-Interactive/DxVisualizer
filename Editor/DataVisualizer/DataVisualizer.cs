@@ -6738,14 +6738,8 @@ namespace WallstopStudios.DataVisualizer.Editor
             {
                 name = "object-actions-button",
                 text = "Actions",
-                tooltip = Input.AssetActionHint(),
             };
-            actionsButton.RegisterCallback<TooltipEvent>(evt =>
-            {
-                evt.tooltip = Input.AssetActionHint();
-                evt.rect = actionsButton.worldBound;
-                evt.StopPropagation();
-            });
+            actionsButton.SetLiveTooltip(() => Input.AssetActionHint());
             ProtectObjectRowAction(actionsButton);
             actionsButton.AddToClassList(StyleConstants.ObjectActionsButtonClass);
             actionsButton.AddToClassList(StyleConstants.ClickableClass);

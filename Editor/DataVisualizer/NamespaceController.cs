@@ -624,19 +624,11 @@ namespace WallstopStudios.DataVisualizer.Editor
                 header.AddToClassList(StyleConstants.NamespaceHeaderClass);
                 namespaceGroupItem.Add(header);
 
-                Button indicator = new()
-                {
-                    text = StyleConstants.ArrowExpanded,
-                    name = $"namespace-indicator-{key}",
-                    tooltip =
-                        $"Collapse or expand {key} ({dataVisualizer.Input.Navigation.SelectKey}/{dataVisualizer.Input.Navigation.ToggleKey}; {dataVisualizer.Input.Navigation.CollapseKey}/{dataVisualizer.Input.Navigation.ExpandKey})",
-                };
-                indicator.RegisterCallback<TooltipEvent>(evt =>
+                Button indicator = new() { text = StyleConstants.ArrowExpanded, name = $"namespace-indicator-{key}" };
+                indicator.SetLiveTooltip(() =>
                 {
                     CatalogInputSettings input = dataVisualizer.Input.Navigation;
-                    evt.tooltip = $"Collapse or expand {key} ({input.SelectKey}/{input.ToggleKey}; {input.CollapseKey}/{input.ExpandKey})";
-                    evt.rect = indicator.worldBound;
-                    evt.StopImmediatePropagation();
+                    return $"Collapse or expand {key} ({input.SelectKey}/{input.ToggleKey}; {input.CollapseKey}/{input.ExpandKey})";
                 });
                 indicator.AddToClassList(StyleConstants.NamespaceIndicatorClass);
                 indicator.AddToClassList(StyleConstants.ClickableClass);

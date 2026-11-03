@@ -95,5 +95,33 @@ namespace WallstopStudios.DataVisualizer.Editor.Extensions
                 })
                 .ExecuteLater(1);
         }
+
+        /// <summary>
+        /// Shows a hint that reads <paramref name="currentHint"/> on every hover, and seeds the
+        /// element's <see cref="VisualElement.tooltip"/> with the same text. Assigning
+        /// <see cref="VisualElement.tooltip"/> installs Unity's own tooltip handler, and a handler
+        /// registered after that one never runs, so the live hint must be registered first.
+        /// </summary>
+        /// <param name="element">Element that shows the hint.</param>
+        /// <param name="currentHint">Reads the hint text for the current state.</param>
+        public static void SetLiveTooltip(this VisualElement element, Func<string> currentHint)
+        {
+            if (element == null)
+            {
+                throw new ArgumentNullException(nameof(element));
+            }
+            if (currentHint == null)
+            {
+                throw new ArgumentNullException(nameof(currentHint));
+            }
+
+            element.RegisterCallback<TooltipEvent>(evt =>
+            {
+                evt.tooltip = currentHint();
+                evt.rect = element.worldBound;
+                evt.StopImmediatePropagation();
+            });
+            element.tooltip = currentHint();
+        }
     }
 }
