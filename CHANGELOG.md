@@ -20,7 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Add Page Up/Down focus navigation to large catalogs, with viewport-sized jumps and unchanged selection. Enter rows with boundary/page keys after filtering clears focus (#324,
   #312).
 - Add Move to top/bottom to asset Actions and Ctrl/Cmd+Home/End shortcuts for the selected asset, including offscreen rows (#312).
-- Show each asset action's current shortcut inside the row Actions menu, matching the Actions hint (#312).
+- Show each asset action's current shortcut inside the row Actions menu (#312).
 - Add viewport-bounded catalog rows with responsive headers. Preserve grouping, filters, order, selection, focus, gestures, full titles and exact type hints (#324, #312).
 - Add atomic GUID selection import and copied export for headless editor tools, sharing browser selection intent and exact type identities (#315).
 - Add paged C# and JSON discovery of browser-eligible types with exact identities, without opening a window or loading assets (#315, #316).

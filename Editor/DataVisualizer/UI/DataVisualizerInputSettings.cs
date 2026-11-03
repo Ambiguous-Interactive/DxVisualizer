@@ -36,14 +36,31 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         [SerializeField]
         private CatalogInputSettings navigation = new();
 
-        private static string ShortcutOrNull(string action, EditorInputBinding binding)
+        private static string ShortcutOrNull(string action, EditorInputBinding binding, bool menuLabel)
         {
             if (binding.key == KeyCode.None)
             {
                 return null;
             }
-            string shortcut = binding.ToString();
+            string shortcut = menuLabel ? binding.ToMenuString() : binding.ToString();
             return string.Equals(shortcut, action, StringComparison.OrdinalIgnoreCase) ? null : shortcut;
+        }
+
+        private static string Caption(string action, string shortcut, string alternateShortcut)
+        {
+            if (shortcut == null && alternateShortcut == null)
+            {
+                return action;
+            }
+            if (shortcut == null)
+            {
+                return action + " (" + alternateShortcut + ")";
+            }
+            if (alternateShortcut == null)
+            {
+                return action + " (" + shortcut + ")";
+            }
+            return action + " (" + shortcut + ", " + alternateShortcut + ")";
         }
 
         public bool HandleButton(KeyDownEvent evt, CatalogInputSettings navigation = null)
@@ -75,32 +92,28 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         }
 
         /*
-            Names a command with every key that runs it, so the row menu and the Actions hint
-            show the same shortcuts. A binding whose key repeats the command name adds nothing
-            ("Delete (Delete)"), and a cleared key cannot run the command at all.
+            Names a command with every key that runs it for a Unity menu label. A binding whose
+            key repeats the command name adds nothing ("Delete (Delete)"), and a cleared key
+            cannot run the command at all. Two keys join with a comma because GenericMenu reads
+            a slash as a submenu separator.
         */
         public string ActionCaption(string action, EditorInputBinding binding, EditorInputBinding alternate = default)
         {
-            string shortcut = ShortcutOrNull(action, binding);
-            string alternateShortcut = ShortcutOrNull(action, alternate);
-            if (shortcut == null && alternateShortcut == null)
-            {
-                return action;
-            }
-            if (shortcut == null)
-            {
-                return action + " (" + alternateShortcut + ")";
-            }
-            if (alternateShortcut == null)
-            {
-                return action + " (" + shortcut + ")";
-            }
-            return action + " (" + shortcut + "/" + alternateShortcut + ")";
+            return Caption(action, ShortcutOrNull(action, binding, true), ShortcutOrNull(action, alternate, true));
         }
 
         public string AssetActionHint()
         {
-            return $"{ActionCaption("Clone", clone)}, {ActionCaption("Rename", rename)}, Move, {DescribeOrderHint()}, {ActionCaption("Delete", delete, ActiveAlternateDelete)}. Actions: {actions}/{alternateActions}.";
+            return $"{ProseCaption("Clone", clone)}, {ProseCaption("Rename", rename)}, Move, {DescribeOrderHint()}, {ProseCaption("Delete", delete, ActiveAlternateDelete)}. Actions: {actions}/{alternateActions}.";
+        }
+
+        /*
+            The Actions hint is one line of prose, so it keeps the cross-platform Ctrl/Cmd
+            spelling that the rest of the help text uses.
+        */
+        private string ProseCaption(string action, EditorInputBinding binding, EditorInputBinding alternate = default)
+        {
+            return Caption(action, ShortcutOrNull(action, binding, false), ShortcutOrNull(action, alternate, false));
         }
 
         /*

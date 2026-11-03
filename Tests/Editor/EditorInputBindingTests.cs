@@ -499,23 +499,40 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(binding.Matches(evt), Is.False);
         }
 
-        [TestCase(KeyCode.D, EventModifiers.None, true, "Clone (Ctrl/Cmd+D)")]
-        [TestCase(KeyCode.F9, EventModifiers.Shift, false, "Clone (Shift+F9)")]
-        [TestCase(KeyCode.J, EventModifiers.Control, false, "Clone (Control+J)")]
-        [TestCase(KeyCode.None, EventModifiers.None, false, "Clone")]
-        public void ShouldNameActionMenuCommandWithItsBinding(KeyCode key, EventModifiers modifiers, bool actionModifier, string expected)
+        [Test]
+        public void ShouldNameActionMenuCommandsWithTheirPlatformBindings()
         {
-            DataVisualizerInputSettings input = new() { clone = new EditorInputBinding(key, modifiers, actionModifier) };
-            Assert.That(input.ActionCaption("Clone", input.clone), Is.EqualTo(expected));
+            string actionModifier = Application.platform == RuntimePlatform.OSXEditor ? "Cmd" : "Ctrl";
+            DataVisualizerInputSettings input = new();
+            Assert.That(input.ActionCaption("Clone", input.clone), Is.EqualTo($"Clone ({actionModifier}+D)"), "Menus name the platform key instead of Ctrl/Cmd.");
+            input.clone = new EditorInputBinding(KeyCode.F9, EventModifiers.Shift);
+            Assert.That(input.ActionCaption("Clone", input.clone), Is.EqualTo("Clone (Shift+F9)"));
+            input.clone = new EditorInputBinding(KeyCode.J, EventModifiers.Control);
+            Assert.That(input.ActionCaption("Clone", input.clone), Is.EqualTo("Clone (Control+J)"));
+            input.clone = new EditorInputBinding(KeyCode.None);
+            Assert.That(input.ActionCaption("Clone", input.clone), Is.EqualTo("Clone"));
+            input.clone = new EditorInputBinding(KeyCode.D, actionModifier: true);
+            input.alternateDeleteOnMacOnly = false;
+            string[] captions =
+            {
+                input.ActionCaption("Clone", input.clone),
+                input.ActionCaption("Move to top", input.moveFirst),
+                input.ActionCaption("Delete", input.delete, input.ActiveAlternateDelete),
+            };
+            foreach (string caption in captions)
+            {
+                Assert.That(caption, Does.Not.Contain("/"), "A menu caption must not open a submenu.");
+            }
         }
 
         [Test]
         public void ShouldKeepActionCaptionsReadableWhenKeysRepeatTheCommand()
         {
             DataVisualizerInputSettings input = new();
+            string delete = input.IsAlternateDeleteAvailable ? "Delete (Backspace)" : "Delete";
             Assert.That(input.ActionCaption("Delete", input.delete), Is.EqualTo("Delete"), "A key named like its command does not repeat it.");
-            Assert.That(input.ActionCaption("Move to top", input.moveFirst), Is.EqualTo("Move to top (Ctrl/Cmd+Home)"));
-            Assert.That(input.AssetActionHint(), Is.EqualTo("Clone (Ctrl/Cmd+D), Rename (F2), Move, Order (Ctrl/Cmd+Home/Ctrl/Cmd+End), Delete. Actions: Shift+F10/Menu."));
+            Assert.That(input.ActionCaption("Move to top", input.moveFirst), Does.Not.Contain("/"));
+            Assert.That(input.AssetActionHint(), Is.EqualTo($"Clone (Ctrl/Cmd+D), Rename (F2), Move, Order (Ctrl/Cmd+Home/Ctrl/Cmd+End), {delete}. Actions: Shift+F10/Menu."));
             input.moveFirst = new EditorInputBinding(KeyCode.None);
             input.clone = new EditorInputBinding(KeyCode.J, EventModifiers.Shift);
             Assert.That(input.AssetActionHint(), Does.Contain(", Move, Order (Ctrl/Cmd+End),"), "A cleared ordering key keeps the other shortcut.");
