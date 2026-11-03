@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Point at Add types when the catalog has no type yet, instead of showing a blank pane (#312).
 - Collapse the Labels controls while a filter is active; the collapsed header keeps the filter expression and the shown/hidden counts visible (#314).
 - Add keyboard access to the Settings data folder path: Enter reveals the folder, and a missing folder reports itself (#312).
+- Add hover hints to every popover close button and the Settings data folder Select button (#312).
 - Add keyboard access to the Labels toggle, Settings switches and processor controls, with current input bindings, live hints and visible focus (#312, #488).
 - Add editable input profiles for browser keys, modifiers, focus and pointer gestures. Apply profile changes to open controls and their shortcut hints (#312).
 - Add Page Up/Down focus navigation to large catalogs, with viewport-sized jumps and unchanged selection. Enter rows with boundary/page keys after filtering clears focus (#324,

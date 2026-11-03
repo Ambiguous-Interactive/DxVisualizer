@@ -1691,10 +1691,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
             dragHandle.Add(new Label("Remove") { style = { unityFontStyleAndWeight = FontStyle.Bold } });
 
-            Button closeButton = new(CloseActivePopover) { text = "X" };
-            closeButton.AddToClassList("popover-close-button");
-            closeButton.AddToClassList(StyleConstants.ClickableClass);
-            dragHandle.Add(closeButton);
+            dragHandle.Add(CreatePopoverCloseButton(CloseActivePopover));
 
             Label messageLabel = new(message) { style = { whiteSpace = WhiteSpace.Normal, marginBottom = 15 } };
             contentWrapper.Add(messageLabel);
@@ -3911,6 +3908,21 @@ namespace WallstopStudios.DataVisualizer.Editor
             return popover;
         }
 
+        /*
+            The close (X) button is the only command in a popover header. Its label is a
+            glyph, so the hover hint names the command. The hint stays static because the
+            cancel binding has a wider scope than this button: it also dismisses the parent
+            type finder while a nested popover is open, and a printable binding types into
+            the Create and Rename fields instead of closing.
+        */
+        private Button CreatePopoverCloseButton(Action close)
+        {
+            Button closeButton = new(close) { text = "X", tooltip = "Close" };
+            closeButton.AddToClassList("popover-close-button");
+            closeButton.AddToClassList(StyleConstants.ClickableClass);
+            return closeButton;
+        }
+
         private void OnPopoverDragHandlePointerDown(PointerDownEvent evt)
         {
             VisualElement target = _activeNestedPopover ?? _activePopover;
@@ -4641,10 +4653,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             // Add Title to Drag Handle
             dragHandle.Add(new Label("Settings") { style = { unityFontStyleAndWeight = FontStyle.Bold, marginLeft = 5 } });
 
-            Button closeButton = new(CloseActivePopover) { text = "X" };
-            closeButton.AddToClassList("popover-close-button");
-            closeButton.AddToClassList(StyleConstants.ClickableClass);
-            dragHandle.Add(closeButton);
+            dragHandle.Add(CreatePopoverCloseButton(CloseActivePopover));
 
             DataVisualizerSettings settings = Settings;
             ActionButtonToggle prefsToggle = null;
@@ -4866,7 +4875,12 @@ namespace WallstopStudios.DataVisualizer.Editor
             );
             _dataFolderPathDisplay = dataFolderPathDisplay;
             dataFolderContainer.Add(dataFolderPathDisplay);
-            Button selectFolderButton = new(() => SelectDataFolderForPopover(dataFolderPathDisplay)) { text = "Select", name = "settings-data-folder-button" };
+            Button selectFolderButton = new(() => SelectDataFolderForPopover(dataFolderPathDisplay))
+            {
+                text = "Select",
+                name = "settings-data-folder-button",
+                tooltip = "Choose the folder inside Assets that holds managed assets",
+            };
             selectFolderButton.SetEnabled(!IsConfigurationEditingPaused);
             selectFolderButton.AddToClassList("settings-data-folder-button");
             selectFolderButton.AddToClassList(StyleConstants.ClickableClass);
@@ -5021,10 +5035,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
             dragHandle.Add(new Label("Create") { style = { unityFontStyleAndWeight = FontStyle.Bold, marginLeft = 5 } });
 
-            Button closeButton = new(CloseActivePopover) { text = "X" };
-            closeButton.AddToClassList("popover-close-button");
-            closeButton.AddToClassList(StyleConstants.ClickableClass);
-            dragHandle.Add(closeButton);
+            dragHandle.Add(CreatePopoverCloseButton(CloseActivePopover));
 
             Label createLabel = new("Enter new name (without extension)");
             createLabel.AddToClassList("create-object-label");
@@ -5074,10 +5085,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
             dragHandle.Add(new Label("Rename") { style = { unityFontStyleAndWeight = FontStyle.Bold, marginLeft = 5 } });
 
-            Button closeButton = new(CloseActivePopover) { text = "X" };
-            closeButton.AddToClassList("popover-close-button");
-            closeButton.AddToClassList(StyleConstants.ClickableClass);
-            dragHandle.Add(closeButton);
+            dragHandle.Add(CreatePopoverCloseButton(CloseActivePopover));
 
             Label renameLabel = new("Enter new name (without extension)");
             renameLabel.AddToClassList("rename-object-label");
@@ -5360,10 +5368,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             contentWrapper.Clear();
 
             dragHandle.Add(new Label("Confirm Delete") { style = { unityFontStyleAndWeight = FontStyle.Bold, marginLeft = 5 } });
-            Button closeButton = new(CloseActivePopover) { text = "X" };
-            closeButton.AddToClassList("popover-close-button");
-            closeButton.AddToClassList(StyleConstants.ClickableClass);
-            dragHandle.Add(closeButton);
+            dragHandle.Add(CreatePopoverCloseButton(CloseActivePopover));
 
             contentWrapper.Add(
                 new Label($"Delete '<color=yellow><i>{objectToDelete.name}</i></color>'?\nThis cannot be undone.")
@@ -8059,10 +8064,7 @@ namespace WallstopStudios.DataVisualizer.Editor
 
             dragHandle.Add(new Label("Confirm Namespace Add") { style = { unityFontStyleAndWeight = FontStyle.Bold, marginLeft = 5 } });
 
-            Button closeButton = new(CloseNestedPopover) { text = "X" };
-            closeButton.AddToClassList("popover-close-button");
-            closeButton.AddToClassList(StyleConstants.ClickableClass);
-            dragHandle.Add(closeButton);
+            dragHandle.Add(CreatePopoverCloseButton(CloseNestedPopover));
 
             int countToAdd = typesToAdd.Count;
             if (countToAdd == 0)

@@ -591,5 +591,51 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(persistenceButton.worldBound.xMax, Is.EqualTo(controlRight).Within(1f), "The persistence switch ends at the trailing column.");
             Assert.That(selectionButton.worldBound.xMax, Is.EqualTo(controlRight).Within(1f), "The selection switch ends at the trailing column.");
         }
+
+        [UnityTest]
+        public IEnumerator ShouldHintEveryPopoverCloseButtonAndTheSettingsSelectButton()
+        {
+            using TestCleanupScope cleanup = new();
+            DataVisualizerWindow window = OpenSettingsWindow(cleanup, "PopoverCloseHints");
+            yield return null;
+
+            ScriptableObject fixture = ScriptableObject.CreateInstance<TestDataObject>();
+            cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(fixture));
+
+            (string PopoverName, Action Build)[] cases =
+            {
+                ("settings-popover", static () => { }),
+                ("create-popover", () => InvokePrivate(window, "BuildCreatePopoverContent", typeof(TestDataObject))),
+                ("rename-popover", () => InvokePrivate(window, "BuildRenamePopoverContent", new Label(), "Assets/Rename.asset", "Rename")),
+                ("confirm-delete-popover", () => InvokePrivate(window, "BuildConfirmDeletePopoverContent", fixture)),
+                (
+                    "confirm-action-popover",
+                    () =>
+                        InvokePrivate(
+                            window,
+                            "BuildAndOpenConfirmationPopover",
+                            "Remove this type?",
+                            "Remove",
+                            (Action)(() => { }),
+                            ReadPrivateField<Button>(window, "_settingsButton")
+                        )
+                ),
+                ("confirm-namespace-add-popover", () => InvokePrivate(window, "BuildConfirmNamespaceAddPopoverContent", "Demo", new List<Type> { typeof(TestDataObject) })),
+            };
+
+            foreach ((string popoverName, Action build) in cases)
+            {
+                build();
+                VisualElement popover = window.rootVisualElement.Q<VisualElement>(name: popoverName);
+                Assert.That(popover != null, $"{popoverName} exists in the window tree.");
+                Button closeButton = popover.Q<Button>(className: "popover-close-button");
+                Assert.That(closeButton != null, $"{popoverName} holds a close button.");
+                Assert.That(closeButton.tooltip, Is.EqualTo("Close"), $"{popoverName} close button names the close command.");
+            }
+
+            Button selectFolder = window.rootVisualElement.Q<Button>(name: "settings-data-folder-button");
+            Assert.That(selectFolder != null, "The settings popover holds the data folder select button.");
+            Assert.That(selectFolder.tooltip, Does.Contain("folder"), "The select button names the folder command.");
+        }
     }
 }
