@@ -302,6 +302,54 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         }
 
         [UnityTest]
+        public IEnumerator ShouldShowMatchingResultsAndHideTheEmptyState()
+        {
+            using TestCleanupScope cleanup = new();
+            string folder = "Assets/SavedSearchPanelTests-" + Guid.NewGuid().ToString("N");
+            cleanup.Defer(() => AssetDatabase.DeleteAsset(folder));
+            AssetDatabase.CreateFolder("Assets", folder.Substring("Assets/".Length));
+            string name = "Needle" + Guid.NewGuid().ToString("N");
+            TestDataObject asset = ScriptableObject.CreateInstance<TestDataObject>();
+            AssetDatabase.CreateAsset(asset, folder + "/" + name + ".asset");
+            AssetDatabase.SaveAssets();
+            DataVisualizer owner = ScriptableObject.CreateInstance<DataVisualizer>();
+            cleanup.Defer(owner.Close);
+            owner.Show();
+            owner.CreateGUI();
+            var original = owner.CopySavedSearches();
+            cleanup.Defer(() => owner.SaveSearches(original));
+            owner.SaveSearches(
+                new()
+                {
+                    new SavedAssetSearch
+                    {
+                        name = "Matches",
+                        query = name,
+                        typeIdentity = typeof(TestDataObject).AssemblyQualifiedName,
+                    },
+                }
+            );
+            SavedAssetSearchPanel workspace = owner.OpenSavedSearches();
+            Label status = workspace.Q<Label>("saved-search-status");
+            Label emptyState = workspace.Q<Label>("saved-search-empty-state");
+            ListView results = workspace.Q<ListView>();
+            Assert.That(emptyState.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(results.style.display.value, Is.EqualTo(DisplayStyle.None));
+            workspace.Q<DropdownField>("saved-search-list").index = 0;
+            workspace.ApplySelected();
+            double deadline = EditorApplication.timeSinceStartup + 10;
+            while (!status.text.StartsWith("Complete", StringComparison.Ordinal) && EditorApplication.timeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+            Assert.That(status.text, Does.StartWith("Complete"));
+            Assert.That(status.text, Does.Contain("1 matches"));
+            Assert.That(emptyState.style.display.value, Is.EqualTo(DisplayStyle.None), "Rows take the place of the empty message.");
+            Assert.That(results.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(results.itemsSource.Count, Is.EqualTo(1));
+        }
+
+        [UnityTest]
         public IEnumerator ShouldExplainACancelledSavedSearch()
         {
             using TestCleanupScope cleanup = new();
