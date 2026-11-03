@@ -4,6 +4,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
     using System.Collections;
     using System.Collections.Generic;
     using NUnit.Framework;
+    using UnityEditor;
     using UnityEngine;
     using UnityEngine.TestTools;
     using UnityEngine.UIElements;
@@ -86,6 +87,36 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
 
             view.Bind(new[] { "alpha" });
             Assert.That(removed, Is.EqualTo(new[] { "alpha" }), "Binding alone never mutates labels.");
+        }
+
+        [UnityTest]
+        public IEnumerator ShouldElideAndHintLabelsLongerThanThePill()
+        {
+            using TestCleanupScope cleanup = new();
+            EditorSurfaceCaptureHostWindow window = ScriptableObject.CreateInstance<EditorSurfaceCaptureHostWindow>();
+            cleanup.Defer(() => EditorSurfaceCapture.CloseWindow(window));
+            window.position = new Rect(80, 80, 360, 300);
+            EditorSurfaceCapture.ShowPopup(window);
+            window.rootVisualElement.styleSheets.Add(
+                AssetDatabase.LoadAssetAtPath<StyleSheet>("Packages/com.wallstop-studios.data-visualizer/Editor/DataVisualizer/Styles/DataVisualizerStyles.uss")
+            );
+            InspectorLabelPillsView view = new(_ => { }, _ => Color.gray, () => null);
+            window.rootVisualElement.Add(view);
+            string longLabel = "release-candidate-verification-required-before-shipping-to-production-and-signed-off-by-the-environment-owner";
+            view.Bind(new[] { "Reviewed", longLabel });
+            yield return null;
+            EditorSurfaceCapture.SettleLayout(window);
+
+            Label label = Pill(view, longLabel).Q<Label>(className: "label-pill-text");
+            Button removeButton = RemoveButton(view, longLabel);
+            Vector2 intrinsic = label.MeasureTextSize(longLabel, 0, VisualElement.MeasureMode.Undefined, 0, VisualElement.MeasureMode.Undefined);
+            Assert.That(label.worldBound.width, Is.LessThan(intrinsic.x), "The fixture label must be wider than the pill lets it paint.");
+            Assert.That(label.tooltip, Is.EqualTo(longLabel), "A label cut off by the pill must stay readable through its hint.");
+            Assert.That(label.resolvedStyle.whiteSpace, Is.EqualTo(WhiteSpace.NoWrap), "Pill text must not wrap under the fixed pill height.");
+            Assert.That(label.resolvedStyle.textOverflow, Is.EqualTo(TextOverflow.Ellipsis), "Pill text must end with an ellipsis when it does not fit.");
+            Assert.That(Pill(view, longLabel).worldBound.xMax, Is.LessThanOrEqualTo(view.worldBound.xMax + 0.5f), "A long pill must stay inside the label container.");
+            Assert.That(removeButton.worldBound.width, Is.GreaterThan(0f), "The remove button must keep its size beside a long label.");
+            Assert.That(removeButton.worldBound.xMax, Is.LessThanOrEqualTo(Pill(view, longLabel).worldBound.xMax + 0.5f), "The remove button must stay inside the pill.");
         }
 
         [UnityTest]

@@ -125,7 +125,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             pillContainer.AddToClassList("non-draggable");
 
             Color textColor = IsDarkBackground(backgroundColor) ? Color.white : Color.black;
-            Label labelElement = new(labelText) { style = { color = textColor } };
+            Label labelElement = new(labelText) { style = { color = textColor }, tooltip = labelText };
             labelElement.AddToClassList("label-pill-text");
             pillContainer.Add(labelElement);
 
