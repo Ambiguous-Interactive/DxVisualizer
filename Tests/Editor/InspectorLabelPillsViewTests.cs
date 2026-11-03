@@ -114,6 +114,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(label.tooltip, Is.EqualTo(longLabel), "A label cut off by the pill must stay readable through its hint.");
             Assert.That(label.resolvedStyle.whiteSpace, Is.EqualTo(WhiteSpace.NoWrap), "Pill text must not wrap under the fixed pill height.");
             Assert.That(label.resolvedStyle.textOverflow, Is.EqualTo(TextOverflow.Ellipsis), "Pill text must end with an ellipsis when it does not fit.");
+            Assert.That(label.isElided, Is.True, "The rendered label must report that it dropped text.");
             Assert.That(Pill(view, longLabel).worldBound.xMax, Is.LessThanOrEqualTo(view.worldBound.xMax + 0.5f), "A long pill must stay inside the label container.");
             Assert.That(removeButton.worldBound.width, Is.GreaterThan(0f), "The remove button must keep its size beside a long label.");
             Assert.That(removeButton.worldBound.xMax, Is.LessThanOrEqualTo(Pill(view, longLabel).worldBound.xMax + 0.5f), "The remove button must stay inside the pill.");

@@ -7753,6 +7753,11 @@ namespace WallstopStudios.DataVisualizer.Editor
                 case LabelFilterSection.AND:
                 case LabelFilterSection.OR:
                 {
+                    /*
+                        The pill text elides inside its container, so the container carries the
+                        full label as the hint for a clipped name.
+                    */
+                    pillContainer.tooltip = labelText;
                     // Add "X" button for removal
                     Button removeButton = new(() => RemoveLabelFromFilter(labelText, currentSection))
                     {
