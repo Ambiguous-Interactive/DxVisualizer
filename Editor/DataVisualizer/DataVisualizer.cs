@@ -3910,21 +3910,16 @@ namespace WallstopStudios.DataVisualizer.Editor
 
         /*
             The close (X) button is the only command in a popover header. Its label is a
-            glyph, so the hover hint names the command and the current close binding.
-            The hint stays dynamic: a static tooltip would answer the hover first and the
-            callback would never run.
+            glyph, so the hover hint names the command. The hint stays static because the
+            cancel binding has a wider scope than this button: it also dismisses the parent
+            type finder while a nested popover is open, and a printable binding types into
+            the Create and Rename fields instead of closing.
         */
         private Button CreatePopoverCloseButton(Action close)
         {
-            Button closeButton = new(close) { text = "X" };
+            Button closeButton = new(close) { text = "X", tooltip = "Close" };
             closeButton.AddToClassList("popover-close-button");
             closeButton.AddToClassList(StyleConstants.ClickableClass);
-            closeButton.RegisterCallback<TooltipEvent>(evt =>
-            {
-                evt.tooltip = $"Close ({Input.Navigation.CancelDragKey})";
-                evt.rect = closeButton.worldBound;
-                evt.StopImmediatePropagation();
-            });
             return closeButton;
         }
 
