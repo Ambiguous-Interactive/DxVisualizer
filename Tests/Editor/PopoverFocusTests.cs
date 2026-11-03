@@ -591,5 +591,87 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(persistenceButton.worldBound.xMax, Is.EqualTo(controlRight).Within(1f), "The persistence switch ends at the trailing column.");
             Assert.That(selectionButton.worldBound.xMax, Is.EqualTo(controlRight).Within(1f), "The selection switch ends at the trailing column.");
         }
+
+        [UnityTest]
+        public IEnumerator ShouldHintEveryPopoverCloseButtonAndTheSettingsSelectButton()
+        {
+            using TestCleanupScope cleanup = new();
+            DataVisualizerWindow window = OpenSettingsWindow(cleanup, "PopoverCloseHints");
+            yield return null;
+
+            ScriptableObject fixture = ScriptableObject.CreateInstance<TestDataObject>();
+            cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(fixture));
+
+            (string PopoverName, Action Build)[] cases =
+            {
+                ("settings-popover", static () => { }),
+                ("create-popover", () => InvokePrivate(window, "BuildCreatePopoverContent", typeof(TestDataObject))),
+                ("rename-popover", () => InvokePrivate(window, "BuildRenamePopoverContent", new Label(), "Assets/Rename.asset", "Rename")),
+                ("confirm-delete-popover", () => InvokePrivate(window, "BuildConfirmDeletePopoverContent", fixture)),
+                (
+                    "confirm-action-popover",
+                    () =>
+                        InvokePrivate(
+                            window,
+                            "BuildAndOpenConfirmationPopover",
+                            "Remove this type?",
+                            "Remove",
+                            (Action)(() => { }),
+                            ReadPrivateField<Button>(window, "_settingsButton")
+                        )
+                ),
+                ("confirm-namespace-add-popover", () => InvokePrivate(window, "BuildConfirmNamespaceAddPopoverContent", "Demo", new List<Type> { typeof(TestDataObject) })),
+            };
+
+            foreach ((string popoverName, Action build) in cases)
+            {
+                build();
+                VisualElement popover = window.rootVisualElement.Q<VisualElement>(name: popoverName);
+                Assert.That(popover != null, $"{popoverName} exists in the window tree.");
+                Button closeButton = popover.Q<Button>(className: "popover-close-button");
+                Assert.That(closeButton != null, $"{popoverName} holds a close button.");
+                using TooltipEvent hint = TooltipEvent.GetPooled();
+                hint.target = closeButton;
+                closeButton.SendEvent(hint);
+                Assert.That(hint.tooltip, Is.EqualTo("Close (Escape)"), $"{popoverName} close button hints the current close binding.");
+            }
+
+            Button selectFolder = window.rootVisualElement.Q<Button>(name: "settings-data-folder-button");
+            Assert.That(selectFolder != null, "The settings popover holds the data folder select button.");
+            Assert.That(selectFolder.tooltip, Does.Contain("folder"), "The select button names the folder command.");
+        }
+
+        [UnityTest]
+        public IEnumerator ShouldReadTheCurrentCloseBindingInPopoverCloseHints()
+        {
+            using TestCleanupScope cleanup = new();
+            DataVisualizerWindow window = OpenSettingsWindow(
+                cleanup,
+                "PopoverCloseHintRemap",
+                scope =>
+                {
+                    DataVisualizerInputProfile profile = ScriptableObject.CreateInstance<DataVisualizerInputProfile>();
+                    cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(profile));
+                    profile.Bindings.Navigation.CancelDragKey = KeyCode.F12;
+                    scope.Settings.inputProfile = profile;
+                }
+            );
+            yield return null;
+
+            VisualElement popover = ReadPrivateField<VisualElement>(window, "_settingsPopover");
+            InvokePrivate(window, "TogglePopover", popover, ReadPrivateField<Button>(window, "_settingsButton"));
+            for (int tick = 0; tick < 120 && Display(popover) != DisplayStyle.Flex; tick++)
+            {
+                yield return null;
+            }
+            Assert.That(Display(popover), Is.EqualTo(DisplayStyle.Flex), "The settings popover opens.");
+
+            Button closeButton = popover.Q<Button>(className: "popover-close-button");
+            Assert.That(closeButton != null, "The settings popover holds a close button.");
+            using TooltipEvent hint = TooltipEvent.GetPooled();
+            hint.target = closeButton;
+            closeButton.SendEvent(hint);
+            Assert.That(hint.tooltip, Is.EqualTo("Close (F12)"), "A remapped close key reaches the hint.");
+        }
     }
 }
