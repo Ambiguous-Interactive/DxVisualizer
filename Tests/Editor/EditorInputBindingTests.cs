@@ -509,6 +509,8 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(input.ActionCaption("Clone", input.clone), Is.EqualTo("Clone (Shift+F9)"));
             input.clone = new EditorInputBinding(KeyCode.J, EventModifiers.Control);
             Assert.That(input.ActionCaption("Clone", input.clone), Is.EqualTo("Clone (Control+J)"));
+            input.clone = new EditorInputBinding(KeyCode.F9, EventModifiers.Shift | EventModifiers.Control);
+            Assert.That(input.ActionCaption("Clone", input.clone), Is.EqualTo("Clone (Shift+Control+F9)"), "Menu labels join modifiers with plus signs.");
             input.clone = new EditorInputBinding(KeyCode.None);
             Assert.That(input.ActionCaption("Clone", input.clone), Is.EqualTo("Clone"));
             input.clone = new EditorInputBinding(KeyCode.D, actionModifier: true);

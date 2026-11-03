@@ -58,7 +58,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         /// <summary>Shortcut text for a Unity menu label, which reads a slash as a submenu separator.</summary>
         public string ToMenuString()
         {
-            return ToString().Replace("Ctrl/Cmd+", Application.platform == RuntimePlatform.OSXEditor ? "Cmd+" : "Ctrl+");
+            return ToString().Replace(", ", "+").Replace("Ctrl/Cmd+", Application.platform == RuntimePlatform.OSXEditor ? "Cmd+" : "Ctrl+");
         }
     }
 }
