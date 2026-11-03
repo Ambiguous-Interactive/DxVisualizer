@@ -499,6 +499,29 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(binding.Matches(evt), Is.False);
         }
 
+        [TestCase(KeyCode.D, EventModifiers.None, true, "Clone (Ctrl/Cmd+D)")]
+        [TestCase(KeyCode.F9, EventModifiers.Shift, false, "Clone (Shift+F9)")]
+        [TestCase(KeyCode.J, EventModifiers.Control, false, "Clone (Control+J)")]
+        [TestCase(KeyCode.None, EventModifiers.None, false, "Clone")]
+        public void ShouldNameActionMenuCommandWithItsBinding(KeyCode key, EventModifiers modifiers, bool actionModifier, string expected)
+        {
+            DataVisualizerInputSettings input = new() { clone = new EditorInputBinding(key, modifiers, actionModifier) };
+            Assert.That(input.ActionCaption("Clone", input.clone), Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void ShouldKeepActionCaptionsReadableWhenKeysRepeatTheCommand()
+        {
+            DataVisualizerInputSettings input = new();
+            Assert.That(input.ActionCaption("Delete", input.delete), Is.EqualTo("Delete"), "A key named like its command does not repeat it.");
+            Assert.That(input.ActionCaption("Move to top", input.moveFirst), Is.EqualTo("Move to top (Ctrl/Cmd+Home)"));
+            Assert.That(input.AssetActionHint(), Is.EqualTo("Clone (Ctrl/Cmd+D), Rename (F2), Move, Order (Ctrl/Cmd+Home/Ctrl/Cmd+End), Delete. Actions: Shift+F10/Menu."));
+            input.moveFirst = new EditorInputBinding(KeyCode.None);
+            input.clone = new EditorInputBinding(KeyCode.J, EventModifiers.Shift);
+            Assert.That(input.AssetActionHint(), Does.Contain(", Move, Order,"), "A cleared ordering binding drops the shortcut.");
+            Assert.That(input.AssetActionHint(), Does.Contain("Clone (Shift+J)"), "The hint reads the current binding.");
+        }
+
         [Test]
         public void ShouldRoundTripCustomInputAndKeepDefaultsIndependent()
         {

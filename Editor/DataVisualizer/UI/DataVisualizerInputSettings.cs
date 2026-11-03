@@ -56,9 +56,25 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             return delete.Matches(evt) || ((!alternateDeleteOnMacOnly || Application.platform == RuntimePlatform.OSXEditor) && alternateDelete.Matches(evt));
         }
 
+        /*
+            Names a command with the key that runs it, so the row menu and the Actions hint show
+            the same shortcut. A binding whose key repeats the command name adds nothing
+            ("Delete (Delete)"), and a cleared key cannot run the command at all.
+        */
+        public string ActionCaption(string action, EditorInputBinding binding)
+        {
+            string shortcut = binding.ToString();
+            if (binding.key == KeyCode.None || string.Equals(shortcut, action, StringComparison.OrdinalIgnoreCase))
+            {
+                return action;
+            }
+            return action + " (" + shortcut + ")";
+        }
+
         public string AssetActionHint()
         {
-            return $"Clone ({clone}), Rename ({rename}), Move, Order ({moveFirst}/{moveLast}), Delete ({delete}). Actions: {actions}/{alternateActions}.";
+            string order = moveFirst.key == KeyCode.None || moveLast.key == KeyCode.None ? "Order" : $"Order ({moveFirst}/{moveLast})";
+            return $"{ActionCaption("Clone", clone)}, {ActionCaption("Rename", rename)}, Move, {order}, {ActionCaption("Delete", delete)}. Actions: {actions}/{alternateActions}.";
         }
     }
 }
