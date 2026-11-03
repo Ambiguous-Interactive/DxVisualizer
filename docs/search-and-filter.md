@@ -144,7 +144,8 @@ The filter is stored per type and follows the persistence setting described in [
 ## Label editing
 
 The inspector panel for a selected asset has an **Asset Labels** section. Type a label and press **Add**, or press Enter, to attach it. The field suggests labels already used in
-the project, and you can move through the suggestions with the arrow keys. Each attached label has a remove button.
+the project, and you can move through the suggestions with the arrow keys. Each attached label has a remove button. A label wider than the inspector pill ends with an ellipsis;
+hover it to read the full label.
 
 Adding a label the asset already has is a no-op. Adding or removing a label saves the asset, refreshes the label cache, and re-applies the current filter, so you see the effect
 immediately.

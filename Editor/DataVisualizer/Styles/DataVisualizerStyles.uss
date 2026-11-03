@@ -1487,6 +1487,23 @@
     cursor: arrow;
 }
 
+/*
+    A label longer than the pane must not wrap under the pill's fixed height or run past
+    its edge. Keep the text on one line so it ends with an ellipsis, and hold the remove
+    button at its own width so the clipped text never pushes it out of the pill.
+*/
+.label-pill-text {
+    flex-shrink: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.label-pill-remove-button {
+    flex-shrink: 0;
+}
+
 .label-pill-container {
     flex-direction: row;
     flex-wrap: wrap;
