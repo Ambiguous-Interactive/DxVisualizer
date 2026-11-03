@@ -281,6 +281,7 @@ namespace WallstopStudios.DataVisualizer.Editor
         private VisualElement _objectColumnElement;
         private VisualElement _popoverTrigger;
         private Label _objectLoadingIndicator;
+        private Label _objectHeaderTypeLabel;
 
         private readonly DataVisualizerThemeSelection _themeSelection = new();
         private VisualElement _settingsPopover;
@@ -6095,7 +6096,20 @@ namespace WallstopStudios.DataVisualizer.Editor
                 },
             };
 
-            headerLeft.Add(new Label("Objects"));
+            Label objectHeaderTitle = new("Objects");
+            objectHeaderTitle.AddToClassList("object-header-title");
+            headerLeft.Add(objectHeaderTitle);
+
+            /*
+                Name the listed type in the header. Expanded layouts can read the highlighted
+                catalog row, but narrow single-pane layouts show only this pane, so the row is
+                gone and nothing else said which type the list belongs to.
+            */
+            _objectHeaderTypeLabel = new Label { name = "object-header-type-label" };
+            _objectHeaderTypeLabel.AddToClassList("object-header-type-label");
+            _objectHeaderTypeLabel.AddToClassList("dataviz-muted");
+            _objectHeaderTypeLabel.style.display = DisplayStyle.None;
+            headerLeft.Add(_objectHeaderTypeLabel);
 
             _objectLoadingIndicator = new Label() { name = "object-loading-indicator", text = "" };
             _objectLoadingIndicator.AddToClassList("loading-indicator");
@@ -7374,14 +7388,35 @@ namespace WallstopStudios.DataVisualizer.Editor
             UpdateLabelsCollapsedClickableState();
         }
 
+        private void UpdateObjectHeaderTypeLabel(Type selectedType)
+        {
+            if (_objectHeaderTypeLabel == null)
+            {
+                return;
+            }
+
+            if (selectedType == null)
+            {
+                _objectHeaderTypeLabel.text = string.Empty;
+                _objectHeaderTypeLabel.tooltip = string.Empty;
+                _objectHeaderTypeLabel.style.display = DisplayStyle.None;
+                return;
+            }
+
+            _objectHeaderTypeLabel.text = NamespaceController.GetTypeDisplayName(selectedType);
+            _objectHeaderTypeLabel.tooltip = NamespaceController.GetTypeIdentityHint(selectedType);
+            _objectHeaderTypeLabel.style.display = DisplayStyle.Flex;
+        }
+
         private void RefreshObjectListPresentation()
         {
             UpdateFilterStatus();
+            Type selectedType = _namespaceController.SelectedType;
+            UpdateObjectHeaderTypeLabel(selectedType);
             if (_objectListView == null)
             {
                 return;
             }
-            Type selectedType = _namespaceController.SelectedType;
 
             /*
                 No type is selected, so there is no object list to describe. Naming the catalog's

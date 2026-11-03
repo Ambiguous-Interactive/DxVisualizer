@@ -20,6 +20,8 @@ exact assembly-qualified type name, so rows that share a short name or use a cus
 
 ### Objects
 
+The header names the selected type, so a single-pane layout still says which type's objects are listed. A long display name elides; hover it for the exact type identity.
+
 Each object row has **↑** and **↓**, which move that object to the top or bottom of the list for its type. **↓** is disabled on the last row.
 
 Objects can also be dragged directly. The list reorders as you drag, and the new order is saved.

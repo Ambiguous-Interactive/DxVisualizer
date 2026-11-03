@@ -696,6 +696,22 @@
     margin-left: 6px;
 }
 
+/*
+    The type name is context, not a title: it shrinks and elides first so "Objects" and the
+    loading text keep their size, and the full identity stays on the hover hint.
+*/
+.object-header .object-header-title {
+    flex-shrink: 0;
+}
+
+.object-header .object-header-type-label {
+    flex-shrink: 1;
+    min-width: 0;
+    margin-left: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .object-header > .unity-button {
     margin-right: 6px;
     margin-top: 4px;
