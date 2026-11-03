@@ -300,5 +300,51 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(emptyState.style.display.value, Is.EqualTo(DisplayStyle.Flex));
             Assert.That(results.style.display.value, Is.EqualTo(DisplayStyle.None));
         }
+
+        [UnityTest]
+        public IEnumerator ShouldExplainACancelledSavedSearch()
+        {
+            using TestCleanupScope cleanup = new();
+            Func<bool> busy = AssetGuidDiscovery.AssetDatabaseBusyOverride;
+            cleanup.Defer(() => AssetGuidDiscovery.AssetDatabaseBusyOverride = busy);
+            DataVisualizer owner = ScriptableObject.CreateInstance<DataVisualizer>();
+            cleanup.Defer(owner.Close);
+            owner.Show();
+            owner.CreateGUI();
+            var original = owner.CopySavedSearches();
+            cleanup.Defer(() => owner.SaveSearches(original));
+            owner.SaveSearches(
+                new()
+                {
+                    new SavedAssetSearch { name = "Pending", typeIdentity = typeof(TestDataObject).AssemblyQualifiedName },
+                }
+            );
+            SavedAssetSearchPanel workspace = owner.OpenSavedSearches();
+            Label status = workspace.Q<Label>("saved-search-status");
+            Label emptyState = workspace.Q<Label>("saved-search-empty-state");
+            workspace.Q<DropdownField>("saved-search-list").index = 0;
+            AssetGuidDiscovery.AssetDatabaseBusyOverride = () => true;
+            workspace.ApplySelected();
+            yield return null;
+            Assert.That(status.text, Does.StartWith("Waiting for editor"));
+            Button cancel = null;
+            foreach (Button button in workspace.Query<Button>().ToList())
+            {
+                if (string.Equals(button.text, "Cancel search", StringComparison.Ordinal))
+                {
+                    cancel = button;
+                }
+            }
+            Assert.That(cancel != null);
+            using (NavigationSubmitEvent submit = NavigationSubmitEvent.GetPooled())
+            {
+                submit.target = cancel;
+                cancel.SendEvent(submit);
+            }
+            yield return null;
+            Assert.That(status.text, Does.StartWith("Cancelled"));
+            Assert.That(emptyState.text, Is.EqualTo("No matches in the records checked before the search stopped."));
+            Assert.That(emptyState.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+        }
     }
 }

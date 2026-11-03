@@ -140,6 +140,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             }
             _emptyState.text =
                 _validation == null ? "Select Project assets and run a validation to list findings here."
+                : _validation.IsCancelled ? "No findings in the assets checked before cancellation."
                 : !_validation.IsComplete ? "No findings in the assets checked so far."
                 : "No problems found in the checked assets.";
         }

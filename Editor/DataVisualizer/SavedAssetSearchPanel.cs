@@ -176,6 +176,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             }
             _emptyState.text =
                 _query == null ? "No saved search is applied. Choose a saved search above and select Apply, or name the current snapshot and select Save current search."
+                : _query.IsCancelled ? "No matches in the records checked before the search stopped."
                 : !_query.IsComplete ? "No matches in the available records yet. The search is still running."
                 : "This saved search matches no assets.";
         }

@@ -241,5 +241,48 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(results.style.display.value, Is.EqualTo(DisplayStyle.Flex));
             Assert.That(results.itemsSource.Count, Is.Positive);
         }
+
+        [UnityTest]
+        public IEnumerator ShouldExplainACancelledValidationInTheReportArea()
+        {
+            using TestCleanupScope cleanup = new();
+            string folder = CreateFolder(cleanup);
+            CreateAsset(folder + "/Clean.asset", "clean");
+            AssetDatabase.SaveAssets();
+            Func<bool> busy = AssetGuidDiscovery.AssetDatabaseBusyOverride;
+            cleanup.Defer(() => AssetGuidDiscovery.AssetDatabaseBusyOverride = busy);
+            UnityEngine.Object[] selection = Selection.objects;
+            cleanup.Defer(() => Selection.objects = selection);
+            DataVisualizer window = ScriptableObject.CreateInstance<DataVisualizer>();
+            cleanup.Defer(() => window.Close());
+            window.Show();
+            window.CreateGUI();
+            window.OpenAssetValidation();
+            AssetValidationPanel workspace = window.rootVisualElement.Q<AssetValidationPanel>();
+            Label status = window.rootVisualElement.Q<Label>("validation-status");
+            Label emptyState = window.rootVisualElement.Q<Label>("validation-empty-state");
+            Selection.objects = new[] { AssetDatabase.LoadMainAssetAtPath(folder + "/Clean.asset") };
+            AssetGuidDiscovery.AssetDatabaseBusyOverride = () => true;
+            workspace.ValidateSelection();
+            Assert.That(status.text, Does.StartWith("Processing"));
+            Button cancel = null;
+            foreach (Button button in workspace.Query<Button>().ToList())
+            {
+                if (string.Equals(button.text, "Cancel validation", StringComparison.Ordinal))
+                {
+                    cancel = button;
+                }
+            }
+            Assert.That(cancel != null);
+            using (NavigationSubmitEvent submit = NavigationSubmitEvent.GetPooled())
+            {
+                submit.target = cancel;
+                cancel.SendEvent(submit);
+            }
+            yield return null;
+            Assert.That(status.text, Does.StartWith("Cancelled"));
+            Assert.That(emptyState.text, Is.EqualTo("No findings in the assets checked before cancellation."));
+            Assert.That(emptyState.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+        }
     }
 }
