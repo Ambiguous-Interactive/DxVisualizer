@@ -222,7 +222,7 @@ class WorkflowTests(unittest.TestCase):
                     self.driver.publish_npm()
                     self.assertEqual(npm.call_count, 1 if exists else 2)
                     if not exists:
-                        self.assertEqual(npm.call_args.args[0], ['npm', 'publish', 'fixture.tgz', '--access', 'public', '--tag', 'next'])
+                        self.assertEqual(npm.call_args.args[0], ['npm', 'publish', 'fixture.tgz', '--access', 'public', '--tag', 'next', '--loglevel=http'])
                 with patch.object(self.driver, 'run', return_value=self.result(code=0 if exists else 1)) as run:
                     self.driver.publish_github()
                     commands = [call.args[0] for call in run.call_args_list]
@@ -230,6 +230,19 @@ class WorkflowTests(unittest.TestCase):
                     self.assertIn('--prerelease', commands[1])
                     self.assertIn(str(Path('dist') / 'fixture.unitypackage.sha256'), commands[-1])
                     self.assertIn('--clobber' if exists else '--verify-tag', commands[-1])
+
+    def test_npm_debug_log_supplies_the_registry_reason(self) -> None:
+        logs = self.root / 'npm-logs'
+        logs.mkdir()
+        (logs / '2026-11-04T19_35_40_315Z-debug-0.log').write_text('npm http fetch POST 404 oidc stale\n', encoding='utf-8')
+        newest = logs / '2026-11-04T19_46_15_004Z-debug-0.log'
+        newest.write_text('npm info run\nnpm http fetch POST 404 https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/fixture\n'
+                          'npm error code E404\n', encoding='utf-8')
+        report = self.driver.npm_debug_report(logs)
+        self.assertIn('19_46_15_004Z', report)
+        self.assertIn('oidc/token/exchange', report)
+        self.assertNotIn('stale', report)
+        self.assertEqual(self.driver.npm_debug_report(self.root / 'absent'), '')
 
     def test_publication_failures_name_the_registry_answer(self) -> None:
         self.driver.environment.update(PKG='fixture', VER='1.2.3', NPM_TAG='latest', PACKAGE_FILE='fixture.tgz',

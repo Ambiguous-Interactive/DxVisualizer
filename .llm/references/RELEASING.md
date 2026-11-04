@@ -74,8 +74,10 @@ transfer to the `Ambiguous-Interactive` organization, the GitHub OIDC claims nam
 package owner can change it: npmjs.com → the package → Settings → Trusted Publisher → GitHub Actions → Organization `Ambiguous-Interactive`, Repository `DxVisualizer`, Workflow
 filename `release.yml`, Environment empty, allow `npm publish`.
 
-The `publish-npm` action now explains a 404 this way instead of only echoing the registry text. Once the registration names the current repository, `operation=publish` with
-`dry_run=false` finishes the release: npm publication, the GitHub Release, and the uploaded archives.
+The `publish-npm` action now explains a 404 this way instead of only echoing the registry text, quotes npm's own debug log (which records the OIDC exchange the registry answered),
+and publishes with `--loglevel=http`. Publication also runs without `setup-node`'s `registry-url`, because the placeholder `_authToken` that option writes makes npm attempt token
+authentication instead of the OIDC exchange trusted publishing needs. Once the registration names the current repository, `operation=publish` with `dry_run=false` finishes the
+release: npm publication, the GitHub Release, and the uploaded archives.
 
 ## Rerun and recovery
 

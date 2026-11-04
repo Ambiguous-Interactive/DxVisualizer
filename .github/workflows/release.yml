@@ -193,7 +193,9 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
-          registry-url: "https://registry.npmjs.org"
+          # No registry-url: trusted publishing needs no token, and the
+          # placeholder `.npmrc` entry setup-node writes would make npm try
+          # token auth instead of the OIDC exchange.
           package-manager-cache: false
 
       # The runner image can resolve its own older node/npm ahead of the
