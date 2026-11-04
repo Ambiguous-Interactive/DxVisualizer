@@ -310,9 +310,20 @@ class ReleaseWorkflow:
         npm = self.npm_executable()
         if self.run([npm, 'view', identity, 'version'], capture=True, check=False).returncode == 0:
             emit(f'::notice::{identity} is already on the registry; skipping publish.')
-        else:
-            self.run([npm, 'publish', self.value('PACKAGE_FILE'), '--access', 'public', '--tag', self.value('NPM_TAG')])
-            emit(f"::notice::Published {identity} to dist-tag '{self.value('NPM_TAG')}'.")
+            return
+        published = self.run([npm, 'publish', self.value('PACKAGE_FILE'), '--access', 'public', '--tag', self.value('NPM_TAG')], capture=True, check=False)
+        if published.returncode:
+            detail = (published.stderr or published.stdout or '').strip()
+            raise ValueError(f'npm publish of {identity} failed ({published.returncode}): {detail}{self.registry_hint(detail)}')
+        emit(f"::notice::Published {identity} to dist-tag '{self.value('NPM_TAG')}'.")
+
+    def registry_hint(self, detail: str) -> str:
+        """Explain the registry answer npm reports without a reason."""
+        if 'E404' not in detail and ' 404 ' not in detail:
+            return ''
+        repository = self.value('GITHUB_REPOSITORY') or 'this repository'
+        return ('\nThe registry answered 404, which npm also uses when the package Trusted Publisher does not name this repository and workflow. '
+                f'Confirm the npm Trusted Publisher for this package lists {repository} and .github/workflows/release.yml.')
 
     def publish_github(self) -> None:
         tag = self.value('TAG')

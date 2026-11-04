@@ -59,6 +59,24 @@ The manifest must use `git+https://github.com/Ambiguous-Interactive/DxVisualizer
 before packing. The workflow uses Node 24 and verifies npm is at least 11.5.1. Prereleases use `next`; stable releases use `latest`. The publisher registration is private npm
 configuration; public metadata cannot verify it. After the repository transfer, update this registration before publishing from the new owner.
 
+## npm Trusted Publisher registration after the repository transfer
+
+[Publish run 41898366972](https://github.com/Ambiguous-Interactive/DxVisualizer/actions/runs/41898366972) built and validated every artifact for `v0.2.0`, then the registry
+answered `E404`:
+
+```text
+npm error code E404
+npm error 404 Not Found - PUT https://registry.npmjs.org/com.wallstop-studios.data-visualizer
+```
+
+npm returns 404 when the OIDC identity is not the package's registered Trusted Publisher. `0.1.1` was published while the repository lived at `wallstop/DataVisualizer`; after the
+transfer to the `Ambiguous-Interactive` organization, the GitHub OIDC claims name the new owner, so the registration must be updated before any new version can publish. Only the
+package owner can change it: npmjs.com → the package → Settings → Trusted Publisher → GitHub Actions → Organization `Ambiguous-Interactive`, Repository `DxVisualizer`, Workflow
+filename `release.yml`, Environment empty, allow `npm publish`.
+
+The `publish-npm` action now explains a 404 this way instead of only echoing the registry text. Once the registration names the current repository, `operation=publish` with
+`dry_run=false` finishes the release: npm publication, the GitHub Release, and the uploaded archives.
+
 ## Rerun and recovery
 
 Run Release on `main` with `operation=publish` and `dry_run=false` to resume the current package version's existing tag. The tag input can stay blank; set it to resume another

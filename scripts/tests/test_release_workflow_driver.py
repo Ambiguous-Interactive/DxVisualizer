@@ -216,18 +216,33 @@ class WorkflowTests(unittest.TestCase):
             (dist / name).write_text('fixture')
         self.driver.environment.update(PKG='fixture', VER='1.2.3', NPM_TAG='next', PACKAGE_FILE='fixture.tgz', TAG='v1.2.3')
         for exists in (True, False):
-            with self.subTest(exists=exists), patch.object(self.driver, 'run', return_value=self.result(code=0 if exists else 1)) as run:
+            with self.subTest(exists=exists):
+                npm_results = [self.result('1.2.3')] if exists else [self.result('', 1), self.result('')]
+                with patch.object(self.driver, 'run', side_effect=npm_results) as npm:
+                    self.driver.publish_npm()
+                    self.assertEqual(npm.call_count, 1 if exists else 2)
+                    if not exists:
+                        self.assertEqual(npm.call_args.args[0], ['npm', 'publish', 'fixture.tgz', '--access', 'public', '--tag', 'next'])
+                with patch.object(self.driver, 'run', return_value=self.result(code=0 if exists else 1)) as run:
+                    self.driver.publish_github()
+                    commands = [call.args[0] for call in run.call_args_list]
+                    self.assertEqual(commands[1][2], 'edit' if exists else 'create')
+                    self.assertIn('--prerelease', commands[1])
+                    self.assertIn(str(Path('dist') / 'fixture.unitypackage.sha256'), commands[-1])
+                    self.assertIn('--clobber' if exists else '--verify-tag', commands[-1])
+
+    def test_publication_failures_name_the_registry_answer(self) -> None:
+        self.driver.environment.update(PKG='fixture', VER='1.2.3', NPM_TAG='latest', PACKAGE_FILE='fixture.tgz',
+                                       GITHUB_REPOSITORY='owner/repository')
+        denied = self.result('', 1, 'npm error code E404\nnpm error 404 Not Found - PUT https://registry.npmjs.org/fixture\n')
+        with patch.object(self.driver, 'run', side_effect=[self.result('', 1), denied]):
+            with self.assertRaisesRegex(ValueError, r'(?s)Trusted Publisher.*owner/repository') as error:
                 self.driver.publish_npm()
-                self.assertEqual(run.call_count, 1 if exists else 2)
-                if not exists:
-                    self.assertEqual(run.call_args.args[0], ['npm', 'publish', 'fixture.tgz', '--access', 'public', '--tag', 'next'])
-                run.reset_mock()
-                self.driver.publish_github()
-                commands = [call.args[0] for call in run.call_args_list]
-                self.assertEqual(commands[1][2], 'edit' if exists else 'create')
-                self.assertIn('--prerelease', commands[1])
-                self.assertIn(str(Path('dist') / 'fixture.unitypackage.sha256'), commands[-1])
-                self.assertIn('--clobber' if exists else '--verify-tag', commands[-1])
+        self.assertIn('E404', str(error.exception))
+        with patch.object(self.driver, 'run', side_effect=[self.result('', 1), self.result('', 1, 'npm error code EOTP')]):
+            with self.assertRaises(ValueError) as error:
+                self.driver.publish_npm()
+        self.assertNotIn('Trusted Publisher', str(error.exception))
 
     def test_retained_tools_survive_switching_to_an_old_source(self) -> None:
         self.driver.retain_tools()
