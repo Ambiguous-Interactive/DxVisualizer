@@ -59,25 +59,33 @@ The manifest must use `git+https://github.com/Ambiguous-Interactive/DxVisualizer
 before packing. The workflow uses Node 24 and verifies npm is at least 11.5.1. Prereleases use `next`; stable releases use `latest`. The publisher registration is private npm
 configuration; public metadata cannot verify it. After the repository transfer, update this registration before publishing from the new owner.
 
-## npm Trusted Publisher registration after the repository transfer
+## Resolution: the 0.2.0 release
 
-[Publish run 41898366972](https://github.com/Ambiguous-Interactive/DxVisualizer/actions/runs/41898366972) built and validated every artifact for `v0.2.0`, then the registry
-answered `E404`:
+`0.2.0` published on 2026-11-04 through the repaired pipeline. Four defects had to be fixed, each one masked by the previous failure:
+
+| Failure                                                                             | Fix                                                                                       |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| The gate read whatever npm `PATH` resolved (image Node 22 / npm 10.9.9)             | `select-toolchain` exports `RELEASE_NODE`/`RELEASE_NPM`; every npm call names them        |
+| Actions may not create pull requests here                                           | The validated `release/vX.Y.Z` branch merges directly after its dispatched CI passes      |
+| A failure before tagging left a merged release with no tag                          | The tag is created as soon as the validated source is checked out                         |
+| npm answered `E404` / `package not found` until the Trusted Publisher matched again | Registration updated to the post-transfer owner; the failure now reports npm's own answer |
+
+The registry's token exchange was the diagnosis that mattered. It answered `OIDC token exchange error - package not found`, and the workflow now prints the identity it presents so
+the registration can be compared field by field:
 
 ```text
-npm error code E404
-npm error 404 Not Found - PUT https://registry.npmjs.org/com.wallstop-studios.data-visualizer
+The workflow presented this identity to npm: repository='Ambiguous-Interactive/DxVisualizer', repository_owner='Ambiguous-Interactive', workflow='Release', environment=''
 ```
 
-npm returns 404 when the OIDC identity is not the package's registered Trusted Publisher. `0.1.1` was published while the repository lived at `wallstop/DataVisualizer`; after the
-transfer to the `Ambiguous-Interactive` organization, the GitHub OIDC claims name the new owner, so the registration must be updated before any new version can publish. Only the
-package owner can change it: npmjs.com → the package → Settings → Trusted Publisher → GitHub Actions → Organization `Ambiguous-Interactive`, Repository `DxVisualizer`, Workflow
-filename `release.yml`, Environment empty, allow `npm publish`.
+The registration is per package and owner-controlled: npmjs.com → the package → Settings → Trusted Publisher → GitHub Actions, with Organization or user `Ambiguous-Interactive`,
+Repository `DxVisualizer`, Workflow filename `release.yml`, Environment empty, and `npm publish` allowed. All fields are case-sensitive, and the save must appear in the publisher
+list; a dismissed 2FA prompt saves nothing. `0.1.1` was published while the repository lived at `wallstop/DataVisualizer`, which is the value that had to change after the transfer.
 
-The `publish-npm` action now explains a 404 this way instead of only echoing the registry text, quotes npm's own debug log (which records the OIDC exchange the registry answered),
-and publishes with `--loglevel=http`. Publication also runs without `setup-node`'s `registry-url`, because the placeholder `_authToken` that option writes makes npm attempt token
-authentication instead of the OIDC exchange trusted publishing needs. Once the registration names the current repository, `operation=publish` with `dry_run=false` finishes the
-release: npm publication, the GitHub Release, and the uploaded archives.
+The verified result: `npm view` reports `latest: 0.2.0` with SLSA provenance, the published tarball's SHA-256 matches the checksum attached to the GitHub Release, and `v0.2.0`
+carries the `.unitypackage`, its checksum, and the notes cut from `CHANGELOG.md`.
+
+Publication runs without `setup-node`'s `registry-url`: the placeholder `_authToken` that option writes makes npm attempt token authentication instead of the OIDC exchange, and
+`publish-npm` publishes with `--loglevel=http`, explains a 404, and quotes npm's own debug log when the registry still refuses.
 
 ## Rerun and recovery
 
