@@ -292,6 +292,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             double deadline = EditorApplication.timeSinceStartup + 10;
             while (!status.text.StartsWith("Complete", StringComparison.Ordinal) && EditorApplication.timeSinceStartup < deadline)
             {
+                workspace.AdvanceQuery();
                 yield return null;
             }
             Assert.That(status.text, Does.StartWith("Complete"));
@@ -311,7 +312,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             string name = "Needle" + Guid.NewGuid().ToString("N");
             TestDataObject asset = ScriptableObject.CreateInstance<TestDataObject>();
             AssetDatabase.CreateAsset(asset, folder + "/" + name + ".asset");
-            AssetDatabase.SaveAssets();
+            AssetDatabase.SaveAssetIfDirty(asset);
             DataVisualizer owner = ScriptableObject.CreateInstance<DataVisualizer>();
             cleanup.Defer(owner.Close);
             owner.Show();
@@ -340,6 +341,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             double deadline = EditorApplication.timeSinceStartup + 10;
             while (!status.text.StartsWith("Complete", StringComparison.Ordinal) && EditorApplication.timeSinceStartup < deadline)
             {
+                workspace.AdvanceQuery();
                 yield return null;
             }
             Assert.That(status.text, Does.StartWith("Complete"));
