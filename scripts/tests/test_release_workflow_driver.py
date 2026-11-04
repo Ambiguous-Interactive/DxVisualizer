@@ -2,6 +2,7 @@
 """Exercise release orchestration without any real remote writes or publication."""
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import os
@@ -230,6 +231,31 @@ class WorkflowTests(unittest.TestCase):
                     self.assertIn('--prerelease', commands[1])
                     self.assertIn(str(Path('dist') / 'fixture.unitypackage.sha256'), commands[-1])
                     self.assertIn('--clobber' if exists else '--verify-tag', commands[-1])
+
+    def test_registry_identity_reports_the_claims_npm_presents(self) -> None:
+        claims = {'repository': 'owner/repository', 'repository_owner': 'owner', 'workflow': 'Release', 'environment': ''}
+        payload = base64.urlsafe_b64encode(json.dumps(claims).encode('utf-8')).decode('ascii').rstrip('=')
+        token = f'header.{payload}.signature'
+        self.assertEqual(workflow.jwt_claims(token), claims)
+        self.assertEqual(workflow.jwt_claims('opaque'), {})
+        self.assertEqual(self.driver.oidc_identity(), '')
+
+        class Response:
+            def read(self) -> bytes:
+                return json.dumps({'value': token}).encode('utf-8')
+
+            def __enter__(self) -> 'Response':
+                return self
+
+            def __exit__(self, *arguments: object) -> bool:
+                return False
+
+        self.driver.environment.update(ACTIONS_ID_TOKEN_REQUEST_URL='https://oidc.invalid/request', ACTIONS_ID_TOKEN_REQUEST_TOKEN='token')
+        with patch.object(workflow.urllib.request, 'urlopen', return_value=Response()):
+            report = self.driver.oidc_identity()
+        self.assertIn("repository='owner/repository'", report)
+        self.assertIn("workflow='Release'", report)
+        self.assertNotIn('signature', report)
 
     def test_npm_debug_log_supplies_the_registry_reason(self) -> None:
         logs = self.root / 'npm-logs'

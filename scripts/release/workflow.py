@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -13,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, cast
+import urllib.request
 
 sys.dont_write_bytecode = True
 
@@ -48,6 +50,19 @@ def parse_version(output: str) -> Optional[Tuple[int, int, int]]:
 def version_text(version: Tuple[int, int, int]) -> str:
     """Render a parsed version for diagnostics."""
     return '.'.join(str(part) for part in version)
+
+
+def jwt_claims(token: str) -> Dict[str, Any]:
+    """Decode an OIDC token's claims without verifying the signature."""
+    parts = token.split('.')
+    if len(parts) < 2:
+        return {}
+    segment = parts[1] + '=' * (-len(parts[1]) % 4)
+    try:
+        claims: object = json.loads(base64.urlsafe_b64decode(segment.encode('ascii')).decode('utf-8'))
+    except (ValueError, UnicodeDecodeError):
+        return {}
+    return cast(Dict[str, Any], claims) if isinstance(claims, dict) else {}
 
 
 def named_values(output: str, keys: Sequence[str]) -> Dict[str, str]:
@@ -317,7 +332,7 @@ class ReleaseWorkflow:
                               '--loglevel=http'], capture=True, check=False)
         if published.returncode:
             detail = (published.stderr or published.stdout or '').strip()
-            raise ValueError(f'npm publish of {identity} failed ({published.returncode}): {detail}{self.registry_hint(detail)}{self.npm_debug_report()}')
+            raise ValueError(f'npm publish of {identity} failed ({published.returncode}): {detail}{self.registry_hint(detail)}{self.oidc_identity()}{self.npm_debug_report()}')
         emit(f"::notice::Published {identity} to dist-tag '{self.value('NPM_TAG')}'.")
 
     def registry_hint(self, detail: str) -> str:
@@ -327,6 +342,24 @@ class ReleaseWorkflow:
         repository = self.value('GITHUB_REPOSITORY') or 'this repository'
         return ('\nThe registry answered 404, which npm also uses when the package Trusted Publisher does not name this repository and workflow. '
                 f'Confirm the npm Trusted Publisher for this package lists {repository} and .github/workflows/release.yml.')
+
+    def oidc_identity(self) -> str:
+        """Report the claims npm presents to the registry's token exchange."""
+        request_url = self.value('ACTIONS_ID_TOKEN_REQUEST_URL')
+        request_token = self.value('ACTIONS_ID_TOKEN_REQUEST_TOKEN')
+        if not request_url or not request_token:
+            return ''
+        request = urllib.request.Request(f'{request_url}&audience=npm%3Aregistry.npmjs.org', headers={'Authorization': f'bearer {request_token}'})
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                payload = cast(Dict[str, Any], json.loads(response.read().decode('utf-8')))
+        except (OSError, ValueError) as error:
+            return f'\nThe runner refused an npm OIDC token: {error}'
+        claims = jwt_claims(str(payload.get('value', '')))
+        if not claims:
+            return ''
+        shown = ', '.join(f'{key}={claims.get(key, "")!r}' for key in ('repository', 'repository_owner', 'workflow', 'environment'))
+        return f'\nThe workflow presented this identity to npm: {shown}'
 
     def npm_debug_report(self, directory: Optional[Path] = None) -> str:
         """Quote npm's own debug log, which carries the registry's reason."""
