@@ -116,6 +116,20 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         }
 
         [Test]
+        public void ShouldNameTheResultKeysBesideTheList()
+        {
+            DataVisualizerInputSettings input = new();
+            AssetSearchResultsView view = new(_ => { }, () => { }, () => { }, () => input);
+            view.SetResults(MakeHits(2), "2 matches");
+            Assert.That(view.Q<Label>("search-key-hint").text, Is.EqualTo(input.SearchResultHint(searchFieldHasFocus: false)));
+            input.Navigation.SelectKey = KeyCode.KeypadEnter;
+            view.RefreshKeyHint();
+            Assert.That(view.Q<Label>("search-key-hint").text, Is.EqualTo("UpArrow/DownArrow select · KeypadEnter open · Escape close"), "A binding change re-reads the hint.");
+            view.SetResults(MakeHits(0), "0 matches");
+            Assert.That(view.Q<Label>("search-key-hint").text, Is.Empty, "No rows means no keys to name.");
+        }
+
+        [Test]
         public void ShouldPreserveGuidSelectionWhenResultsAreReplaced()
         {
             AssetSearchResultsView view = new(_ => { }, () => { }, () => { });

@@ -557,6 +557,61 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         }
 
         [Test]
+        public void ShouldNameTheCurrentSearchResultKeysAndDropUnusableOnes()
+        {
+            DataVisualizerInputSettings input = new();
+            Assert.That(input.SearchResultHint(), Is.EqualTo("UpArrow/DownArrow select · Return/KeypadEnter open · Escape close"));
+            input.Navigation.PreviousTypeKey = KeyCode.None;
+            Assert.That(input.SearchResultHint(), Is.EqualTo("DownArrow select · Return/KeypadEnter open · Escape close"), "A cleared key keeps its partner in the hint.");
+            input.Navigation.NextTypeKey = KeyCode.N;
+            Assert.That(input.SearchResultHint(), Is.EqualTo("Return/KeypadEnter open · Escape close"), "A printable key types into the search field, so the hint omits it.");
+            Assert.That(
+                input.SearchResultHint(searchFieldHasFocus: false),
+                Is.EqualTo("N select · Return/KeypadEnter open · Escape close"),
+                "The browse-all list takes printable keys because it holds focus."
+            );
+            input.Navigation.SelectKey = KeyCode.None;
+            input.Navigation.CancelDragKey = KeyCode.None;
+            Assert.That(input.SearchResultHint(), Is.EqualTo("KeypadEnter open"), "The alternate open key survives and cleared keys drop out.");
+            input.Navigation.SelectKey = KeyCode.KeypadEnter;
+            Assert.That(input.SearchResultHint(), Is.EqualTo("KeypadEnter open"), "A key does not repeat as its own alternate.");
+        }
+
+        [Test]
+        public void ShouldOmitASearchCommandWhoseKeyNavigationAlreadyRuns()
+        {
+            DataVisualizerInputSettings input = new();
+            input.Navigation.SelectKey = KeyCode.UpArrow;
+            Assert.That(
+                input.SearchResultHint(),
+                Is.EqualTo("UpArrow/DownArrow select · KeypadEnter open · Escape close"),
+                "Navigation runs before open, so the shared key opens nothing."
+            );
+            input.Navigation.SelectKey = KeyCode.Return;
+            input.Navigation.NextTypeKey = KeyCode.KeypadEnter;
+            Assert.That(input.SearchResultHint(), Is.EqualTo("UpArrow/KeypadEnter select · Return open · Escape close"), "A claimed alternate key drops out of open.");
+        }
+
+        [Test]
+        public void ShouldGiveTheCloseKeyFirstClaimInSearchHints()
+        {
+            DataVisualizerInputSettings input = new();
+            input.Navigation.CancelDragKey = KeyCode.UpArrow;
+            Assert.That(
+                input.SearchResultHint(),
+                Is.EqualTo("DownArrow select · Return/KeypadEnter open · UpArrow close"),
+                "Close is routed first, so it keeps the key and select falls back to its partner."
+            );
+            input.nextFocus = new EditorInputBinding(KeyCode.Escape);
+            input.Navigation.CancelDragKey = KeyCode.Escape;
+            Assert.That(
+                input.SearchResultHint(),
+                Is.EqualTo("UpArrow/DownArrow select · Return/KeypadEnter open"),
+                "Focus routing runs first, so a focus key cannot also close the search."
+            );
+        }
+
+        [Test]
         public void ShouldRoundTripCustomInputAndKeepDefaultsIndependent()
         {
             DataVisualizerInputSettings first = new();

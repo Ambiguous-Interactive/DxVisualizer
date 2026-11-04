@@ -55,6 +55,18 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         public static bool MatchesKey(KeyCode actual, KeyCode configured) => configured != KeyCode.None && actual == configured;
 
+        /*
+            A focused text field keeps printable input for text entry (see IsTextEntry), so a
+            navigation or command binding on a letter, digit or punctuation key never runs
+            from the search box. Hints must not advertise those keys. Unity numbers every
+            printable key contiguously from Space to Tilde; control keys sit outside that
+            range.
+        */
+        public static bool IsPrintableKey(KeyCode key)
+        {
+            return (int)key >= (int)KeyCode.Space && (int)key <= (int)KeyCode.Tilde;
+        }
+
         public static bool IsNativeNavigationKey(KeyCode key)
         {
             return key
