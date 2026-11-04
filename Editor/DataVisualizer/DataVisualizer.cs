@@ -6420,7 +6420,12 @@ namespace WallstopStudios.DataVisualizer.Editor
             SetupDropTarget(_andLabelsContainer, LabelFilterSection.AND);
             SetupDropTarget(_orLabelsContainer, LabelFilterSection.OR);
 
-            _emptyObjectLabel = new Label { name = "empty-object-list-label", style = { alignSelf = Align.Center, display = DisplayStyle.None } };
+            _emptyObjectLabel = new Label
+            {
+                name = "empty-object-list-label",
+                enableRichText = false,
+                style = { alignSelf = Align.Center, display = DisplayStyle.None },
+            };
             _emptyObjectLabel.AddToClassList("empty-object-list-label");
             objectColumn.Add(_emptyObjectLabel);
 
@@ -7536,6 +7541,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                 _objectListView.RefreshItems();
                 _objectListView.style.display = DisplayStyle.None;
                 _emptyObjectLabel.text = "Select a type to list its objects.";
+                _emptyObjectLabel.tooltip = null;
                 _emptyObjectLabel.style.display = DisplayStyle.Flex;
                 return;
             }
@@ -7550,19 +7556,25 @@ namespace WallstopStudios.DataVisualizer.Editor
                     _isLoadingObjectsAsync && _asyncLoadTargetType == selectedType
                         ? "Loading objects..."
                         : $"No objects of type '{NamespaceController.GetTypeDisplayName(selectedType)}' found.\nUse the '+' button above to create one.";
+                _emptyObjectLabel.tooltip = null;
                 _emptyObjectLabel.style.display = DisplayStyle.Flex;
                 return;
             }
 
             /*
                 Objects exist for the selected type, so an empty filtered list means the active
-                label filter hides every one of them.
+                label filter hides every one of them. The Labels controls can be collapsed, so
+                name the filter that hides the rows and where to clear or edit it. The recovery
+                instruction comes first because the height-capped label elides its tail, and the
+                expression goes in the tooltip so an arbitrary label cannot truncate the action.
             */
             if (_filteredObjects.Count == 0)
             {
                 _objectListView.RefreshItems();
                 _objectListView.style.display = DisplayStyle.None;
-                _emptyObjectLabel.text = $"No objects of type '{NamespaceController.GetTypeDisplayName(selectedType)}' match the current label filter.";
+                string expression = _labelFilterEditor?.ExpressionText;
+                _emptyObjectLabel.text = $"Clear or edit the label filter in Labels to list the hidden '{NamespaceController.GetTypeDisplayName(selectedType)}' objects.";
+                _emptyObjectLabel.tooltip = expression;
                 _emptyObjectLabel.style.display = DisplayStyle.Flex;
                 return;
             }
