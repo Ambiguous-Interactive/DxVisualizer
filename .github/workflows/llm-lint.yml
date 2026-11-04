@@ -175,3 +175,27 @@ jobs:
           TEMP: ${{ runner.temp }}
           TMP: ${{ runner.temp }}
         run: uv run scripts/tests/run_all.py --names "${{ steps.check-scope.outputs.selection }}"
+
+  probe-pr-creation:
+    name: Probe Actions pull request creation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Attempt a throwaway pull request with the Actions token
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit --allow-empty -m 'Probe pull request creation'
+          git push origin HEAD:probe/actions-token-pr
+          gh pr create --base main --head probe/actions-token-pr --title 'Probe: Actions token pull request' --body 'Throwaway probe.'
+          echo "probe-exit=$?"
