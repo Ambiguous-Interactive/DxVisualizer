@@ -2879,16 +2879,16 @@ namespace WallstopStudios.DataVisualizer.Editor
                 SetActiveObject(selectedObject, preserveProcessorSelection: processorSelection.HasSelectionIntent);
             }
             _namespaceController.SelectType(this, selectedType);
-            RefreshSearchKeyHints();
+            RefreshCommandKeyHints();
             _needsRefresh = false;
         }
 
         /*
-            An assigned input profile can change while a search view stays open. The hints
-            name bindings, so a settings refresh must re-read them instead of keeping the
-            text that was built for the previous profile.
+            An assigned input profile can change while a command list or search view stays
+            open. The hints name bindings, so a settings refresh must re-read them instead of
+            keeping the text that was built for the previous profile.
         */
-        private void RefreshSearchKeyHints()
+        private void RefreshCommandKeyHints()
         {
             if (_activePopover == _searchPopover && _searchPopover != null)
             {
@@ -2896,6 +2896,14 @@ namespace WallstopStudios.DataVisualizer.Editor
                 if (hint != null)
                 {
                     hint.text = Input.SearchResultHint();
+                }
+            }
+            if (_activePopover == _inspectorLabelSuggestionsPopover && _inspectorLabelSuggestionsPopover != null)
+            {
+                Label hint = _inspectorLabelSuggestionsPopover.Q<Label>("label-suggestion-key-hint");
+                if (hint != null)
+                {
+                    hint.text = Input.LabelSuggestionHint();
                 }
             }
             _allSearchResultsView?.RefreshKeyHint();
@@ -8895,6 +8903,13 @@ namespace WallstopStudios.DataVisualizer.Editor
                     suggestionItem.AddToClassList("dataviz-suggestion");
                     _inspectorLabelSuggestionsPopover.Add(suggestionItem);
                     _currentLabelSuggestionItems.Add(suggestionItem);
+                }
+                string keyHint = Input.LabelSuggestionHint();
+                if (!string.IsNullOrWhiteSpace(keyHint))
+                {
+                    Label hint = new(keyHint) { name = "label-suggestion-key-hint" };
+                    hint.AddToClassList("label-suggestion-key-hint");
+                    _inspectorLabelSuggestionsPopover.Add(hint);
                 }
             }
             else

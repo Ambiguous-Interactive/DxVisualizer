@@ -1131,13 +1131,19 @@
     text-overflow: ellipsis;
 }
 
-/* Names the keys that drive the quick results and the browse-all list. */
-.search-key-hint {
+/* Names the keys that drive the quick results, the browse-all list and the label suggestions. */
+.search-key-hint,
+.label-suggestion-key-hint {
     font-size: var(--dataviz-font-size-caption);
     color: var(--dataviz-muted);
     padding: 4px 6px 6px 4px;
     white-space: normal;
     flex-shrink: 0;
+}
+
+/* The suggestion popover sizes to its content, so the caption must not widen it without bound. */
+.label-suggestion-key-hint {
+    max-width: 320px;
 }
 
 .popover-button-container {

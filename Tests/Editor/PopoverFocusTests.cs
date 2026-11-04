@@ -176,6 +176,62 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         }
 
         [UnityTest]
+        public IEnumerator ShouldNameTheLabelSuggestionKeysAndRefreshThem()
+        {
+            using TestCleanupScope cleanup = new();
+            Type type = typeof(TestDataObject);
+            DataVisualizerInputProfile profile = ScriptableObject.CreateInstance<DataVisualizerInputProfile>();
+            cleanup.Defer(() => UnityEngine.Object.DestroyImmediate(profile));
+            DataVisualizerWindow window = OpenSettingsWindow(
+                cleanup,
+                "PopoverLabelSuggestions",
+                scope =>
+                {
+                    scope.UserState.managedTypeNames.Add(type.FullName);
+                    scope.Settings.HydrateFrom(scope.UserState);
+                    scope.Settings.inputProfile = profile;
+                }
+            );
+            string folder = "Assets/PopoverLabelSuggestions_" + Guid.NewGuid().ToString("N");
+            AssetDatabase.CreateFolder("Assets", folder.Substring("Assets/".Length));
+            cleanup.Defer(() => AssetDatabase.DeleteAsset(folder));
+            ScriptableObject labeled = ScriptableObject.CreateInstance<TestDataObject>();
+            string labeledPath = folder + "/Labeled.asset";
+            AssetDatabase.CreateAsset(labeled, labeledPath);
+            AssetDatabase.SetLabels(labeled, new[] { "Reviewed" });
+            ScriptableObject selected = ScriptableObject.CreateInstance<TestDataObject>();
+            string selectedPath = folder + "/Selected.asset";
+            AssetDatabase.CreateAsset(selected, selectedPath);
+            AssetDatabase.SaveAssets();
+            ReadPrivateField<NamespaceController>(window, "_namespaceController").SelectType(window, type);
+            yield return WaitForRefresh(window);
+            EditorSurfaceCapture.SettleLayout(window);
+            InvokePrivate(window, "SetActiveObject", AssetDatabase.LoadAssetAtPath<ScriptableObject>(selectedPath), false);
+            yield return WaitForRefresh(window);
+            EditorSurfaceCapture.SettleLayout(window);
+
+            TextField field = window.rootVisualElement.Q<TextField>("inspector-new-label-input");
+            Assert.That(field != null, "A selected asset owns the inspector label entry.");
+            field.Focus();
+            yield return null;
+            VisualElement popover = ReadPrivateField<VisualElement>(window, "_inspectorLabelSuggestionsPopover");
+            for (int tick = 0; tick < 120 && Display(popover) != DisplayStyle.Flex; tick++)
+            {
+                yield return null;
+            }
+            Assert.That(Display(popover), Is.EqualTo(DisplayStyle.Flex), "Focusing the label entry shows its suggestions.");
+            Label hint = popover.Q<Label>("label-suggestion-key-hint");
+            Assert.That(hint != null, "The suggestion list names the keys that drive it.");
+            Assert.That(hint.text, Is.EqualTo(profile.Bindings.LabelSuggestionHint()), "The hint reads the assigned input profile.");
+
+            profile.Bindings.Navigation.SelectKey = KeyCode.F10;
+            profile.Bindings.Navigation.AlternateSelectKey = KeyCode.None;
+            profile.Bindings.Navigation.PreviousTypeKey = KeyCode.None;
+            InvokePrivate(window, "RefreshCommandKeyHints");
+            Assert.That(hint.text, Is.EqualTo("DownArrow choose · F10 add · Escape close"), "A profile change re-reads the caption instead of keeping stale keys.");
+        }
+
+        [UnityTest]
         public IEnumerator ShouldReturnFocusToTheTriggerWhenAnOutsideClickClearsFocus()
         {
             using TestCleanupScope cleanup = new();

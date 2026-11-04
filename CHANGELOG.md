@@ -36,6 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Add Show all results to reach matches beyond the first 25, with virtualized rows, keyboard navigation, and a return to quick search (#311).
 - Highlight the first quick-search match so Enter opens it, and name the current select, open and close keys beside the results (#312).
 - Explain empty Saved searches and Asset validation results, naming how to start a search and reporting a clean run instead of a blank box (#312).
+- Name the keys that move through, add, and close the inspector label suggestions (#312).
 
 ### Fixed
 

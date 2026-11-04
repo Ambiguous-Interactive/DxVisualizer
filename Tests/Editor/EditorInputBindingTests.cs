@@ -612,6 +612,28 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         }
 
         [Test]
+        public void ShouldNameTheCurrentLabelSuggestionKeysAndDropUnusableOnes()
+        {
+            DataVisualizerInputSettings input = new();
+            Assert.That(
+                input.LabelSuggestionHint(),
+                Is.EqualTo("UpArrow/DownArrow choose · Return/KeypadEnter add · Escape close"),
+                "The inspector label suggestions name their live keys."
+            );
+            input.Navigation.PreviousTypeKey = KeyCode.None;
+            Assert.That(input.LabelSuggestionHint(), Is.EqualTo("DownArrow choose · Return/KeypadEnter add · Escape close"), "A cleared key keeps its partner in the hint.");
+            input.Navigation.NextTypeKey = KeyCode.N;
+            Assert.That(input.LabelSuggestionHint(), Is.EqualTo("Return/KeypadEnter add · Escape close"), "A printable key types into the label field, so the hint omits it.");
+            input.Navigation.SelectKey = KeyCode.None;
+            Assert.That(input.LabelSuggestionHint(), Is.EqualTo("KeypadEnter add · Escape close"), "The alternate add key survives and cleared keys drop out.");
+            input.Navigation.SelectKey = KeyCode.UpArrow;
+            input.Navigation.PreviousTypeKey = KeyCode.UpArrow;
+            Assert.That(input.LabelSuggestionHint(), Is.EqualTo("UpArrow choose · KeypadEnter add · Escape close"), "Choosing runs before add, so the shared key adds nothing.");
+            input.nextFocus = new EditorInputBinding(KeyCode.Escape);
+            Assert.That(input.LabelSuggestionHint(), Is.EqualTo("UpArrow choose · KeypadEnter add"), "Focus routing runs first, so a focus key cannot also close the suggestions.");
+        }
+
+        [Test]
         public void ShouldRoundTripCustomInputAndKeepDefaultsIndependent()
         {
             DataVisualizerInputSettings first = new();
