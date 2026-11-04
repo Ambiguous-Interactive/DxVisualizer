@@ -38,6 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Name the label filter that hides every object in the Objects pane, and point at Labels to clear or edit it (#312).
 - Keep long asset labels readable in the inspector with an ellipsis and the full label on hover (#312).
 - Refresh the catalog namespace and Actions hover hints when an assigned input profile changes (#525).
 - Show the exact assembly-qualified type name on hover for catalogs of 128 types or fewer, matching large catalogs and keeping duplicate short names distinguishable (#312).

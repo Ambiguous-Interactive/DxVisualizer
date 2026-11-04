@@ -7556,13 +7556,17 @@ namespace WallstopStudios.DataVisualizer.Editor
 
             /*
                 Objects exist for the selected type, so an empty filtered list means the active
-                label filter hides every one of them.
+                label filter hides every one of them. The Labels controls can be collapsed, so
+                name the filter that hides the rows and where to clear or edit it.
             */
             if (_filteredObjects.Count == 0)
             {
                 _objectListView.RefreshItems();
                 _objectListView.style.display = DisplayStyle.None;
-                _emptyObjectLabel.text = $"No objects of type '{NamespaceController.GetTypeDisplayName(selectedType)}' match the current label filter.";
+                string expression = _labelFilterEditor?.ExpressionText;
+                _emptyObjectLabel.text = string.IsNullOrWhiteSpace(expression)
+                    ? $"No objects of type '{NamespaceController.GetTypeDisplayName(selectedType)}' match the active label filter. Clear or edit it in Labels to list them."
+                    : $"No objects of type '{NamespaceController.GetTypeDisplayName(selectedType)}' match the label filter ({expression}). Clear or edit it in Labels to list them.";
                 _emptyObjectLabel.style.display = DisplayStyle.Flex;
                 return;
             }

@@ -168,6 +168,34 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(editor.resolvedStyle.display, Is.EqualTo(DisplayStyle.Flex));
         }
 
+        /*
+            The Labels controls collapse to one header row, so an empty object list that only
+            names the type leaves no visible place to fix the filter that hides every row.
+            Name the filter labels and where to clear or edit them.
+        */
+        [UnityTest]
+        public IEnumerator ShouldNameTheHiddenFilterInTheEmptyObjectList()
+        {
+            using TestCleanupScope cleanup = new();
+            Type type = typeof(TestDataObject);
+            DataVisualizerWindow window = OpenLabelledWindow(cleanup, type, out TypeLabelFilterConfig config);
+            yield return WaitForRefresh(window);
+
+            config.andLabels.Clear();
+            config.orLabels.Clear();
+            config.andLabels.Add("Missing");
+            InvokePrivate(window, "ApplyLabelFilter", true);
+            yield return WaitForRefresh(window);
+            EditorSurfaceCapture.SettleLayout(window);
+
+            Label empty = window.rootVisualElement.Q<Label>("empty-object-list-label");
+            ListView list = window.rootVisualElement.Q<ListView>("object-listview");
+            Assert.That(empty.resolvedStyle.display, Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(list.resolvedStyle.display, Is.EqualTo(DisplayStyle.None));
+            Assert.That(empty.text, Does.Contain("Missing"), "The message names the filter labels that hide every object.");
+            Assert.That(empty.text, Does.Contain("Labels"), "The message names where to clear or edit the filter.");
+        }
+
         [UnityTest]
         public IEnumerator ShouldHideTheHeaderSummaryWhenNoFilterIsActive()
         {
