@@ -27,6 +27,11 @@ MINIMUM_NPM_TEXT = '.'.join(str(part) for part in MINIMUM_NPM)
 # directly instead, so preparation is not lost.
 PR_CREATION_DENIED = 'not permitted to create or approve pull requests'
 
+# The selected publication toolchain travels as environment variables because
+# runner PATH order proved unreliable; every npm invocation reads these names.
+RELEASE_NODE_VARIABLE = 'RELEASE_NODE'
+RELEASE_NPM_VARIABLE = 'RELEASE_NPM'
+
 
 def emit(message: str) -> None:
     sys.stdout.buffer.write((message.rstrip('\n') + '\n').encode('utf-8'))
@@ -100,7 +105,7 @@ class ReleaseWorkflow:
 
     def validate_tree(self) -> None:
         self.run([sys.executable, str(self.root / 'scripts/lint_llm_instructions.py')])
-        self.run(['npm', 'pack', '--dry-run'])
+        self.run([self.npm_executable(), 'pack', '--dry-run'])
         with tempfile.TemporaryDirectory(prefix='release-candidate.', dir=self.value('RUNNER_TEMP') or None) as directory:
             package = self.package()
             self.python('build_unitypackage.py', '--output', directory)
@@ -208,6 +213,14 @@ class ReleaseWorkflow:
         result = self.run([str(executable), '--version'], capture=True, check=False)
         return parse_version(result.stdout) if result.returncode == 0 else None
 
+    def node_executable(self) -> str:
+        """Prefer the selected Node.js binary; fall back to the ambient PATH."""
+        return self.value('RELEASE_NODE') or 'node'
+
+    def npm_executable(self) -> str:
+        """Prefer the selected npm binary; fall back to the ambient PATH."""
+        return self.value('RELEASE_NPM') or 'npm'
+
     def installed_node_directories(self) -> List[Path]:
         """List tool-cache bin directories that carry both node and npm."""
         cache = self.value('RUNNER_TOOL_CACHE') or self.value('AGENT_TOOLSDIRECTORY')
@@ -221,12 +234,14 @@ class ReleaseWorkflow:
         return directories
 
     def select_toolchain(self) -> None:
-        """Pin the installed Node.js ahead of whatever the image puts on PATH.
+        """Make the installed Node.js authoritative for every later step.
 
         ``setup-node`` installs the requested Node.js into the runner tool
         cache, but the image can still resolve its own older ``node`` and
-        ``npm`` first. Selecting the installed directory explicitly makes the
-        publication toolchain deterministic instead of PATH-order dependent.
+        ``npm`` first, and writing ``GITHUB_PATH`` did not change which npm a
+        later step found. The selected executables are therefore exported as
+        ``RELEASE_NODE`` and ``RELEASE_NPM`` so every later step names them
+        directly instead of depending on PATH order.
         """
         requested = self.value('NODE_VERSION').strip()
         candidates = self.installed_node_directories()
@@ -242,21 +257,25 @@ class ReleaseWorkflow:
             raise ValueError(f'No installed npm meets trusted publishing npm >= {MINIMUM_NPM_TEXT}; found {found}.')
         preferred = [entry for entry in usable if entry[1].parent.parent.name == requested] or usable
         version, binaries = max(preferred, key=lambda entry: (entry[0], str(entry[1])))
+        environment_file = self.value('GITHUB_ENV')
+        if not environment_file:
+            raise ValueError('GITHUB_ENV is unset; the selected release toolchain cannot be exported to later steps.')
+        with Path(environment_file).open('a', encoding='utf-8', newline='\n') as stream:
+            stream.write(f'{RELEASE_NODE_VARIABLE}={binaries / "node"}\n{RELEASE_NPM_VARIABLE}={binaries / "npm"}\n')
         path_file = self.value('GITHUB_PATH')
-        if not path_file:
-            raise ValueError('GITHUB_PATH is unset; the selected release toolchain cannot be exported to later steps.')
-        with Path(path_file).open('a', encoding='utf-8', newline='\n') as stream:
-            stream.write(f'{binaries}\n')
+        if path_file:
+            with Path(path_file).open('a', encoding='utf-8', newline='\n') as stream:
+                stream.write(f'{binaries}\n')
         emit(f'::notice::Selected Node.js {binaries.parent.parent.name} with npm {version_text(version)} from {binaries}.')
 
     def toolchain(self) -> None:
-        node = shutil.which('node') or 'node'
-        npm = shutil.which('npm') or 'npm'
+        node = self.node_executable()
+        npm = self.npm_executable()
         self.run([node, '--version'])
         reported = self.run([npm, '--version'], capture=True).stdout.strip()
         version = parse_version(reported)
-        emit(f'node: {node}')
-        emit(f'npm: {npm} ({reported})')
+        emit(f'node: {shutil.which(node) or node}')
+        emit(f'npm: {shutil.which(npm) or npm} ({reported})')
         if version is None or version < MINIMUM_NPM:
             raise ValueError(f'npm {reported} at {npm} is too old; trusted publishing requires npm >= {MINIMUM_NPM_TEXT}.')
 
@@ -288,10 +307,11 @@ class ReleaseWorkflow:
 
     def publish_npm(self) -> None:
         identity = self.value('PKG') + '@' + self.value('VER')
-        if self.run(['npm', 'view', identity, 'version'], capture=True, check=False).returncode == 0:
+        npm = self.npm_executable()
+        if self.run([npm, 'view', identity, 'version'], capture=True, check=False).returncode == 0:
             emit(f'::notice::{identity} is already on the registry; skipping publish.')
         else:
-            self.run(['npm', 'publish', self.value('PACKAGE_FILE'), '--access', 'public', '--tag', self.value('NPM_TAG')])
+            self.run([npm, 'publish', self.value('PACKAGE_FILE'), '--access', 'public', '--tag', self.value('NPM_TAG')])
             emit(f"::notice::Published {identity} to dist-tag '{self.value('NPM_TAG')}'.")
 
     def publish_github(self) -> None:

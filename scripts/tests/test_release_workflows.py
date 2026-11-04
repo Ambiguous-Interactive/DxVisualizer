@@ -105,11 +105,13 @@ def case_validates_all_artifacts_before_npm_publication() -> None:
         assert_true(0 <= index < publication, f"{step} must succeed before irreversible npm publication.")
 
 
-def case_pins_the_publishing_toolchain_before_tagging() -> None:
+def case_pins_the_publishing_toolchain_before_publication() -> None:
     select = publish.find("- name: Select the release Node.js toolchain")
     toolchain = publish.find("- name: Verify npm trusted publishing toolchain")
     tag = publish.find("- name: Tag the merged release commit")
-    assert_true(0 <= select < toolchain < tag, "The release must select and verify its npm toolchain before pushing a tag.")
+    publication = publish.find("- name: Publish to npm with trusted publishing")
+    assert_true(0 <= select < toolchain < publication, "The release must select and verify its npm toolchain before publishing.")
+    assert_true(0 <= tag < publication, "An existing tag keeps a failed publication recoverable with a Publish dispatch.")
     assert_true(len(re.findall(r'release-tools/workflow\.py"\s+(?:select-toolchain|toolchain)', publish)) == 2, "Both toolchain steps must run the retained tooling.")
     assert_true(
         re.search(r"id: node\b", publish) is not None and "steps.node.outputs.node-version" in publish,
@@ -326,7 +328,7 @@ def main() -> int:
     run_case("Validates_AllArtifacts_BeforeNpmPublication", case_validates_all_artifacts_before_npm_publication)
     run_case("Rehearses_WithoutPublishing", case_rehearses_without_publishing)
     run_case("Merges_The_ValidatedBranch_WithoutAPullRequest", case_merges_the_validated_branch_without_a_pull_request)
-    run_case("Pins_ThePublishingToolchain_BeforeTagging", case_pins_the_publishing_toolchain_before_tagging)
+    run_case("Pins_ThePublishingToolchain_BeforePublication", case_pins_the_publishing_toolchain_before_publication)
     run_case("Validates_PreparedTree_EvenDuringDryRun", case_validates_prepared_tree_even_during_dry_run)
     run_case("Prepares_Tags_AndBuilds_ACompleteRelease", lambda: case_prepares_tags_and_builds_a_complete_release(python))
 

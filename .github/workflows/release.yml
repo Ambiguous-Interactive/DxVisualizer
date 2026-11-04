@@ -177,6 +177,17 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
+      # Tag as soon as the validated source is checked out. Publication is
+      # idempotent and re-runnable against an existing tag, so an early tag
+      # keeps every later failure recoverable with a Publish dispatch instead
+      # of a manual tag.
+      - name: Tag the merged release commit
+        if: ${{ steps.resolve.outputs.create_tag == 'true' }}
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+          BRANCH: ${{ steps.resolve.outputs.branch }}
+        run: uv run --no-project "${RUNNER_TEMP}/release-tools/workflow.py" tag
+
       - name: Set up Node.js
         id: node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -194,8 +205,6 @@ jobs:
           RUNNER_TOOL_CACHE: ${{ runner.tool_cache }}
         run: uv run --no-project "${RUNNER_TEMP}/release-tools/workflow.py" select-toolchain
 
-      # Fail before any tag is pushed when the publishing toolchain is wrong;
-      # a tag without a release leaves a half-finished publication behind.
       - name: Verify npm trusted publishing toolchain
         run: uv run --no-project "${RUNNER_TEMP}/release-tools/workflow.py" toolchain
 
@@ -203,13 +212,6 @@ jobs:
         env:
           REPOSITORY: ${{ github.repository }}
         run: uv run --no-project "${RUNNER_TEMP}/release-tools/repository_identity.py" --root . --repository "${REPOSITORY}" --repair-legacy
-
-      - name: Tag the merged release commit
-        if: ${{ steps.resolve.outputs.create_tag == 'true' }}
-        env:
-          TAG: ${{ steps.resolve.outputs.tag }}
-          BRANCH: ${{ steps.resolve.outputs.branch }}
-        run: uv run --no-project "${RUNNER_TEMP}/release-tools/workflow.py" tag
 
       - name: Run non-Unity repository validation
         run: uv run --no-project scripts/lint_llm_instructions.py

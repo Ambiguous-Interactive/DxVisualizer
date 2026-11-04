@@ -16,8 +16,9 @@ The workflow builds and validates Unity archives without an editor. EditMode and
    the run records the notice.
 6. The same workflow consumes the returned merge SHA, creates an annotated tag, validates both packages and notes, publishes npm, and creates the GitHub Release.
 
-Publication pins its own toolchain: `setup-node` installs Node 24, then `workflow.py select-toolchain` writes the installed `node`/`npm` directory to `GITHUB_PATH` (preferring the
-requested version and requiring npm >= 11.5.1) before anything is tagged. The npm floor is re-checked in the next step, which reports the resolved paths.
+Publication pins its own toolchain: `setup-node` installs Node 24, then `workflow.py select-toolchain` exports `RELEASE_NODE`/`RELEASE_NPM` for the installed `node`/`npm` pair
+(preferring the requested version and requiring npm >= 11.5.1) and also prefixes `GITHUB_PATH`. Every later npm call (`verify`, `publish`) names the exported executable directly.
+The npm floor is re-checked in the next step, which reports the resolved paths.
 
 No manual PR merge or second dispatch is needed. GitHub does not start workflows for `GITHUB_TOKEN` merges or pushes, so explicit CI dispatch and the merge output connect the
 chain. An externally merged release PR or externally pushed `v*` tag also publishes. Fork PRs cannot trigger publication through a release branch name.
@@ -98,9 +99,13 @@ publishing step resolved `node v22.23.4` and npm 10.9.9 from the runner image. T
 any image or action change that reorders `PATH` decides which npm publishes.
 
 The fix makes the toolchain explicit. The Node.js step now exposes its resolved version, `select-toolchain` locates the matching `node`/`npm` pair in the runner tool cache (falling
-back to any cached pair at or above the npm floor), and prefixes it to `GITHUB_PATH` so every later step and every `npm` invocation uses it. Selection fails closed, naming each
-candidate it rejected, when no cached pair reaches npm 11.5.1, and the toolchain check now reports the absolute `node` and `npm` paths it validated. The check runs before the tag
-step, so a toolchain problem can no longer leave a pushed tag without a release.
+back to any cached pair at or above the npm floor), and exports it as `RELEASE_NODE`/`RELEASE_NPM` so every later step and every `npm` invocation uses that pair. Selection fails
+closed, naming each candidate it rejected, when no cached pair reaches npm 11.5.1, and the toolchain check reports the absolute `node` and `npm` paths it validated.
+
+[Run 41896328507](https://github.com/Ambiguous-Interactive/DxVisualizer/actions/runs/41896328507) proved the first attempt insufficient: `select-toolchain` reported the correct
+tool cache directory and wrote it to `GITHUB_PATH`, and the next step still resolved `/usr/local/bin/npm` (npm 10.9.9). PATH order is not a contract here, so the selected
+executables travel as environment variables, and `verify_release.py` packs with the same npm. Tags are also created before the toolchain work: a failure then leaves an existing tag
+that the documented Publish dispatch resumes, instead of a merged release with no tag.
 
 ## Runner policy incident and fix
 
