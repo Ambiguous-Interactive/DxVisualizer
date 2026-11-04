@@ -2879,16 +2879,16 @@ namespace WallstopStudios.DataVisualizer.Editor
                 SetActiveObject(selectedObject, preserveProcessorSelection: processorSelection.HasSelectionIntent);
             }
             _namespaceController.SelectType(this, selectedType);
-            RefreshSearchKeyHints();
+            RefreshCommandKeyHints();
             _needsRefresh = false;
         }
 
         /*
-            An assigned input profile can change while a search view stays open. The hints
-            name bindings, so a settings refresh must re-read them instead of keeping the
-            text that was built for the previous profile.
+            An assigned input profile can change while a command list or search view stays
+            open. The hints name bindings, so a settings refresh must re-read them instead of
+            keeping the text that was built for the previous profile.
         */
-        private void RefreshSearchKeyHints()
+        private void RefreshCommandKeyHints()
         {
             if (_activePopover == _searchPopover && _searchPopover != null)
             {
@@ -2898,7 +2898,38 @@ namespace WallstopStudios.DataVisualizer.Editor
                     hint.text = Input.SearchResultHint();
                 }
             }
+            if (_activePopover == _inspectorLabelSuggestionsPopover && _inspectorLabelSuggestionsPopover != null)
+            {
+                UpdateLabelSuggestionKeyHint();
+            }
             _allSearchResultsView?.RefreshKeyHint();
+        }
+
+        /*
+            The caption appears only while it names a key that can run. Rebuilding the
+            suggestion list never leaves a stale caption, and a profile change that makes a
+            key available adds one to an already open list.
+        */
+        private void UpdateLabelSuggestionKeyHint()
+        {
+            if (_inspectorLabelSuggestionsPopover == null)
+            {
+                return;
+            }
+            string keyHint = Input.LabelSuggestionHint();
+            Label hint = _inspectorLabelSuggestionsPopover.Q<Label>("label-suggestion-key-hint");
+            if (string.IsNullOrWhiteSpace(keyHint))
+            {
+                hint?.RemoveFromHierarchy();
+                return;
+            }
+            if (hint == null)
+            {
+                hint = new Label { name = "label-suggestion-key-hint" };
+                hint.AddToClassList("label-suggestion-key-hint");
+                _inspectorLabelSuggestionsPopover.Add(hint);
+            }
+            hint.text = keyHint;
         }
 
         private VisualElement FindAncestorNamespaceGroup(VisualElement startingElement)
@@ -8896,6 +8927,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                     _inspectorLabelSuggestionsPopover.Add(suggestionItem);
                     _currentLabelSuggestionItems.Add(suggestionItem);
                 }
+                UpdateLabelSuggestionKeyHint();
             }
             else
             {

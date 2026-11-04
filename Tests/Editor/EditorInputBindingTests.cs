@@ -612,6 +612,53 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         }
 
         [Test]
+        public void ShouldNameTheCurrentLabelSuggestionKeysAndDropUnusableOnes()
+        {
+            DataVisualizerInputSettings input = new();
+            Assert.That(
+                input.LabelSuggestionHint(),
+                Is.EqualTo("UpArrow/DownArrow choose · Return/KeypadEnter add · Escape close"),
+                "The inspector label suggestions name their live keys."
+            );
+            input.Navigation.PreviousTypeKey = KeyCode.None;
+            Assert.That(input.LabelSuggestionHint(), Is.EqualTo("DownArrow choose · Return/KeypadEnter add · Escape close"), "A cleared key keeps its partner in the hint.");
+            input.Navigation.NextTypeKey = KeyCode.N;
+            Assert.That(input.LabelSuggestionHint(), Is.EqualTo("Return/KeypadEnter add · Escape close"), "A printable key types into the label field, so the hint omits it.");
+            input.Navigation.SelectKey = KeyCode.None;
+            Assert.That(input.LabelSuggestionHint(), Is.EqualTo("KeypadEnter add · Escape close"), "The alternate add key survives and cleared keys drop out.");
+            input.Navigation.SelectKey = KeyCode.UpArrow;
+            input.Navigation.PreviousTypeKey = KeyCode.UpArrow;
+            Assert.That(input.LabelSuggestionHint(), Is.EqualTo("UpArrow choose · KeypadEnter add · Escape close"), "Choosing runs before add, so the shared key adds nothing.");
+            input.nextFocus = new EditorInputBinding(KeyCode.Escape);
+            Assert.That(input.LabelSuggestionHint(), Is.EqualTo("UpArrow choose · KeypadEnter add"), "Focus routing runs first, so a focus key cannot also close the suggestions.");
+
+            input = new DataVisualizerInputSettings();
+            input.Navigation.SelectKey = KeyCode.F10;
+            input.Navigation.AlternateSelectKey = KeyCode.None;
+            input.nextFocus = new EditorInputBinding(KeyCode.F10, EventModifiers.Shift);
+            Assert.That(
+                input.LabelSuggestionHint(),
+                Is.EqualTo("UpArrow/DownArrow choose · F10 add · Escape close"),
+                "A focus binding with modifiers leaves the unmodified command key available."
+            );
+            input.nextFocus = new EditorInputBinding(KeyCode.F10);
+            Assert.That(input.LabelSuggestionHint(), Is.EqualTo("UpArrow/DownArrow choose · Escape close"), "An unmodified focus binding claims its key.");
+
+            input = new DataVisualizerInputSettings();
+            input.nextFocus = new EditorInputBinding(KeyCode.F6);
+            input.previousFocus = new EditorInputBinding(KeyCode.F7);
+            input.Navigation.SelectKey = KeyCode.Tab;
+            input.Navigation.AlternateSelectKey = KeyCode.None;
+            Assert.That(
+                input.LabelSuggestionHint(),
+                Is.EqualTo("UpArrow/DownArrow choose · Escape close"),
+                "Focus routing always consumes Tab, even when both focus bindings are remapped."
+            );
+            input.Navigation.SelectKey = KeyCode.Keypad1;
+            Assert.That(input.LabelSuggestionHint(), Is.EqualTo("UpArrow/DownArrow choose · Escape close"), "A keypad digit types into the label field, so the hint omits it.");
+        }
+
+        [Test]
         public void ShouldRoundTripCustomInputAndKeepDefaultsIndependent()
         {
             DataVisualizerInputSettings first = new();

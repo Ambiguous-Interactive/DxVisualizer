@@ -73,10 +73,10 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             types into a focused search field instead, so both drop out. A command keeps its
             alternate key when the primary one is unusable.
         */
-        private static string BuildSearchHint(HashSet<KeyCode> claimed, KeyCode primary, KeyCode alternate, string action, bool allowPrintable)
+        private static string BuildCommandHint(HashSet<KeyCode> claimed, KeyCode primary, KeyCode alternate, string action, bool allowPrintable)
         {
-            bool hasPrimary = IsSearchHintKey(primary, claimed, allowPrintable);
-            bool hasAlternate = alternate != primary && IsSearchHintKey(alternate, claimed, allowPrintable);
+            bool hasPrimary = IsHintKey(primary, claimed, allowPrintable);
+            bool hasAlternate = alternate != primary && IsHintKey(alternate, claimed, allowPrintable);
             if (!hasPrimary && !hasAlternate)
             {
                 return null;
@@ -92,9 +92,27 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             return hasPrimary && hasAlternate ? $"{primary}/{alternate} {action}" : $"{(hasPrimary ? primary : alternate)} {action}";
         }
 
-        private static bool IsSearchHintKey(KeyCode key, HashSet<KeyCode> claimed, bool allowPrintable)
+        private static bool IsHintKey(KeyCode key, HashSet<KeyCode> claimed, bool allowPrintable)
         {
             return key != KeyCode.None && !claimed.Contains(key) && (allowPrintable || !CatalogInputSettings.IsPrintableKey(key));
+        }
+
+        /*
+            Focus routing runs before command hints. It matches a focus binding's exact
+            modifiers, and the router always consumes a bare Tab even when both focus
+            bindings are remapped, so only an unmodified focus key and Tab are claimed.
+        */
+        private static void AddFocusClaims(HashSet<KeyCode> claimed, EditorInputBinding next, EditorInputBinding previous)
+        {
+            claimed.Add(KeyCode.Tab);
+            if (next.key != KeyCode.None && next.MatchesModifiers(EventModifiers.None))
+            {
+                claimed.Add(next.key);
+            }
+            if (previous.key != KeyCode.None && previous.MatchesModifiers(EventModifiers.None))
+            {
+                claimed.Add(previous.key);
+            }
         }
 
         public bool HandleButton(KeyDownEvent evt, CatalogInputSettings navigation = null)
@@ -154,21 +172,10 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             CatalogInputSettings navigation = Navigation;
             bool allowPrintable = !searchFieldHasFocus;
             HashSet<KeyCode> claimed = new();
-            /*
-                Focus routing runs before search commands, so a key bound to moving focus
-                cannot also run select, open or close.
-            */
-            if (nextFocus.key != KeyCode.None)
-            {
-                claimed.Add(nextFocus.key);
-            }
-            if (previousFocus.key != KeyCode.None)
-            {
-                claimed.Add(previousFocus.key);
-            }
-            string close = BuildSearchHint(claimed, navigation.CancelDragKey, KeyCode.None, "close", allowPrintable);
-            string select = BuildSearchHint(claimed, navigation.PreviousTypeKey, navigation.NextTypeKey, "select", allowPrintable);
-            string open = BuildSearchHint(claimed, navigation.SelectKey, navigation.AlternateSelectKey, "open", allowPrintable);
+            AddFocusClaims(claimed, nextFocus, previousFocus);
+            string close = BuildCommandHint(claimed, navigation.CancelDragKey, KeyCode.None, "close", allowPrintable);
+            string select = BuildCommandHint(claimed, navigation.PreviousTypeKey, navigation.NextTypeKey, "select", allowPrintable);
+            string open = BuildCommandHint(claimed, navigation.SelectKey, navigation.AlternateSelectKey, "open", allowPrintable);
             List<string> parts = new(3);
             if (select != null)
             {
@@ -177,6 +184,36 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             if (open != null)
             {
                 parts.Add(open);
+            }
+            if (close != null)
+            {
+                parts.Add(close);
+            }
+            return string.Join(" · ", parts);
+        }
+
+        /*
+            Names the keys that move through the inspector label suggestions, add the chosen
+            suggestion and close the list. The field keeps printable keys for typing, so they
+            never appear here even when a command uses one, and the commands are claimed in
+            routing order so a shared key names only the command that runs it.
+        */
+        public string LabelSuggestionHint()
+        {
+            CatalogInputSettings navigation = Navigation;
+            HashSet<KeyCode> claimed = new();
+            AddFocusClaims(claimed, nextFocus, previousFocus);
+            string choose = BuildCommandHint(claimed, navigation.PreviousTypeKey, navigation.NextTypeKey, "choose", allowPrintable: false);
+            string add = BuildCommandHint(claimed, navigation.SelectKey, navigation.AlternateSelectKey, "add", allowPrintable: false);
+            string close = BuildCommandHint(claimed, navigation.CancelDragKey, KeyCode.None, "close", allowPrintable: false);
+            List<string> parts = new(3);
+            if (choose != null)
+            {
+                parts.Add(choose);
+            }
+            if (add != null)
+            {
+                parts.Add(add);
             }
             if (close != null)
             {
