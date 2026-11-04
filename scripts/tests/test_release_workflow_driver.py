@@ -155,7 +155,7 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.driver.validate_archive()
 
-    def test_toolchain_selection_pins_the_installed_node_ahead_of_path(self) -> None:
+    def test_toolchain_selection_exports_the_installed_node_for_later_steps(self) -> None:
         cache = self.root / 'toolcache'
         versions = {'22.23.4': (10, 9, 9), '24.22.2': (11, 19, 1)}
         for installed in versions:
@@ -165,35 +165,49 @@ class WorkflowTests(unittest.TestCase):
                 (binaries / name).write_text('fixture', encoding='utf-8')
         npm_versions = {str(cache / 'node' / installed / 'x64' / 'bin' / 'npm'): version for installed, version in versions.items()}
         path_file = self.root / 'github_path'
+        env_file = self.root / 'github_env'
 
         def report(executable: Path) -> tuple[int, int, int] | None:
             return npm_versions.get(str(executable))
 
         patch.object(self.driver, 'npm_version', side_effect=report).start()
+        expected = cache / 'node' / '24.22.2' / 'x64' / 'bin'
 
         def select(requested: str) -> list[str]:
             path_file.unlink(missing_ok=True)
-            self.driver.environment.update(RUNNER_TOOL_CACHE=str(cache), NODE_VERSION=requested, GITHUB_PATH=str(path_file))
+            env_file.unlink(missing_ok=True)
+            self.driver.environment.update(RUNNER_TOOL_CACHE=str(cache), NODE_VERSION=requested, GITHUB_PATH=str(path_file),
+                                           GITHUB_ENV=str(env_file))
             self.driver.select_toolchain()
+            # Every later step reads these names instead of trusting PATH order.
+            exported = dict(line.split('=', 1) for line in env_file.read_text(encoding='utf-8').splitlines())
+            self.assertEqual(exported, {'RELEASE_NODE': str(expected / 'node'), 'RELEASE_NPM': str(expected / 'npm')})
+            self.driver.environment.update(exported)
+            self.assertEqual(self.driver.npm_executable(), str(expected / 'npm'))
+            self.assertEqual(self.driver.node_executable(), str(expected / 'node'))
             return path_file.read_text(encoding='utf-8').splitlines()
 
-        expected = str(cache / 'node' / '24.22.2' / 'x64' / 'bin')
-        installed_npm = str(cache / 'node' / '24.22.2' / 'x64' / 'bin' / 'npm')
-        self.assertEqual(select('24.22.2'), [expected])
+        self.assertEqual(select('24.22.2'), [str(expected)])
         # An unknown or under-specified installation still selects an adequate npm.
-        self.assertEqual(select(''), [expected])
-        self.assertEqual(select('20.11.0'), [expected])
+        self.assertEqual(select(''), [str(expected)])
+        self.assertEqual(select('20.11.0'), [str(expected)])
         self.driver.environment.update(RUNNER_TOOL_CACHE=str(self.root / 'empty'))
         with self.assertRaisesRegex(ValueError, 'no Node.js installation'):
             self.driver.select_toolchain()
-        npm_versions.pop(installed_npm)
+        npm_versions.pop(str(expected / 'npm'))
         self.driver.environment['RUNNER_TOOL_CACHE'] = str(cache)
         with self.assertRaisesRegex(ValueError, 'No installed npm meets'):
             self.driver.select_toolchain()
-        npm_versions[installed_npm] = (11, 19, 1)
-        self.driver.environment.update(RUNNER_TOOL_CACHE=str(cache), GITHUB_PATH='')
-        with self.assertRaisesRegex(ValueError, 'GITHUB_PATH'):
+        npm_versions[str(expected / 'npm')] = (11, 19, 1)
+        self.driver.environment.update(RUNNER_TOOL_CACHE=str(cache), GITHUB_ENV='')
+        with self.assertRaisesRegex(ValueError, 'GITHUB_ENV'):
             self.driver.select_toolchain()
+
+    def test_toolchain_gate_uses_the_selected_npm(self) -> None:
+        self.driver.environment.update(RELEASE_NODE='/selected/node', RELEASE_NPM='/selected/npm')
+        with patch.object(self.driver, 'run', return_value=self.result('11.19.1')) as run:
+            self.driver.toolchain()
+        self.assertEqual([call.args[0][0] for call in run.call_args_list], ['/selected/node', '/selected/npm'])
 
     def test_publication_reruns_skip_npm_and_update_github(self) -> None:
         dist = self.root / 'dist'

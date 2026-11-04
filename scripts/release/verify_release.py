@@ -33,6 +33,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -118,9 +119,10 @@ def verify_tag(tag: str, package_version: str) -> str:
 
 def run_npm(arguments: Sequence[str], root: Path, purpose: str) -> str:
     """Run npm, launching it through a shell on Windows where npm is a .cmd shim."""
+    executable = os.environ.get("RELEASE_NPM") or "npm"
     try:
         completed = subprocess.run(
-            ["npm", *arguments],
+            [executable, *arguments],
             cwd=str(root),
             capture_output=True,
             text=True,

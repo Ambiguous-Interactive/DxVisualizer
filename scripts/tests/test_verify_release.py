@@ -75,8 +75,9 @@ def new_verify_fixture(version: str = "0.0.38", package_json: Optional[str] = No
     return root
 
 
-def invoke_verify(python: str, root: Path, arguments: Sequence[str]) -> Tuple[str, int]:
-    return run_tool_output([python, str(VERIFY_SCRIPT), "--root", str(root), *arguments])
+def invoke_verify(python: str, root: Path, arguments: Sequence[str], environment: Optional[dict] = None) -> Tuple[str, int]:
+    env = {**os.environ, **environment} if environment else None
+    return run_tool_output([python, str(VERIFY_SCRIPT), "--root", str(root), *arguments], env=env)
 
 
 def new_hand_tarball(root: Path, name: str, include_paths: Sequence[str], extra_paths: Sequence[str] = ()) -> Path:
@@ -265,6 +266,17 @@ def case_fails_when_root_is_not_a_repository(python: str) -> None:
         remove_temp_root(root)
 
 
+def case_packs_with_the_selected_npm(python: str) -> None:
+    root = new_verify_fixture()
+    try:
+        missing = root / "missing-npm"
+        output, exit_code = invoke_verify(python, root, ["--tag", "v0.0.38"], environment={"RELEASE_NPM": str(missing)})
+        assert_exit_code(1, "a missing selected npm must fail verification", exit_code)
+        assert_true("missing-npm" in output, f"the failure must name the selected npm instead of the ambient one, got: {output}")
+    finally:
+        remove_temp_root(root)
+
+
 def case_rejects_invalid_arguments(python: str) -> None:
     cases = [
         ArgumentCase(name="missing tag", arguments=[]),
@@ -298,6 +310,7 @@ def main() -> int:
             ("Fails_When_PackageJsonIsMissingOrIncomplete", lambda: case_fails_when_package_json_is_missing_or_incomplete(python)),
             ("Fails_When_PackageFileDoesNotExist", lambda: case_fails_when_package_file_does_not_exist(python)),
             ("Fails_When_RootIsNotARepository", lambda: case_fails_when_root_is_not_a_repository(python)),
+            ("Packs_With_TheSelectedNpm", lambda: case_packs_with_the_selected_npm(python)),
             ("Rejects_InvalidArguments", lambda: case_rejects_invalid_arguments(python)),
         )
     )
