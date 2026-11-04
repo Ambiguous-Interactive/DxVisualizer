@@ -1,6 +1,7 @@
 namespace WallstopStudios.DataVisualizer.Editor.UI
 {
     using System;
+    using System.Collections.Generic;
     using Extensions;
     using UnityEngine;
     using UnityEngine.UIElements;
@@ -67,6 +68,35 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             return $"{action} ({shortcut})";
         }
 
+        /*
+            Names one search command. A cleared key cannot run the command, and a printable key
+            types into a focused search field instead, so both drop out. A command keeps its
+            alternate key when the primary one is unusable.
+        */
+        private static string BuildSearchHint(HashSet<KeyCode> claimed, KeyCode primary, KeyCode alternate, string action, bool allowPrintable)
+        {
+            bool hasPrimary = IsSearchHintKey(primary, claimed, allowPrintable);
+            bool hasAlternate = alternate != primary && IsSearchHintKey(alternate, claimed, allowPrintable);
+            if (!hasPrimary && !hasAlternate)
+            {
+                return null;
+            }
+            if (hasPrimary)
+            {
+                claimed.Add(primary);
+            }
+            if (hasAlternate)
+            {
+                claimed.Add(alternate);
+            }
+            return hasPrimary && hasAlternate ? $"{primary}/{alternate} {action}" : $"{(hasPrimary ? primary : alternate)} {action}";
+        }
+
+        private static bool IsSearchHintKey(KeyCode key, HashSet<KeyCode> claimed, bool allowPrintable)
+        {
+            return key != KeyCode.None && !claimed.Contains(key) && (allowPrintable || !CatalogInputSettings.IsPrintableKey(key));
+        }
+
         public bool HandleButton(KeyDownEvent evt, CatalogInputSettings navigation = null)
         {
             VisualElement target = evt.target as VisualElement;
@@ -109,6 +139,50 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         public string AssetActionHint()
         {
             return $"{ProseCaption("Clone", clone)}, {ProseCaption("Rename", rename)}, Move, {DescribeOrderHint()}, {ProseCaption("Delete", delete, ActiveAlternateDelete)}. Actions: {actions}/{alternateActions}.";
+        }
+
+        /*
+            Names the keys that drive the quick search results and the browse-all list. Each
+            command keeps whichever of its keys can run in the active context: a cleared key
+            drops out, a key another command already runs drops out, and, while the search
+            field holds focus, a printable key drops out because the field keeps it for text
+            entry. Close is routed before select and open, so it claims its key first even
+            though the hint reads select, open, close.
+        */
+        public string SearchResultHint(bool searchFieldHasFocus = true)
+        {
+            CatalogInputSettings navigation = Navigation;
+            bool allowPrintable = !searchFieldHasFocus;
+            HashSet<KeyCode> claimed = new();
+            /*
+                Focus routing runs before search commands, so a key bound to moving focus
+                cannot also run select, open or close.
+            */
+            if (nextFocus.key != KeyCode.None)
+            {
+                claimed.Add(nextFocus.key);
+            }
+            if (previousFocus.key != KeyCode.None)
+            {
+                claimed.Add(previousFocus.key);
+            }
+            string close = BuildSearchHint(claimed, navigation.CancelDragKey, KeyCode.None, "close", allowPrintable);
+            string select = BuildSearchHint(claimed, navigation.PreviousTypeKey, navigation.NextTypeKey, "select", allowPrintable);
+            string open = BuildSearchHint(claimed, navigation.SelectKey, navigation.AlternateSelectKey, "open", allowPrintable);
+            List<string> parts = new(3);
+            if (select != null)
+            {
+                parts.Add(select);
+            }
+            if (open != null)
+            {
+                parts.Add(open);
+            }
+            if (close != null)
+            {
+                parts.Add(close);
+            }
+            return string.Join(" · ", parts);
         }
 
         /*

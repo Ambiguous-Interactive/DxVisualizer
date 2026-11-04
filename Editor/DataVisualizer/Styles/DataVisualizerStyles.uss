@@ -1124,6 +1124,15 @@
     text-overflow: ellipsis;
 }
 
+/* Names the keys that drive the quick results and the browse-all list. */
+.search-key-hint {
+    font-size: var(--dataviz-font-size-caption);
+    color: var(--dataviz-muted);
+    padding: 4px 6px 6px 4px;
+    white-space: normal;
+    flex-shrink: 0;
+}
+
 .popover-button-container {
     flex-direction: row;
     justify-content: flex-end;

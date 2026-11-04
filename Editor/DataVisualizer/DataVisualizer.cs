@@ -1745,7 +1745,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             Instance = this;
             _assetChanges?.Dispose();
             _assetObjectCache = new AssetObjectCache(AssetGuidTypeIndex.Shared.Metadata);
-            _assetChanges = new AssetChangeRefreshService(IsTrackedAssetType, ApplyAssetChange);
+            _assetChanges = new AssetChangeRefreshService(IsRefreshRelevantAssetType, ApplyAssetChange);
             ObjectChangeEvents.changesPublished -= HandleAssetObjectChanges;
             ObjectChangeEvents.changesPublished += HandleAssetObjectChanges;
             _assetChanges.SetSuspended(EditorApplication.isPlayingOrWillChangePlaymode);
@@ -2186,6 +2186,19 @@ namespace WallstopStudios.DataVisualizer.Editor
             string settingsPath = AssetDatabase.GetAssetPath(Settings);
             _settingsAssetGuid = AssetDatabase.AssetPathToGUID(settingsPath);
             _assetChanges?.Track(settingsPath, _settingsAssetGuid);
+            /*
+                Inspector edits to the assigned profile change the live bindings, so the
+                service must resolve its GUID to publish them.
+            */
+            DataVisualizerInputProfile profile = Settings.inputProfile;
+            if (profile != null)
+            {
+                string profilePath = AssetDatabase.GetAssetPath(profile);
+                if (!string.IsNullOrWhiteSpace(profilePath))
+                {
+                    _assetChanges?.Track(profilePath, AssetDatabase.AssetPathToGUID(profilePath));
+                }
+            }
             foreach (string guid in uniqueGuids)
             {
                 _pendingSearchCacheGuids.Enqueue(guid);
@@ -2295,6 +2308,16 @@ namespace WallstopStudios.DataVisualizer.Editor
             }
         }
 
+        /*
+            The window follows data assets, the settings asset and the assigned input profile.
+            The profile owns the live bindings, so its edits must reach ApplyAssetChange even
+            though it is never cached as a data asset.
+        */
+        private bool IsRefreshRelevantAssetType(Type type)
+        {
+            return IsTrackedAssetType(type) || (type != null && typeof(DataVisualizerInputProfile).IsAssignableFrom(type));
+        }
+
         private bool IsTrackedAssetType(Type type)
         {
             if (typeof(DataVisualizerSettings).IsAssignableFrom(type))
@@ -2334,9 +2357,33 @@ namespace WallstopStudios.DataVisualizer.Editor
             }
         }
 
+        /*
+            The assigned profile owns the live bindings. Its own asset edits do not touch the
+            settings asset, so they need the same view refresh as configuration changes.
+        */
+        private bool IsAssignedInputProfile(string guid)
+        {
+            DataVisualizerInputProfile profile = Settings.inputProfile;
+            if (profile == null || string.IsNullOrWhiteSpace(guid))
+            {
+                return false;
+            }
+            string path = AssetDatabase.GetAssetPath(profile);
+            return !string.IsNullOrWhiteSpace(path) && string.Equals(AssetDatabase.AssetPathToGUID(path), guid, StringComparison.Ordinal);
+        }
+
         private void ApplyAssetChange(string guid, string path, Type type)
         {
-            if (string.Equals(guid, _settingsAssetGuid, StringComparison.Ordinal) || (type != null && typeof(DataVisualizerSettings).IsAssignableFrom(type)))
+            /*
+                Configuration and the assigned input profile both change what the browser
+                shows: the profile owns the bindings that hints and navigation read, so an
+                edited profile must refresh the open views.
+            */
+            if (
+                string.Equals(guid, _settingsAssetGuid, StringComparison.Ordinal)
+                || (type != null && typeof(DataVisualizerSettings).IsAssignableFrom(type))
+                || IsAssignedInputProfile(guid)
+            )
             {
                 _assetRefreshNeedsViews = true;
                 return;
@@ -2832,7 +2879,26 @@ namespace WallstopStudios.DataVisualizer.Editor
                 SetActiveObject(selectedObject, preserveProcessorSelection: processorSelection.HasSelectionIntent);
             }
             _namespaceController.SelectType(this, selectedType);
+            RefreshSearchKeyHints();
             _needsRefresh = false;
+        }
+
+        /*
+            An assigned input profile can change while a search view stays open. The hints
+            name bindings, so a settings refresh must re-read them instead of keeping the
+            text that was built for the previous profile.
+        */
+        private void RefreshSearchKeyHints()
+        {
+            if (_activePopover == _searchPopover && _searchPopover != null)
+            {
+                Label hint = _searchPopover.Q<Label>("search-key-hint");
+                if (hint != null)
+                {
+                    hint.text = Input.SearchResultHint();
+                }
+            }
+            _allSearchResultsView?.RefreshKeyHint();
         }
 
         private VisualElement FindAncestorNamespaceGroup(VisualElement startingElement)
@@ -3620,7 +3686,22 @@ namespace WallstopStudios.DataVisualizer.Editor
                 showAll.AddToClassList(StyleConstants.ClickableClass);
                 _searchPopover.Add(showAll);
             }
-            ScrollView scrollView = _searchPopover.Q<ScrollView>("search-scroll") ?? new ScrollView { name = "search-scroll", style = { flexGrow = 1 } };
+            ScrollView scrollView =
+                _searchPopover.Q<ScrollView>("search-scroll")
+                ?? new ScrollView
+                {
+                    name = "search-scroll",
+                    style =
+                    {
+                        flexGrow = 1,
+                        /*
+                            A clamped popover height must shorten the list, not push the key
+                            hint out of the panel.
+                        */
+                        flexShrink = 1,
+                        minHeight = 0,
+                    },
+                };
             VisualElement listContainer = scrollView.Q<VisualElement>("search-list-content") ?? new VisualElement { name = "search-list-content" };
             listContainer.Clear();
 
@@ -3776,6 +3857,28 @@ namespace WallstopStudios.DataVisualizer.Editor
                 emptyLabel.AddToClassList("dataviz-muted");
                 listContainer.Add(emptyLabel);
                 _searchPopover.style.maxHeight = StyleKeyword.None;
+            }
+
+            /*
+                Nothing told the user that the rows take keyboard input, and Enter did
+                nothing until an arrow key picked a row. Highlight the first match so the
+                select key opens it immediately, then name the keys below the list.
+
+                A preferred row that left a partial snapshot keeps its GUID instead: the row
+                can return in a later snapshot, and the user's choice must survive. Only a
+                finished query over a complete index proves the row is gone, so only then
+                does the first match take the highlight again.
+            */
+            if (_searchHighlightIndex < 0 && 0 < _currentSearchResultItems.Count && (_searchHighlightGuid == null || (complete && query.IsComplete)))
+            {
+                _searchHighlightIndex = 0;
+            }
+            string keyHint = Input.SearchResultHint();
+            if (0 < _currentSearchResultItems.Count && !string.IsNullOrWhiteSpace(keyHint))
+            {
+                Label hint = new(keyHint) { name = "search-key-hint" };
+                hint.AddToClassList("search-key-hint");
+                _searchPopover.Add(hint);
             }
             UpdateSearchResultHighlight();
         }
