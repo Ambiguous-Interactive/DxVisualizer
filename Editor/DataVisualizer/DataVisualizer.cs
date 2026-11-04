@@ -2334,9 +2334,33 @@ namespace WallstopStudios.DataVisualizer.Editor
             }
         }
 
+        /*
+            The assigned profile owns the live bindings. Its own asset edits do not touch the
+            settings asset, so they need the same view refresh as configuration changes.
+        */
+        private bool IsAssignedInputProfile(string guid)
+        {
+            DataVisualizerInputProfile profile = Settings.inputProfile;
+            if (profile == null || string.IsNullOrWhiteSpace(guid))
+            {
+                return false;
+            }
+            string path = AssetDatabase.GetAssetPath(profile);
+            return !string.IsNullOrWhiteSpace(path) && string.Equals(AssetDatabase.AssetPathToGUID(path), guid, StringComparison.Ordinal);
+        }
+
         private void ApplyAssetChange(string guid, string path, Type type)
         {
-            if (string.Equals(guid, _settingsAssetGuid, StringComparison.Ordinal) || (type != null && typeof(DataVisualizerSettings).IsAssignableFrom(type)))
+            /*
+                Configuration and the assigned input profile both change what the browser
+                shows: the profile owns the bindings that hints and navigation read, so an
+                edited profile must refresh the open views.
+            */
+            if (
+                string.Equals(guid, _settingsAssetGuid, StringComparison.Ordinal)
+                || (type != null && typeof(DataVisualizerSettings).IsAssignableFrom(type))
+                || IsAssignedInputProfile(guid)
+            )
             {
                 _assetRefreshNeedsViews = true;
                 return;
