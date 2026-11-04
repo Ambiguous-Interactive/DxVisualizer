@@ -105,6 +105,41 @@ def case_validates_all_artifacts_before_npm_publication() -> None:
         assert_true(0 <= index < publication, f"{step} must succeed before irreversible npm publication.")
 
 
+def case_pins_the_publishing_toolchain_before_tagging() -> None:
+    select = publish.find("- name: Select the release Node.js toolchain")
+    toolchain = publish.find("- name: Verify npm trusted publishing toolchain")
+    tag = publish.find("- name: Tag the merged release commit")
+    assert_true(0 <= select < toolchain < tag, "The release must select and verify its npm toolchain before pushing a tag.")
+    assert_true(len(re.findall(r'release-tools/workflow\.py"\s+(?:select-toolchain|toolchain)', publish)) == 2, "Both toolchain steps must run the retained tooling.")
+    assert_true(
+        re.search(r"id: node\b", publish) is not None and "steps.node.outputs.node-version" in publish,
+        "Toolchain selection must use the Node.js version setup-node installed.",
+    )
+
+def case_merges_the_validated_branch_without_a_pull_request() -> None:
+    success = {"display_title": "request", "head_sha": "candidate", "status": "completed", "conclusion": "success"}
+    with patch.dict(os.environ, {"GITHUB_REPOSITORY": REPOSITORY}), patch.object(complete_release_pr.time, "sleep"):
+        responses: List[Any] = [ValueError("no pull request"), {"object": {"sha": "candidate"}}, None, {"workflow_runs": [success]},
+                                {"sha": "merged"}]
+        with patch.object(complete_release_pr, "gh", side_effect=responses) as mock:
+            assert_true(complete_release_pr.complete("release/v0.1.2", "request", "candidate") == "merged", "Merge the validated branch head.")
+            arguments = mock.call_args_list[-1].args[0]
+            assert_true(any("merges" in argument for argument in arguments), "Without a pull request the branch merge targets main.")
+            assert_true("base=main" in arguments and "head=release/v0.1.2" in arguments, "Branch merge must name main and the release branch.")
+        responses = [ValueError("no pull request"), {"object": {"sha": "candidate"}}, None, {"workflow_runs": [success]}, None,
+                     {"sha": "main-after-merge"}]
+        with patch.object(complete_release_pr, "gh", side_effect=responses):
+            assert_true(complete_release_pr.complete("release/v0.1.2", "request", "candidate") == "main-after-merge",
+                        "An already merged release resolves the current main head.")
+    with patch.dict(os.environ, {"GITHUB_REPOSITORY": REPOSITORY}):
+        with patch.object(complete_release_pr, "gh", side_effect=[ValueError("no pull request"), {"object": {"sha": "changed"}}]) as mock:
+            try:
+                complete_release_pr.complete("release/v0.1.2", "request", "candidate")
+                raise AssertionError("A changed branch head must not merge.")
+            except ValueError:
+                pass
+            assert_true(mock.call_count == 2, "Changed branch heads must not dispatch or merge.")
+
 def case_rehearses_without_publishing() -> None:
     assert_true("dry_run:" in workflow, "Publish workflow needs an artifact rehearsal input.")
     for name in ("Publish to npm with trusted publishing", "Create or update the GitHub Release"):
@@ -290,6 +325,8 @@ def main() -> int:
     run_case("Uses_OneReleaseWorkflow_WithBuiltInAuthentication", case_uses_one_release_workflow)
     run_case("Validates_AllArtifacts_BeforeNpmPublication", case_validates_all_artifacts_before_npm_publication)
     run_case("Rehearses_WithoutPublishing", case_rehearses_without_publishing)
+    run_case("Merges_The_ValidatedBranch_WithoutAPullRequest", case_merges_the_validated_branch_without_a_pull_request)
+    run_case("Pins_ThePublishingToolchain_BeforeTagging", case_pins_the_publishing_toolchain_before_tagging)
     run_case("Validates_PreparedTree_EvenDuringDryRun", case_validates_prepared_tree_even_during_dry_run)
     run_case("Prepares_Tags_AndBuilds_ACompleteRelease", lambda: case_prepares_tags_and_builds_a_complete_release(python))
 
