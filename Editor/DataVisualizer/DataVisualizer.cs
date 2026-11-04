@@ -1745,7 +1745,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             Instance = this;
             _assetChanges?.Dispose();
             _assetObjectCache = new AssetObjectCache(AssetGuidTypeIndex.Shared.Metadata);
-            _assetChanges = new AssetChangeRefreshService(IsTrackedAssetType, ApplyAssetChange);
+            _assetChanges = new AssetChangeRefreshService(IsRefreshRelevantAssetType, ApplyAssetChange);
             ObjectChangeEvents.changesPublished -= HandleAssetObjectChanges;
             ObjectChangeEvents.changesPublished += HandleAssetObjectChanges;
             _assetChanges.SetSuspended(EditorApplication.isPlayingOrWillChangePlaymode);
@@ -2186,6 +2186,19 @@ namespace WallstopStudios.DataVisualizer.Editor
             string settingsPath = AssetDatabase.GetAssetPath(Settings);
             _settingsAssetGuid = AssetDatabase.AssetPathToGUID(settingsPath);
             _assetChanges?.Track(settingsPath, _settingsAssetGuid);
+            /*
+                Inspector edits to the assigned profile change the live bindings, so the
+                service must resolve its GUID to publish them.
+            */
+            DataVisualizerInputProfile profile = Settings.inputProfile;
+            if (profile != null)
+            {
+                string profilePath = AssetDatabase.GetAssetPath(profile);
+                if (!string.IsNullOrWhiteSpace(profilePath))
+                {
+                    _assetChanges?.Track(profilePath, AssetDatabase.AssetPathToGUID(profilePath));
+                }
+            }
             foreach (string guid in uniqueGuids)
             {
                 _pendingSearchCacheGuids.Enqueue(guid);
@@ -2293,6 +2306,16 @@ namespace WallstopStudios.DataVisualizer.Editor
             {
                 SearchIndexSliceOverrunCount++;
             }
+        }
+
+        /*
+            The window follows data assets, the settings asset and the assigned input profile.
+            The profile owns the live bindings, so its edits must reach ApplyAssetChange even
+            though it is never cached as a data asset.
+        */
+        private bool IsRefreshRelevantAssetType(Type type)
+        {
+            return IsTrackedAssetType(type) || (type != null && typeof(DataVisualizerInputProfile).IsAssignableFrom(type));
         }
 
         private bool IsTrackedAssetType(Type type)
@@ -3842,11 +3865,11 @@ namespace WallstopStudios.DataVisualizer.Editor
                 select key opens it immediately, then name the keys below the list.
 
                 A preferred row that left a partial snapshot keeps its GUID instead: the row
-                can return in a later snapshot, and the user's choice must survive. Once the
-                index is complete, an absent row is gone for good, so the first match takes
-                the highlight again.
+                can return in a later snapshot, and the user's choice must survive. Only a
+                finished query over a complete index proves the row is gone, so only then
+                does the first match take the highlight again.
             */
-            if (_searchHighlightIndex < 0 && 0 < _currentSearchResultItems.Count && (_searchHighlightGuid == null || complete))
+            if (_searchHighlightIndex < 0 && 0 < _currentSearchResultItems.Count && (_searchHighlightGuid == null || (complete && query.IsComplete)))
             {
                 _searchHighlightIndex = 0;
             }

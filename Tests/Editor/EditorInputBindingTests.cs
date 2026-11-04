@@ -593,6 +593,18 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         }
 
         [Test]
+        public void ShouldGiveTheCloseKeyFirstClaimInSearchHints()
+        {
+            DataVisualizerInputSettings input = new();
+            input.Navigation.CancelDragKey = KeyCode.UpArrow;
+            Assert.That(
+                input.SearchResultHint(),
+                Is.EqualTo("DownArrow select · Return/KeypadEnter open · UpArrow close"),
+                "Close is routed first, so it keeps the key and select falls back to its partner."
+            );
+        }
+
+        [Test]
         public void ShouldRoundTripCustomInputAndKeepDefaultsIndependent()
         {
             DataVisualizerInputSettings first = new();

@@ -69,17 +69,17 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         }
 
         /*
-            Adds one search command to the hint. A cleared key cannot run the command, and a
-            printable key types into a focused search field instead, so both drop out. A
-            command keeps its alternate key when the primary one is unusable.
+            Names one search command. A cleared key cannot run the command, and a printable key
+            types into a focused search field instead, so both drop out. A command keeps its
+            alternate key when the primary one is unusable.
         */
-        private static void AddSearchHint(List<string> parts, HashSet<KeyCode> claimed, KeyCode primary, KeyCode alternate, string action, bool allowPrintable)
+        private static string BuildSearchHint(HashSet<KeyCode> claimed, KeyCode primary, KeyCode alternate, string action, bool allowPrintable)
         {
             bool hasPrimary = IsSearchHintKey(primary, claimed, allowPrintable);
             bool hasAlternate = alternate != primary && IsSearchHintKey(alternate, claimed, allowPrintable);
             if (!hasPrimary && !hasAlternate)
             {
-                return;
+                return null;
             }
             if (hasPrimary)
             {
@@ -89,14 +89,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             {
                 claimed.Add(alternate);
             }
-            if (hasPrimary && hasAlternate)
-            {
-                parts.Add($"{primary}/{alternate} {action}");
-            }
-            else
-            {
-                parts.Add($"{(hasPrimary ? primary : alternate)} {action}");
-            }
+            return hasPrimary && hasAlternate ? $"{primary}/{alternate} {action}" : $"{(hasPrimary ? primary : alternate)} {action}";
         }
 
         private static bool IsSearchHintKey(KeyCode key, HashSet<KeyCode> claimed, bool allowPrintable)
@@ -151,19 +144,32 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         /*
             Names the keys that drive the quick search results and the browse-all list. Each
             command keeps whichever of its keys can run in the active context: a cleared key
-            drops out, a key another command already runs drops out (navigation is handled
-            before open), and, while the search field holds focus, a printable key drops out
-            because the field keeps it for text entry.
+            drops out, a key another command already runs drops out, and, while the search
+            field holds focus, a printable key drops out because the field keeps it for text
+            entry. Close is routed before select and open, so it claims its key first even
+            though the hint reads select, open, close.
         */
         public string SearchResultHint(bool searchFieldHasFocus = true)
         {
             CatalogInputSettings navigation = Navigation;
             bool allowPrintable = !searchFieldHasFocus;
-            List<string> parts = new(3);
             HashSet<KeyCode> claimed = new();
-            AddSearchHint(parts, claimed, navigation.PreviousTypeKey, navigation.NextTypeKey, "select", allowPrintable);
-            AddSearchHint(parts, claimed, navigation.SelectKey, navigation.AlternateSelectKey, "open", allowPrintable);
-            AddSearchHint(parts, claimed, navigation.CancelDragKey, KeyCode.None, "close", allowPrintable);
+            string close = BuildSearchHint(claimed, navigation.CancelDragKey, KeyCode.None, "close", allowPrintable);
+            string select = BuildSearchHint(claimed, navigation.PreviousTypeKey, navigation.NextTypeKey, "select", allowPrintable);
+            string open = BuildSearchHint(claimed, navigation.SelectKey, navigation.AlternateSelectKey, "open", allowPrintable);
+            List<string> parts = new(3);
+            if (select != null)
+            {
+                parts.Add(select);
+            }
+            if (open != null)
+            {
+                parts.Add(open);
+            }
+            if (close != null)
+            {
+                parts.Add(close);
+            }
             return string.Join(" · ", parts);
         }
 
