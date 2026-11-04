@@ -192,8 +192,9 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             ListView list = window.rootVisualElement.Q<ListView>("object-listview");
             Assert.That(empty.resolvedStyle.display, Is.EqualTo(DisplayStyle.Flex));
             Assert.That(list.resolvedStyle.display, Is.EqualTo(DisplayStyle.None));
-            Assert.That(empty.text, Does.Contain("Missing"), "The message names the filter labels that hide every object.");
-            Assert.That(empty.text, Does.Contain("Labels"), "The message names where to clear or edit the filter.");
+            Assert.That(empty.text, Does.Contain("Clear or edit the label filter in Labels"), "The message names where to clear or edit the filter.");
+            Assert.That(empty.tooltip, Does.Contain("Missing"), "The tooltip names the filter labels that hide every object.");
+            Assert.That(empty.enableRichText, Is.False, "A filter label must render verbatim, not as markup.");
         }
 
         [UnityTest]

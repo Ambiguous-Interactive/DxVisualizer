@@ -1008,10 +1008,17 @@
     min-height: 0;
 }
 
+/*
+    The label sits outside a scroll container, so a long message must not grow
+    past the pane and hide the controls above it. Cap the height and let the
+    text clip instead.
+*/
 .empty-object-list-label {
     color: var(--dataviz-muted);
     white-space: normal;
     margin: 10px;
+    max-height: 120px;
+    overflow: hidden;
 }
 
 .type-selection-list-item {
