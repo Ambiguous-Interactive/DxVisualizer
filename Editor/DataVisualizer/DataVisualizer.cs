@@ -3841,11 +3841,12 @@ namespace WallstopStudios.DataVisualizer.Editor
                 nothing until an arrow key picked a row. Highlight the first match so the
                 select key opens it immediately, then name the keys below the list.
 
-                A preferred row that left this snapshot keeps its GUID instead: a partial
-                refresh must not replace the user's choice with the first row, because the
-                row can return in a later snapshot.
+                A preferred row that left a partial snapshot keeps its GUID instead: the row
+                can return in a later snapshot, and the user's choice must survive. Once the
+                index is complete, an absent row is gone for good, so the first match takes
+                the highlight again.
             */
-            if (_searchHighlightIndex < 0 && _searchHighlightGuid == null && 0 < _currentSearchResultItems.Count)
+            if (_searchHighlightIndex < 0 && 0 < _currentSearchResultItems.Count && (_searchHighlightGuid == null || complete))
             {
                 _searchHighlightIndex = 0;
             }

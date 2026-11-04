@@ -140,7 +140,11 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         */
         public void RefreshKeyHint()
         {
-            _keyHint.text = 0 < _hits.Count ? Input.SearchResultHint() : string.Empty;
+            /*
+                The browse-all list takes focus when it opens, so printable bindings run
+                here even though the search field keeps them for text entry.
+            */
+            _keyHint.text = 0 < _hits.Count ? Input.SearchResultHint(searchFieldHasFocus: false) : string.Empty;
         }
 
         public bool HandleNavigation(KeyCode key)

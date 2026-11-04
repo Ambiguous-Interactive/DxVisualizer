@@ -121,7 +121,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             DataVisualizerInputSettings input = new();
             AssetSearchResultsView view = new(_ => { }, () => { }, () => { }, () => input);
             view.SetResults(MakeHits(2), "2 matches");
-            Assert.That(view.Q<Label>("search-key-hint").text, Is.EqualTo(input.SearchResultHint()));
+            Assert.That(view.Q<Label>("search-key-hint").text, Is.EqualTo(input.SearchResultHint(searchFieldHasFocus: false)));
             input.Navigation.SelectKey = KeyCode.KeypadEnter;
             view.RefreshKeyHint();
             Assert.That(view.Q<Label>("search-key-hint").text, Is.EqualTo("UpArrow/DownArrow select · KeypadEnter open · Escape close"), "A binding change re-reads the hint.");

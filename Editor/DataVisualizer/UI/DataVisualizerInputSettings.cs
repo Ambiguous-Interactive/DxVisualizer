@@ -70,25 +70,38 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         /*
             Adds one search command to the hint. A cleared key cannot run the command, and a
-            printable key types into the focused search field instead, so both drop out. A
+            printable key types into a focused search field instead, so both drop out. A
             command keeps its alternate key when the primary one is unusable.
         */
-        private static void AddSearchHint(List<string> parts, KeyCode primary, KeyCode alternate, string action)
+        private static void AddSearchHint(List<string> parts, HashSet<KeyCode> claimed, KeyCode primary, KeyCode alternate, string action, bool allowPrintable)
         {
-            bool hasPrimary = primary != KeyCode.None && !CatalogInputSettings.IsPrintableKey(primary);
-            bool hasAlternate = alternate != KeyCode.None && alternate != primary && !CatalogInputSettings.IsPrintableKey(alternate);
+            bool hasPrimary = IsSearchHintKey(primary, claimed, allowPrintable);
+            bool hasAlternate = alternate != primary && IsSearchHintKey(alternate, claimed, allowPrintable);
+            if (!hasPrimary && !hasAlternate)
+            {
+                return;
+            }
+            if (hasPrimary)
+            {
+                claimed.Add(primary);
+            }
+            if (hasAlternate)
+            {
+                claimed.Add(alternate);
+            }
             if (hasPrimary && hasAlternate)
             {
                 parts.Add($"{primary}/{alternate} {action}");
             }
-            else if (hasPrimary)
+            else
             {
-                parts.Add($"{primary} {action}");
+                parts.Add($"{(hasPrimary ? primary : alternate)} {action}");
             }
-            else if (hasAlternate)
-            {
-                parts.Add($"{alternate} {action}");
-            }
+        }
+
+        private static bool IsSearchHintKey(KeyCode key, HashSet<KeyCode> claimed, bool allowPrintable)
+        {
+            return key != KeyCode.None && !claimed.Contains(key) && (allowPrintable || !CatalogInputSettings.IsPrintableKey(key));
         }
 
         public bool HandleButton(KeyDownEvent evt, CatalogInputSettings navigation = null)
@@ -137,17 +150,20 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
 
         /*
             Names the keys that drive the quick search results and the browse-all list. Each
-            command keeps whichever of its keys can run from the search box: a cleared key
-            drops out, and a printable key drops out because the focused field keeps it for
-            text entry.
+            command keeps whichever of its keys can run in the active context: a cleared key
+            drops out, a key another command already runs drops out (navigation is handled
+            before open), and, while the search field holds focus, a printable key drops out
+            because the field keeps it for text entry.
         */
-        public string SearchResultHint()
+        public string SearchResultHint(bool searchFieldHasFocus = true)
         {
             CatalogInputSettings navigation = Navigation;
+            bool allowPrintable = !searchFieldHasFocus;
             List<string> parts = new(3);
-            AddSearchHint(parts, navigation.PreviousTypeKey, navigation.NextTypeKey, "select");
-            AddSearchHint(parts, navigation.SelectKey, navigation.AlternateSelectKey, "open");
-            AddSearchHint(parts, navigation.CancelDragKey, KeyCode.None, "close");
+            HashSet<KeyCode> claimed = new();
+            AddSearchHint(parts, claimed, navigation.PreviousTypeKey, navigation.NextTypeKey, "select", allowPrintable);
+            AddSearchHint(parts, claimed, navigation.SelectKey, navigation.AlternateSelectKey, "open", allowPrintable);
+            AddSearchHint(parts, claimed, navigation.CancelDragKey, KeyCode.None, "close", allowPrintable);
             return string.Join(" · ", parts);
         }
 
