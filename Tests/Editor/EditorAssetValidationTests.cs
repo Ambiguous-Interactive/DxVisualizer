@@ -31,6 +31,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             serialized.FindProperty("_assetGuid").stringValue = id;
             serialized.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(asset);
+            AssetDatabase.SaveAssetIfDirty(asset);
             return AssetDatabase.AssetPathToGUID(path);
         }
 
@@ -40,7 +41,6 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             using TestCleanupScope cleanup = new();
             string folder = CreateFolder(cleanup);
             CreateAsset(folder + "/Previous.asset", "previous");
-            AssetDatabase.SaveAssets();
             Func<bool> busy = AssetGuidDiscovery.AssetDatabaseBusyOverride;
             cleanup.Defer(() => AssetGuidDiscovery.AssetDatabaseBusyOverride = busy);
             UnityEngine.Object[] selection = Selection.objects;
@@ -114,7 +114,6 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             string first = CreateAsset(folder + "/First.asset", "authored");
             string second = CreateAsset(folder + "/Second.asset", "authored");
             string third = CreateAsset(folder + "/Third.asset", "AUTHORED");
-            AssetDatabase.SaveAssets();
             byte[] before = File.ReadAllBytes(folder + "/First.asset");
             using EditorAssetValidation validation = new(new[] { first, second, third, first.ToUpperInvariant() });
             validation.Advance(0);
@@ -143,7 +142,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             asset.reference = AssetDatabase.LoadMainAssetAtPath(AssetDatabase.GUIDToAssetPath(target));
             asset.exposedReference = new ExposedReference<UnityEngine.Object> { defaultValue = asset.reference };
             EditorUtility.SetDirty(asset);
-            AssetDatabase.SaveAssets();
+            AssetDatabase.SaveAssetIfDirty(asset);
             AssetDatabase.DeleteAsset(folder + "/Target.asset");
             AssetDatabase.ImportAsset(folder + "/Missing.asset", ImportAssetOptions.ForceUpdate);
             EditorOnlyCreationData ordinary = ScriptableObject.CreateInstance<EditorOnlyCreationData>();
@@ -184,7 +183,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             asset.node = new AssetValidationTestNode();
             asset.node.next = asset.node;
             EditorUtility.SetDirty(asset);
-            AssetDatabase.SaveAssets();
+            AssetDatabase.SaveAssetIfDirty(asset);
             using EditorAssetValidation validation = new(new[] { guid });
             validation.Advance(1000);
             Assert.That(validation.IsComplete, Is.True);
@@ -217,7 +216,6 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             string folder = CreateFolder(cleanup);
             CreateAsset(folder + "/First.asset", "authored");
             CreateAsset(folder + "/Second.asset", "authored");
-            AssetDatabase.SaveAssets();
             UnityEngine.Object[] selection = Selection.objects;
             cleanup.Defer(() => Selection.objects = selection);
             DataVisualizer window = ScriptableObject.CreateInstance<DataVisualizer>();
@@ -248,7 +246,6 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             using TestCleanupScope cleanup = new();
             string folder = CreateFolder(cleanup);
             CreateAsset(folder + "/Clean.asset", "clean");
-            AssetDatabase.SaveAssets();
             Func<bool> busy = AssetGuidDiscovery.AssetDatabaseBusyOverride;
             cleanup.Defer(() => AssetGuidDiscovery.AssetDatabaseBusyOverride = busy);
             UnityEngine.Object[] selection = Selection.objects;
