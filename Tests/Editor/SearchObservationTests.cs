@@ -350,8 +350,16 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             string folder = "Assets/" + marker;
             AssetDatabase.CreateFolder("Assets", marker);
             cleanup.Defer(() => AssetDatabase.DeleteAsset(folder));
-            AssetDatabase.CreateAsset(ScriptableObject.CreateInstance<OperationLifecycleData>(), folder + "/" + marker + ".asset");
+            OperationLifecycleData asset = ScriptableObject.CreateInstance<OperationLifecycleData>();
+            AssetDatabase.CreateAsset(asset, folder + "/" + marker + ".asset");
             DataVisualizerWindow window = CreateTestWindow(cleanup);
+            /*
+                The host settings can assign an input profile with other bindings; the
+                snapshot above restores them, and null selects the package defaults.
+            */
+            DataVisualizerSettings settings = (DataVisualizerSettings)
+                typeof(DataVisualizerWindow).GetProperty("Settings", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(window);
+            settings.inputProfile = null;
             for (int tick = 0; tick < 1000 && !window.IsSearchIndexComplete; tick++)
             {
                 yield return null;
@@ -375,7 +383,12 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             enter.target = field;
             field.SendEvent(enter);
             Assert.That(field.value, Is.EqualTo(string.Empty));
-            Assert.That(window.ActiveSearchText == null);
+            FieldInfo selectedObject = typeof(DataVisualizerWindow).GetField("_selectedObject", BindingFlags.Instance | BindingFlags.NonPublic);
+            for (int tick = 0; tick < 1000 && !ReferenceEquals(selectedObject.GetValue(window), asset); tick++)
+            {
+                yield return null;
+            }
+            Assert.That(selectedObject.GetValue(window), Is.SameAs(asset), "The select key must open the highlighted match.");
         }
 
         [UnityTest]

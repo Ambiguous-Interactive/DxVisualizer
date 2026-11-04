@@ -2832,7 +2832,26 @@ namespace WallstopStudios.DataVisualizer.Editor
                 SetActiveObject(selectedObject, preserveProcessorSelection: processorSelection.HasSelectionIntent);
             }
             _namespaceController.SelectType(this, selectedType);
+            RefreshSearchKeyHints();
             _needsRefresh = false;
+        }
+
+        /*
+            An assigned input profile can change while a search view stays open. The hints
+            name bindings, so a settings refresh must re-read them instead of keeping the
+            text that was built for the previous profile.
+        */
+        private void RefreshSearchKeyHints()
+        {
+            if (_activePopover == _searchPopover && _searchPopover != null)
+            {
+                Label hint = _searchPopover.Q<Label>("search-key-hint");
+                if (hint != null)
+                {
+                    hint.text = Input.SearchResultHint();
+                }
+            }
+            _allSearchResultsView?.RefreshKeyHint();
         }
 
         private VisualElement FindAncestorNamespaceGroup(VisualElement startingElement)
@@ -3797,8 +3816,12 @@ namespace WallstopStudios.DataVisualizer.Editor
                 Nothing told the user that the rows take keyboard input, and Enter did
                 nothing until an arrow key picked a row. Highlight the first match so the
                 select key opens it immediately, then name the keys below the list.
+
+                A preferred row that left this snapshot keeps its GUID instead: a partial
+                refresh must not replace the user's choice with the first row, because the
+                row can return in a later snapshot.
             */
-            if (_searchHighlightIndex < 0 && 0 < _currentSearchResultItems.Count)
+            if (_searchHighlightIndex < 0 && _searchHighlightGuid == null && 0 < _currentSearchResultItems.Count)
             {
                 _searchHighlightIndex = 0;
             }

@@ -68,6 +68,29 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             return $"{action} ({shortcut})";
         }
 
+        /*
+            Adds one search command to the hint. A cleared key cannot run the command, and a
+            printable key types into the focused search field instead, so both drop out. A
+            command keeps its alternate key when the primary one is unusable.
+        */
+        private static void AddSearchHint(List<string> parts, KeyCode primary, KeyCode alternate, string action)
+        {
+            bool hasPrimary = primary != KeyCode.None && !CatalogInputSettings.IsPrintableKey(primary);
+            bool hasAlternate = alternate != KeyCode.None && alternate != primary && !CatalogInputSettings.IsPrintableKey(alternate);
+            if (hasPrimary && hasAlternate)
+            {
+                parts.Add($"{primary}/{alternate} {action}");
+            }
+            else if (hasPrimary)
+            {
+                parts.Add($"{primary} {action}");
+            }
+            else if (hasAlternate)
+            {
+                parts.Add($"{alternate} {action}");
+            }
+        }
+
         public bool HandleButton(KeyDownEvent evt, CatalogInputSettings navigation = null)
         {
             VisualElement target = evt.target as VisualElement;
@@ -113,26 +136,18 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         }
 
         /*
-            Names the keys that drive the quick search results and the browse-all list. A
-            cleared key cannot run the command, so it drops out instead of printing an
-            unbound placeholder, matching the Actions hint.
+            Names the keys that drive the quick search results and the browse-all list. Each
+            command keeps whichever of its keys can run from the search box: a cleared key
+            drops out, and a printable key drops out because the focused field keeps it for
+            text entry.
         */
         public string SearchResultHint()
         {
             CatalogInputSettings navigation = Navigation;
             List<string> parts = new(3);
-            if (navigation.PreviousTypeKey != KeyCode.None && navigation.NextTypeKey != KeyCode.None)
-            {
-                parts.Add($"{navigation.PreviousTypeKey}/{navigation.NextTypeKey} select");
-            }
-            if (navigation.SelectKey != KeyCode.None)
-            {
-                parts.Add($"{navigation.SelectKey} open");
-            }
-            if (navigation.CancelDragKey != KeyCode.None)
-            {
-                parts.Add($"{navigation.CancelDragKey} close");
-            }
+            AddSearchHint(parts, navigation.PreviousTypeKey, navigation.NextTypeKey, "select");
+            AddSearchHint(parts, navigation.SelectKey, navigation.AlternateSelectKey, "open");
+            AddSearchHint(parts, navigation.CancelDragKey, KeyCode.None, "close");
             return string.Join(" · ", parts);
         }
 

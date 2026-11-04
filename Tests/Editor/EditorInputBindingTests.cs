@@ -557,16 +557,19 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         }
 
         [Test]
-        public void ShouldNameTheCurrentSearchResultKeysAndDropClearedOnes()
+        public void ShouldNameTheCurrentSearchResultKeysAndDropUnusableOnes()
         {
             DataVisualizerInputSettings input = new();
-            Assert.That(input.SearchResultHint(), Is.EqualTo("UpArrow/DownArrow select · Return open · Escape close"));
-            input.Navigation.NextTypeKey = KeyCode.N;
-            input.Navigation.SelectKey = KeyCode.Space;
-            Assert.That(input.SearchResultHint(), Is.EqualTo("UpArrow/N select · Space open · Escape close"), "The hint reads the current bindings.");
+            Assert.That(input.SearchResultHint(), Is.EqualTo("UpArrow/DownArrow select · Return/KeypadEnter open · Escape close"));
             input.Navigation.PreviousTypeKey = KeyCode.None;
+            Assert.That(input.SearchResultHint(), Is.EqualTo("DownArrow select · Return/KeypadEnter open · Escape close"), "A cleared key keeps its partner in the hint.");
+            input.Navigation.NextTypeKey = KeyCode.N;
+            Assert.That(input.SearchResultHint(), Is.EqualTo("Return/KeypadEnter open · Escape close"), "A printable key types into the search field, so the hint omits it.");
+            input.Navigation.SelectKey = KeyCode.None;
             input.Navigation.CancelDragKey = KeyCode.None;
-            Assert.That(input.SearchResultHint(), Is.EqualTo("Space open"), "A cleared key cannot run its command, so the hint drops it.");
+            Assert.That(input.SearchResultHint(), Is.EqualTo("KeypadEnter open"), "The alternate open key survives and cleared keys drop out.");
+            input.Navigation.SelectKey = KeyCode.KeypadEnter;
+            Assert.That(input.SearchResultHint(), Is.EqualTo("KeypadEnter open"), "A key does not repeat as its own alternate.");
         }
 
         [Test]

@@ -108,11 +108,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                 _hits.Add(hits[index]);
             }
             _status.text = status;
-            /*
-                The list takes the catalog's select/open/close keys, so name the current
-                bindings beside it and keep them current after a profile change.
-            */
-            _keyHint.text = 0 < _hits.Count ? Input.SearchResultHint() : string.Empty;
+            RefreshKeyHint();
             bool changed = reset || previousCount != _hits.Count;
             if (changed)
             {
@@ -136,6 +132,15 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                 }
             }
             return changed;
+        }
+
+        /*
+            The list takes the catalog's select/open/close keys, so name the current
+            bindings beside it and keep them current after a profile change.
+        */
+        public void RefreshKeyHint()
+        {
+            _keyHint.text = 0 < _hits.Count ? Input.SearchResultHint() : string.Empty;
         }
 
         public bool HandleNavigation(KeyCode key)
