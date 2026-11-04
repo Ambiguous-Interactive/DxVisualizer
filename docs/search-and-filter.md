@@ -63,9 +63,10 @@ The workspace opens inside DxVisualizer and uses the active theme. **Back to ass
 workspace; reopen it to capture new settings. An empty query matches every asset within its saved scope. For example, save an armor type with labels `Reviewed` and `Urgent` to
 revisit urgent reviewed armor. A missing type gives a recovery message and never expands scope.
 
-**Indexing (partial)** lasts until discovery finishes; **Cancel** retains partial results. **Previous results** and **Next results** reach every available match. Choose a result to
-select and ping it in Project; Apply again after project changes. Searches are private in user state by default. The project-persistence switch copies them in either direction,
-preserving query semantics and labels. Older state without searches starts empty.
+**Indexing (partial)** lasts until discovery finishes; **Cancel** retains partial results. **Previous results** and **Next results** reach every available match. The results area
+names the current state: no applied search, matches still arriving, or no matches for the applied search. Choose a result to select and ping it in Project; Apply again after
+project changes. Searches are private in user state by default. The project-persistence switch copies them in either direction, preserving query semantics and labels. Older state
+without searches starts empty.
 
 ![Named query with its exact type and label expression](images/saved-searches.png)
 

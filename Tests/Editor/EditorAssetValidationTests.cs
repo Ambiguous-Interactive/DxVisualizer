@@ -31,6 +31,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             serialized.FindProperty("_assetGuid").stringValue = id;
             serialized.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(asset);
+            AssetDatabase.SaveAssetIfDirty(asset);
             return AssetDatabase.AssetPathToGUID(path);
         }
 
@@ -40,7 +41,6 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             using TestCleanupScope cleanup = new();
             string folder = CreateFolder(cleanup);
             CreateAsset(folder + "/Previous.asset", "previous");
-            AssetDatabase.SaveAssets();
             Func<bool> busy = AssetGuidDiscovery.AssetDatabaseBusyOverride;
             cleanup.Defer(() => AssetGuidDiscovery.AssetDatabaseBusyOverride = busy);
             UnityEngine.Object[] selection = Selection.objects;
@@ -114,7 +114,6 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             string first = CreateAsset(folder + "/First.asset", "authored");
             string second = CreateAsset(folder + "/Second.asset", "authored");
             string third = CreateAsset(folder + "/Third.asset", "AUTHORED");
-            AssetDatabase.SaveAssets();
             byte[] before = File.ReadAllBytes(folder + "/First.asset");
             using EditorAssetValidation validation = new(new[] { first, second, third, first.ToUpperInvariant() });
             validation.Advance(0);
@@ -143,7 +142,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             asset.reference = AssetDatabase.LoadMainAssetAtPath(AssetDatabase.GUIDToAssetPath(target));
             asset.exposedReference = new ExposedReference<UnityEngine.Object> { defaultValue = asset.reference };
             EditorUtility.SetDirty(asset);
-            AssetDatabase.SaveAssets();
+            AssetDatabase.SaveAssetIfDirty(asset);
             AssetDatabase.DeleteAsset(folder + "/Target.asset");
             AssetDatabase.ImportAsset(folder + "/Missing.asset", ImportAssetOptions.ForceUpdate);
             EditorOnlyCreationData ordinary = ScriptableObject.CreateInstance<EditorOnlyCreationData>();
@@ -184,7 +183,7 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             asset.node = new AssetValidationTestNode();
             asset.node.next = asset.node;
             EditorUtility.SetDirty(asset);
-            AssetDatabase.SaveAssets();
+            AssetDatabase.SaveAssetIfDirty(asset);
             using EditorAssetValidation validation = new(new[] { guid });
             validation.Advance(1000);
             Assert.That(validation.IsComplete, Is.True);
@@ -197,9 +196,90 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             window.CreateGUI();
             window.OpenAssetValidation();
             AssetValidationPanel workspace = window.rootVisualElement.Q<AssetValidationPanel>();
+            Label emptyState = window.rootVisualElement.Q<Label>("validation-empty-state");
+            ListView results = workspace.Q<ListView>();
+            Assert.That(emptyState.text, Is.EqualTo("Select Project assets and run a validation to list findings here."));
+            Assert.That(emptyState.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(results.style.display.value, Is.EqualTo(DisplayStyle.None));
             Selection.objects = new UnityEngine.Object[] { asset };
             workspace.ValidateSelection();
             Assert.That(window.rootVisualElement.Q<Label>("validation-status").text, Is.EqualTo("Complete: 1/1 assets, 0 findings."));
+            Assert.That(emptyState.text, Is.EqualTo("No problems found in the checked assets."));
+            Assert.That(emptyState.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(results.style.display.value, Is.EqualTo(DisplayStyle.None));
+        }
+
+        [UnityTest]
+        public IEnumerator ShouldReplaceTheEmptyStateWithReportedFindings()
+        {
+            using TestCleanupScope cleanup = new();
+            string folder = CreateFolder(cleanup);
+            CreateAsset(folder + "/First.asset", "authored");
+            CreateAsset(folder + "/Second.asset", "authored");
+            UnityEngine.Object[] selection = Selection.objects;
+            cleanup.Defer(() => Selection.objects = selection);
+            DataVisualizer window = ScriptableObject.CreateInstance<DataVisualizer>();
+            cleanup.Defer(() => window.Close());
+            window.Show();
+            window.CreateGUI();
+            window.OpenAssetValidation();
+            AssetValidationPanel workspace = window.rootVisualElement.Q<AssetValidationPanel>();
+            Label status = window.rootVisualElement.Q<Label>("validation-status");
+            Label emptyState = window.rootVisualElement.Q<Label>("validation-empty-state");
+            ListView results = workspace.Q<ListView>();
+            Selection.objects = new[] { AssetDatabase.LoadMainAssetAtPath(folder + "/First.asset"), AssetDatabase.LoadMainAssetAtPath(folder + "/Second.asset") };
+            workspace.ValidateSelection();
+            double deadline = EditorApplication.timeSinceStartup + 3;
+            while (status.text.StartsWith("Processing", StringComparison.Ordinal) && EditorApplication.timeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+            Assert.That(status.text, Does.StartWith("Complete: 2/2 assets, "));
+            Assert.That(emptyState.style.display.value, Is.EqualTo(DisplayStyle.None), "Findings take the place of the empty message.");
+            Assert.That(results.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(results.itemsSource.Count, Is.Positive);
+        }
+
+        [UnityTest]
+        public IEnumerator ShouldExplainACancelledValidationInTheReportArea()
+        {
+            using TestCleanupScope cleanup = new();
+            string folder = CreateFolder(cleanup);
+            CreateAsset(folder + "/Clean.asset", "clean");
+            Func<bool> busy = AssetGuidDiscovery.AssetDatabaseBusyOverride;
+            cleanup.Defer(() => AssetGuidDiscovery.AssetDatabaseBusyOverride = busy);
+            UnityEngine.Object[] selection = Selection.objects;
+            cleanup.Defer(() => Selection.objects = selection);
+            DataVisualizer window = ScriptableObject.CreateInstance<DataVisualizer>();
+            cleanup.Defer(() => window.Close());
+            window.Show();
+            window.CreateGUI();
+            window.OpenAssetValidation();
+            AssetValidationPanel workspace = window.rootVisualElement.Q<AssetValidationPanel>();
+            Label status = window.rootVisualElement.Q<Label>("validation-status");
+            Label emptyState = window.rootVisualElement.Q<Label>("validation-empty-state");
+            Selection.objects = new[] { AssetDatabase.LoadMainAssetAtPath(folder + "/Clean.asset") };
+            AssetGuidDiscovery.AssetDatabaseBusyOverride = () => true;
+            workspace.ValidateSelection();
+            Assert.That(status.text, Does.StartWith("Processing"));
+            Button cancel = null;
+            foreach (Button button in workspace.Query<Button>().ToList())
+            {
+                if (string.Equals(button.text, "Cancel validation", StringComparison.Ordinal))
+                {
+                    cancel = button;
+                }
+            }
+            Assert.That(cancel != null);
+            using (NavigationSubmitEvent submit = NavigationSubmitEvent.GetPooled())
+            {
+                submit.target = cancel;
+                cancel.SendEvent(submit);
+            }
+            yield return null;
+            Assert.That(status.text, Does.StartWith("Cancelled"));
+            Assert.That(emptyState.text, Is.EqualTo("No findings in the assets checked before cancellation."));
+            Assert.That(emptyState.style.display.value, Is.EqualTo(DisplayStyle.Flex));
         }
     }
 }

@@ -1,10 +1,12 @@
 namespace WallstopStudios.DataVisualizer.Tests.Editor
 {
     using System;
+    using System.Collections;
     using System.IO;
     using NUnit.Framework;
     using UnityEditor;
     using UnityEngine;
+    using UnityEngine.TestTools;
     using UnityEngine.UIElements;
     using WallstopStudios.DataVisualizer.Editor;
     using WallstopStudios.DataVisualizer.Editor.Data;
@@ -237,6 +239,162 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             workspace.Q<DropdownField>("saved-search-list").index = 0;
             workspace.DeleteSelected();
             Assert.That(owner.CopySavedSearches(), Is.Empty);
+        }
+
+        [Test]
+        public void ShouldExplainWhenNoSavedSearchIsApplied()
+        {
+            using TestCleanupScope cleanup = new();
+            DataVisualizer owner = ScriptableObject.CreateInstance<DataVisualizer>();
+            cleanup.Defer(owner.Close);
+            owner.Show();
+            owner.CreateGUI();
+            var original = owner.CopySavedSearches();
+            cleanup.Defer(() => owner.SaveSearches(original));
+            owner.SaveSearches(new());
+            SavedAssetSearchPanel workspace = owner.OpenSavedSearches();
+            Label emptyState = workspace.Q<Label>("saved-search-empty-state");
+            ListView results = workspace.Q<ListView>();
+            Assert.That(emptyState.text, Does.Contain("No saved search is applied"));
+            Assert.That(emptyState.text, Does.Contain("Save current search"));
+            Assert.That(emptyState.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(results.style.display.value, Is.EqualTo(DisplayStyle.None), "An empty message replaces the empty list box.");
+        }
+
+        [UnityTest]
+        public IEnumerator ShouldExplainASavedSearchWithNoMatches()
+        {
+            using TestCleanupScope cleanup = new();
+            DataVisualizer owner = ScriptableObject.CreateInstance<DataVisualizer>();
+            cleanup.Defer(owner.Close);
+            owner.Show();
+            owner.CreateGUI();
+            var original = owner.CopySavedSearches();
+            cleanup.Defer(() => owner.SaveSearches(original));
+            owner.SaveSearches(
+                new()
+                {
+                    new SavedAssetSearch
+                    {
+                        name = "No matches",
+                        query = "zzzz-no-such-text",
+                        typeIdentity = typeof(TestDataObject).AssemblyQualifiedName,
+                    },
+                }
+            );
+            SavedAssetSearchPanel workspace = owner.OpenSavedSearches();
+            Label status = workspace.Q<Label>("saved-search-status");
+            Label emptyState = workspace.Q<Label>("saved-search-empty-state");
+            ListView results = workspace.Q<ListView>();
+            workspace.Q<DropdownField>("saved-search-list").index = 0;
+            workspace.ApplySelected();
+            Assert.That(emptyState.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+            double deadline = EditorApplication.timeSinceStartup + 10;
+            while (!status.text.StartsWith("Complete", StringComparison.Ordinal) && EditorApplication.timeSinceStartup < deadline)
+            {
+                workspace.AdvanceQuery();
+                yield return null;
+            }
+            Assert.That(status.text, Does.StartWith("Complete"));
+            Assert.That(status.text, Does.Contain("0 matches"));
+            Assert.That(emptyState.text, Is.EqualTo("This saved search matches no assets."));
+            Assert.That(emptyState.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(results.style.display.value, Is.EqualTo(DisplayStyle.None));
+        }
+
+        [UnityTest]
+        public IEnumerator ShouldShowMatchingResultsAndHideTheEmptyState()
+        {
+            using TestCleanupScope cleanup = new();
+            string folder = "Assets/SavedSearchPanelTests-" + Guid.NewGuid().ToString("N");
+            cleanup.Defer(() => AssetDatabase.DeleteAsset(folder));
+            AssetDatabase.CreateFolder("Assets", folder.Substring("Assets/".Length));
+            string name = "Needle" + Guid.NewGuid().ToString("N");
+            TestDataObject asset = ScriptableObject.CreateInstance<TestDataObject>();
+            AssetDatabase.CreateAsset(asset, folder + "/" + name + ".asset");
+            AssetDatabase.SaveAssetIfDirty(asset);
+            DataVisualizer owner = ScriptableObject.CreateInstance<DataVisualizer>();
+            cleanup.Defer(owner.Close);
+            owner.Show();
+            owner.CreateGUI();
+            var original = owner.CopySavedSearches();
+            cleanup.Defer(() => owner.SaveSearches(original));
+            owner.SaveSearches(
+                new()
+                {
+                    new SavedAssetSearch
+                    {
+                        name = "Matches",
+                        query = name,
+                        typeIdentity = typeof(TestDataObject).AssemblyQualifiedName,
+                    },
+                }
+            );
+            SavedAssetSearchPanel workspace = owner.OpenSavedSearches();
+            Label status = workspace.Q<Label>("saved-search-status");
+            Label emptyState = workspace.Q<Label>("saved-search-empty-state");
+            ListView results = workspace.Q<ListView>();
+            Assert.That(emptyState.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(results.style.display.value, Is.EqualTo(DisplayStyle.None));
+            workspace.Q<DropdownField>("saved-search-list").index = 0;
+            workspace.ApplySelected();
+            double deadline = EditorApplication.timeSinceStartup + 10;
+            while (!status.text.StartsWith("Complete", StringComparison.Ordinal) && EditorApplication.timeSinceStartup < deadline)
+            {
+                workspace.AdvanceQuery();
+                yield return null;
+            }
+            Assert.That(status.text, Does.StartWith("Complete"));
+            Assert.That(status.text, Does.Contain("1 matches"));
+            Assert.That(emptyState.style.display.value, Is.EqualTo(DisplayStyle.None), "Rows take the place of the empty message.");
+            Assert.That(results.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(results.itemsSource.Count, Is.EqualTo(1));
+        }
+
+        [UnityTest]
+        public IEnumerator ShouldExplainACancelledSavedSearch()
+        {
+            using TestCleanupScope cleanup = new();
+            Func<bool> busy = AssetGuidDiscovery.AssetDatabaseBusyOverride;
+            cleanup.Defer(() => AssetGuidDiscovery.AssetDatabaseBusyOverride = busy);
+            DataVisualizer owner = ScriptableObject.CreateInstance<DataVisualizer>();
+            cleanup.Defer(owner.Close);
+            owner.Show();
+            owner.CreateGUI();
+            var original = owner.CopySavedSearches();
+            cleanup.Defer(() => owner.SaveSearches(original));
+            owner.SaveSearches(
+                new()
+                {
+                    new SavedAssetSearch { name = "Pending", typeIdentity = typeof(TestDataObject).AssemblyQualifiedName },
+                }
+            );
+            SavedAssetSearchPanel workspace = owner.OpenSavedSearches();
+            Label status = workspace.Q<Label>("saved-search-status");
+            Label emptyState = workspace.Q<Label>("saved-search-empty-state");
+            workspace.Q<DropdownField>("saved-search-list").index = 0;
+            AssetGuidDiscovery.AssetDatabaseBusyOverride = () => true;
+            workspace.ApplySelected();
+            yield return null;
+            Assert.That(status.text, Does.StartWith("Waiting for editor"));
+            Button cancel = null;
+            foreach (Button button in workspace.Query<Button>().ToList())
+            {
+                if (string.Equals(button.text, "Cancel search", StringComparison.Ordinal))
+                {
+                    cancel = button;
+                }
+            }
+            Assert.That(cancel != null);
+            using (NavigationSubmitEvent submit = NavigationSubmitEvent.GetPooled())
+            {
+                submit.target = cancel;
+                cancel.SendEvent(submit);
+            }
+            yield return null;
+            Assert.That(status.text, Does.StartWith("Cancelled"));
+            Assert.That(emptyState.text, Is.EqualTo("No matches in the records checked before the search stopped."));
+            Assert.That(emptyState.style.display.value, Is.EqualTo(DisplayStyle.Flex));
         }
     }
 }

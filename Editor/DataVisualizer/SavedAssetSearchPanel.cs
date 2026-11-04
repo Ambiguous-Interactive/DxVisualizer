@@ -23,6 +23,7 @@ namespace WallstopStudios.DataVisualizer.Editor
         private Label _status;
         private Label _message;
         private Label _resultScope;
+        private Label _emptyState;
         private ListView _results;
         private readonly List<EditorAssetRecord> _rows = new();
         private int _selected = -1;
@@ -122,6 +123,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                 _offset = 0;
                 _rows.Clear();
                 _results.RefreshItems();
+                UpdateResultEmptyState();
                 AdvanceQuery();
             }
             catch (Exception error)
@@ -156,6 +158,27 @@ namespace WallstopStudios.DataVisualizer.Editor
                 _rows.AddRange(_query.GetPage(_offset, 1000));
                 _results.RefreshItems();
             }
+            UpdateResultEmptyState();
+        }
+
+        /*
+            A blank list box reads as a finished search with no results. Name the current
+            state instead: no applied search, matches still arriving, or no matches at all.
+        */
+        private void UpdateResultEmptyState()
+        {
+            bool hasRows = 0 < _rows.Count;
+            _results.style.display = hasRows ? DisplayStyle.Flex : DisplayStyle.None;
+            _emptyState.style.display = hasRows ? DisplayStyle.None : DisplayStyle.Flex;
+            if (hasRows)
+            {
+                return;
+            }
+            _emptyState.text =
+                _query == null ? "No saved search is applied. Choose a saved search above and select Apply, or name the current snapshot and select Save current search."
+                : _query.IsCancelled ? "No matches in the records checked before the search stopped."
+                : !_query.IsComplete ? "No matches in the available records yet. The search is still running."
+                : "This saved search matches no assets.";
         }
 
         private void BuildContent()
@@ -183,6 +206,9 @@ namespace WallstopStudios.DataVisualizer.Editor
             _message.AddToClassList(StyleConstants.AssetToolMessageClass);
             _resultScope = new Label { name = "saved-results-scope", style = { whiteSpace = WhiteSpace.Normal } };
             Add(_resultScope);
+            _emptyState = new Label { name = "saved-search-empty-state" };
+            _emptyState.AddToClassList(StyleConstants.AssetToolEmptyClass);
+            Add(_emptyState);
             _results = new ListView
             {
                 itemsSource = _rows,
@@ -227,6 +253,7 @@ namespace WallstopStudios.DataVisualizer.Editor
             _cancel = AddAction(paging, "Cancel search", "Keep partial results and stop indexing", CancelQuery);
             RefreshChoices();
             UpdateActions();
+            UpdateResultEmptyState();
             _scope.text = "Current snapshot\nQuery: " + _draft.query + "\nType: " + _draft.typeIdentity?.Split(',')[0] + "\nLabels: " + DescribeLabels(_draft.labels);
         }
 

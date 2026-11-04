@@ -14,6 +14,7 @@ namespace WallstopStudios.DataVisualizer.Editor.Styles
         public const string AssetToolResultsClass = "asset-tool-results";
         public const string AssetToolResultClass = "asset-tool-result";
         public const string AssetToolMessageClass = "asset-tool-message";
+        public const string AssetToolEmptyClass = "asset-tool-empty";
 
         public const string LabelFilterControlsClass = "label-filter-controls";
         public const string LabelFilterSummaryClass = "label-filter-summary";

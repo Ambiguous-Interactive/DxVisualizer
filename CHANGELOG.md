@@ -35,6 +35,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Add editor queries with exact type scopes and GUID pages. Preview explicit processor targets, cancel preparation, and inspect batch outcomes (#315).
 - Add Show all results to reach matches beyond the first 25, with virtualized rows, keyboard navigation, and a return to quick search (#311).
 - Highlight the first quick-search match so Enter opens it, and name the current select, open and close keys beside the results (#312).
+- Explain empty Saved searches and Asset validation results, naming how to start a search and reporting a clean run instead of a blank box (#312).
 
 ### Fixed
 
