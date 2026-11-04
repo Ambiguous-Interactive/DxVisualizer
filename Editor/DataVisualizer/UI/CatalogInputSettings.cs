@@ -65,7 +65,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         */
         public static bool IsPrintableKey(KeyCode key)
         {
-            if ((int)key >= (int)KeyCode.Space && (int)key <= (int)KeyCode.Tilde)
+            if ((int)KeyCode.Space <= (int)key && (int)key <= (int)KeyCode.Tilde)
             {
                 return true;
             }

@@ -645,6 +645,8 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             Assert.That(input.LabelSuggestionHint(), Is.EqualTo("UpArrow/DownArrow choose · Escape close"), "An unmodified focus binding claims its key.");
 
             input = new DataVisualizerInputSettings();
+            input.nextFocus = new EditorInputBinding(KeyCode.F6);
+            input.previousFocus = new EditorInputBinding(KeyCode.F7);
             input.Navigation.SelectKey = KeyCode.Tab;
             input.Navigation.AlternateSelectKey = KeyCode.None;
             Assert.That(
