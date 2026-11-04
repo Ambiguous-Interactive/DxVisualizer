@@ -2900,13 +2900,36 @@ namespace WallstopStudios.DataVisualizer.Editor
             }
             if (_activePopover == _inspectorLabelSuggestionsPopover && _inspectorLabelSuggestionsPopover != null)
             {
-                Label hint = _inspectorLabelSuggestionsPopover.Q<Label>("label-suggestion-key-hint");
-                if (hint != null)
-                {
-                    hint.text = Input.LabelSuggestionHint();
-                }
+                UpdateLabelSuggestionKeyHint();
             }
             _allSearchResultsView?.RefreshKeyHint();
+        }
+
+        /*
+            The caption appears only while it names a key that can run. Rebuilding the
+            suggestion list never leaves a stale caption, and a profile change that makes a
+            key available adds one to an already open list.
+        */
+        private void UpdateLabelSuggestionKeyHint()
+        {
+            if (_inspectorLabelSuggestionsPopover == null)
+            {
+                return;
+            }
+            string keyHint = Input.LabelSuggestionHint();
+            Label hint = _inspectorLabelSuggestionsPopover.Q<Label>("label-suggestion-key-hint");
+            if (string.IsNullOrWhiteSpace(keyHint))
+            {
+                hint?.RemoveFromHierarchy();
+                return;
+            }
+            if (hint == null)
+            {
+                hint = new Label { name = "label-suggestion-key-hint" };
+                hint.AddToClassList("label-suggestion-key-hint");
+                _inspectorLabelSuggestionsPopover.Add(hint);
+            }
+            hint.text = keyHint;
         }
 
         private VisualElement FindAncestorNamespaceGroup(VisualElement startingElement)
@@ -8904,13 +8927,7 @@ namespace WallstopStudios.DataVisualizer.Editor
                     _inspectorLabelSuggestionsPopover.Add(suggestionItem);
                     _currentLabelSuggestionItems.Add(suggestionItem);
                 }
-                string keyHint = Input.LabelSuggestionHint();
-                if (!string.IsNullOrWhiteSpace(keyHint))
-                {
-                    Label hint = new(keyHint) { name = "label-suggestion-key-hint" };
-                    hint.AddToClassList("label-suggestion-key-hint");
-                    _inspectorLabelSuggestionsPopover.Add(hint);
-                }
+                UpdateLabelSuggestionKeyHint();
             }
             else
             {

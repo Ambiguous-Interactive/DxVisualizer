@@ -60,11 +60,32 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             navigation or command binding on a letter, digit or punctuation key never runs
             from the search box. Hints must not advertise those keys. Unity numbers every
             printable key contiguously from Space to Tilde; control keys sit outside that
-            range.
+            range. The numeric keypad sits elsewhere and also sends a character, so its
+            digits and operators count as printable while its Enter key stays a submit key.
         */
         public static bool IsPrintableKey(KeyCode key)
         {
-            return (int)key >= (int)KeyCode.Space && (int)key <= (int)KeyCode.Tilde;
+            if ((int)key >= (int)KeyCode.Space && (int)key <= (int)KeyCode.Tilde)
+            {
+                return true;
+            }
+            return key
+                is KeyCode.Keypad0
+                    or KeyCode.Keypad1
+                    or KeyCode.Keypad2
+                    or KeyCode.Keypad3
+                    or KeyCode.Keypad4
+                    or KeyCode.Keypad5
+                    or KeyCode.Keypad6
+                    or KeyCode.Keypad7
+                    or KeyCode.Keypad8
+                    or KeyCode.Keypad9
+                    or KeyCode.KeypadPeriod
+                    or KeyCode.KeypadDivide
+                    or KeyCode.KeypadMultiply
+                    or KeyCode.KeypadMinus
+                    or KeyCode.KeypadPlus
+                    or KeyCode.KeypadEquals;
         }
 
         public static bool IsNativeNavigationKey(KeyCode key)

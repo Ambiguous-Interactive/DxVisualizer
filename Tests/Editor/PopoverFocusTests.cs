@@ -229,6 +229,17 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
             profile.Bindings.Navigation.PreviousTypeKey = KeyCode.None;
             InvokePrivate(window, "RefreshCommandKeyHints");
             Assert.That(hint.text, Is.EqualTo("DownArrow choose · F10 add · Escape close"), "A profile change re-reads the caption instead of keeping stale keys.");
+
+            profile.Bindings.Navigation.NextTypeKey = KeyCode.None;
+            profile.Bindings.Navigation.SelectKey = KeyCode.None;
+            profile.Bindings.Navigation.CancelDragKey = KeyCode.None;
+            InvokePrivate(window, "RefreshCommandKeyHints");
+            Assert.That(popover.Q<Label>("label-suggestion-key-hint") == null, "Cleared bindings remove the caption.");
+            profile.Bindings.Navigation.SelectKey = KeyCode.F10;
+            InvokePrivate(window, "RefreshCommandKeyHints");
+            Label rebuilt = popover.Q<Label>("label-suggestion-key-hint");
+            Assert.That(rebuilt != null, "A key that becomes available adds the caption to the open list.");
+            Assert.That(rebuilt.text, Is.EqualTo("F10 add"), "The rebuilt caption names the new key.");
         }
 
         [UnityTest]
