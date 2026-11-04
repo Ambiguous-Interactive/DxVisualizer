@@ -29,8 +29,8 @@ class WorkflowTests(unittest.TestCase):
         self.addCleanup(patch.stopall)
         patch.object(workflow, 'emit').start()
 
-    def result(self, text: str = '', code: int = 0) -> subprocess.CompletedProcess[str]:
-        return subprocess.CompletedProcess(['fixture'], code, text, '')
+    def result(self, text: str = '', code: int = 0, error: str = '') -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(['fixture'], code, text, error)
 
     def test_commands_capture_utf8_and_fail_closed(self) -> None:
         self.driver.environment['PYTHONIOENCODING'] = 'cp1252'
@@ -99,6 +99,17 @@ class WorkflowTests(unittest.TestCase):
                     body = Path(command[command.index('--body-file') + 1]).read_text()
                     self.assertTrue(body.startswith('DISCLOSURE: LLM-GENERATED TEXT\n'))
                     self.assertIn('1.2.3 to 1.2.4', body)
+
+    def test_denied_pull_request_creation_keeps_the_validated_branch(self) -> None:
+        policy = 'pull request create failed: GraphQL: GitHub Actions is not permitted to create or approve pull requests (createPullRequest)'
+        for error, fails in ((policy, False), ('gh: HTTP 502 Bad Gateway', True)):
+            with self.subTest(error=error), patch.object(self.driver, 'run', side_effect=[self.result('', 1), self.result('', 1, error)]) as run:
+                if fails:
+                    with self.assertRaises(ValueError):
+                        self.driver.open_pr()
+                else:
+                    self.driver.open_pr()
+                self.assertEqual(run.call_count, 2)
 
     def test_source_guards_reject_non_main_missing_merge_and_invalid_tags(self) -> None:
         for event, ref, head, merge, tag in (('workflow_dispatch', 'refs/heads/topic', '', '', ''),

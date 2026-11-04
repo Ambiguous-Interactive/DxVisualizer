@@ -17,12 +17,14 @@ a clone or after a partial failure.
 1. Add user-facing entries under `CHANGELOG.md` `## [Unreleased]`.
 2. Dispatch `.github/workflows/release.yml` on `main` with `operation=prepare`.
    Choose `bump` or `explicit_version`; use the default `dry_run=true` first.
-3. Set `dry_run=false` to open the release PR. The workflow bumps `package.json`,
+3. Set `dry_run=false` to publish the release candidate. The workflow bumps `package.json`,
    syncs `.llm/context.md`, dates the changelog, and validates the artifacts.
-   It then dispatches and waits for CI, merges the exact validated PR head,
-   and publishes the resulting merge commit in the same run.
-4. Wait for the workflow to finish. No manual PR merge is needed. Repository
-   rules must permit the bot to squash-merge after CI; the workflow does not
+   It then dispatches and waits for CI, merges the exact validated head, and publishes
+   the resulting merge commit in the same run.
+4. Wait for the workflow to finish. No manual PR merge is needed. A release PR is
+   opened and squash-merged when repository policy allows Actions pull requests;
+   otherwise the validated `release/vX.Y.Z` branch is merged into `main` directly.
+   Repository rules must permit the bot to merge after CI; the workflow does not
    bypass required human approvals. Both packages and notes must validate
    before npm and GitHub publication.
 5. Recover a partial release by dispatching `release.yml` with

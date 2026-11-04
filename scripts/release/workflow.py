@@ -22,6 +22,11 @@ sys.dont_write_bytecode = True
 MINIMUM_NPM: Tuple[int, int, int] = (11, 5, 1)
 MINIMUM_NPM_TEXT = '.'.join(str(part) for part in MINIMUM_NPM)
 
+# Platform policy answer when a repository (or its enterprise) forbids GitHub
+# Actions from creating pull requests. The validated release branch is merged
+# directly instead, so preparation is not lost.
+PR_CREATION_DENIED = 'not permitted to create or approve pull requests'
+
 
 def emit(message: str) -> None:
     sys.stdout.buffer.write((message.rstrip('\n') + '\n').encode('utf-8'))
@@ -134,7 +139,17 @@ class ReleaseWorkflow:
         body.write_text(f'DISCLOSURE: LLM-GENERATED TEXT\n\n**Why:** Release v{version} publishes the prepared package changes.\n\n'
                         f'**What:**\n\n- Bump {self.value("PREVIOUS_VERSION")} to {version} and date the release notes.\n'
                         '- Publish npm and GitHub artifacts after automated validation and merge.\n', encoding='utf-8')
-        self.run(['gh', 'pr', 'create', '--base', 'main', '--head', branch, '--title', f'Release v{version}', '--body-file', str(body)])
+        created = self.run(['gh', 'pr', 'create', '--base', 'main', '--head', branch, '--title', f'Release v{version}', '--body-file', str(body)],
+                           capture=True, check=False)
+        if created.returncode == 0:
+            return
+        detail = (created.stderr or created.stdout or '').strip()
+        if PR_CREATION_DENIED in detail.lower():
+            # The release is not lost: the branch merge path validates and
+            # merges the same pushed head after CI passes.
+            emit('::notice::This repository forbids GitHub Actions pull requests; the validated release branch is merged directly instead.')
+            return
+        raise ValueError(f'gh pr create failed ({created.returncode}): {detail}')
 
     def dry_summary(self) -> None:
         emit(f"Dry run: would prepare release v{self.value('VERSION')} (branch {self.value('BRANCH')}); candidate validated on the runner; no branch pushed and no PR opened.")

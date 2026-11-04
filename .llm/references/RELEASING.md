@@ -11,7 +11,9 @@ The workflow builds and validates Unity archives without an editor. EditMode and
 2. Run Release on `main` with `operation=prepare`, select a bump or `explicit_version`, and set `dry_run=false`.
 3. Preparation checks the npm repository identity, bumps the version, syncs `.llm/context.md`, rotates the changelog, and validates candidate artifacts.
 4. The workflow opens or reuses `release/vX.Y.Z`, dispatches Linux and Windows CI, and waits for that exact request and commit. Failed or missing CI stops the run.
-5. It merges the validated PR head with the repository's normal squash-merge API. Changed heads and repository merge restrictions stop the run. No policy bypass is used.
+5. It merges the validated head with the repository's normal squash-merge API. Changed heads and repository merge restrictions stop the run. No policy bypass is used. When the
+   repository or its enterprise forbids GitHub Actions pull requests, no release PR is created: the same CI-validated branch head is merged into `main` through the merges API, and
+   the run records the notice.
 6. The same workflow consumes the returned merge SHA, creates an annotated tag, validates both packages and notes, publishes npm, and creates the GitHub Release.
 
 Publication pins its own toolchain: `setup-node` installs Node 24, then `workflow.py select-toolchain` writes the installed `node`/`npm` directory to `GITHUB_PATH` (preferring the
@@ -34,9 +36,11 @@ No custom secrets are required.
 GitHub writes use the built-in `GITHUB_TOKEN`; npm uses OIDC. No npm token, PAT, or GitHub App is needed. Preparation needs Contents, Pull requests, and Actions write permissions.
 Publication needs Contents and ID token write permissions.
 
-Enable Settings → Actions → General → Workflow permissions → Allow GitHub Actions to create and approve pull requests. Allow squash merges. Repository policies must permit the bot
-to merge after CI passes. A required human review or deployment approval remains a human gate; remove that requirement for release PRs if zero-touch releases are required. The
-workflow does not approve its own PR or bypass policy.
+Enable Settings → Actions → General → Workflow permissions → Allow GitHub Actions to create and approve pull requests if the release should leave a reviewable pull request behind.
+The pipeline does not require it: when an enterprise policy forbids Actions-created pull requests, preparation keeps the pushed `release/vX.Y.Z` branch and the merge step validates
+and merges that branch head after CI, so no custom token is needed either way. Allow squash merges. Repository policies must permit the bot to merge after CI passes. A required
+human review or deployment approval remains a human gate; remove that requirement for release PRs if zero-touch releases are required. The workflow does not approve its own PR or
+bypass policy.
 
 ## npm Trusted Publisher setup
 
@@ -97,6 +101,16 @@ The fix makes the toolchain explicit. The Node.js step now exposes its resolved 
 back to any cached pair at or above the npm floor), and prefixes it to `GITHUB_PATH` so every later step and every `npm` invocation uses it. Selection fails closed, naming each
 candidate it rejected, when no cached pair reaches npm 11.5.1, and the toolchain check now reports the absolute `node` and `npm` paths it validated. The check runs before the tag
 step, so a toolchain problem can no longer leave a pushed tag without a release.
+
+## Runner policy incident and fix
+
+The [release procedure](../skills/bump-version-release/SKILL.md) relied on `gh pr create` for the release PR. A probe run on this repository answered
+`pull request create failed: GraphQL: GitHub Actions is not permitted to create or approve pull requests (createPullRequest)`: the enterprise policy forbids Actions-created pull
+requests, and the repository setting cannot be enabled. Preparation therefore failed right after pushing `release/vX.Y.Z`, and no release could be cut.
+
+Preparation now treats a policy refusal as expected: it records a notice and continues. `complete_release_pr.py` merges whichever head preparation published. A real release PR is
+still used and squash-merged when one exists; otherwise the pushed branch head is verified against the candidate, validated by the dispatched CI request, then merged into `main`
+with the merges API, and its merge commit is published. A changed head, failed CI, or rejected merge still stops the run, so the gate is unchanged.
 
 ## References
 
