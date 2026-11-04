@@ -154,6 +154,18 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             CatalogInputSettings navigation = Navigation;
             bool allowPrintable = !searchFieldHasFocus;
             HashSet<KeyCode> claimed = new();
+            /*
+                Focus routing runs before search commands, so a key bound to moving focus
+                cannot also run select, open or close.
+            */
+            if (nextFocus.key != KeyCode.None)
+            {
+                claimed.Add(nextFocus.key);
+            }
+            if (previousFocus.key != KeyCode.None)
+            {
+                claimed.Add(previousFocus.key);
+            }
             string close = BuildSearchHint(claimed, navigation.CancelDragKey, KeyCode.None, "close", allowPrintable);
             string select = BuildSearchHint(claimed, navigation.PreviousTypeKey, navigation.NextTypeKey, "select", allowPrintable);
             string open = BuildSearchHint(claimed, navigation.SelectKey, navigation.AlternateSelectKey, "open", allowPrintable);

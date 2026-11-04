@@ -602,6 +602,13 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
                 Is.EqualTo("DownArrow select · Return/KeypadEnter open · UpArrow close"),
                 "Close is routed first, so it keeps the key and select falls back to its partner."
             );
+            input.nextFocus = new EditorInputBinding(KeyCode.Escape);
+            input.Navigation.CancelDragKey = KeyCode.Escape;
+            Assert.That(
+                input.SearchResultHint(),
+                Is.EqualTo("UpArrow/DownArrow select · Return/KeypadEnter open"),
+                "Focus routing runs first, so a focus key cannot also close the search."
+            );
         }
 
         [Test]
