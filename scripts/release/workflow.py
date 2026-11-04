@@ -12,13 +12,32 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from typing import Any, Dict, Mapping, Optional, Sequence, cast
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, cast
 
 sys.dont_write_bytecode = True
+
+# Trusted publishing (OIDC) arrived in this npm release. Older CLIs upload
+# without provenance, so the release refuses them instead of publishing an
+# unverified package.
+MINIMUM_NPM: Tuple[int, int, int] = (11, 5, 1)
+MINIMUM_NPM_TEXT = '.'.join(str(part) for part in MINIMUM_NPM)
 
 
 def emit(message: str) -> None:
     sys.stdout.buffer.write((message.rstrip('\n') + '\n').encode('utf-8'))
+
+
+def parse_version(output: str) -> Optional[Tuple[int, int, int]]:
+    """Parse a leading x.y.z version, ignoring a v prefix, and trailing detail."""
+    match = re.match(r'^\s*v?(\d+)\.(\d+)\.(\d+)', output)
+    if match is None:
+        return None
+    return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+
+
+def version_text(version: Tuple[int, int, int]) -> str:
+    """Render a parsed version for diagnostics."""
+    return '.'.join(str(part) for part in version)
 
 
 def named_values(output: str, keys: Sequence[str]) -> Dict[str, str]:
@@ -169,13 +188,62 @@ class ReleaseWorkflow:
         emit(output)
         self.outputs(named_values(output, ('pkg', 'version', 'npm_tag', 'package_file', 'entries')))
 
+    def npm_version(self, executable: Path) -> Optional[Tuple[int, int, int]]:
+        """Report the version of one npm executable, or None when it cannot run."""
+        result = self.run([str(executable), '--version'], capture=True, check=False)
+        return parse_version(result.stdout) if result.returncode == 0 else None
+
+    def installed_node_directories(self) -> List[Path]:
+        """List tool-cache bin directories that carry both node and npm."""
+        cache = self.value('RUNNER_TOOL_CACHE') or self.value('AGENT_TOOLSDIRECTORY')
+        if not cache:
+            raise ValueError('RUNNER_TOOL_CACHE is unset; the runner tool cache location is required to select the release Node.js.')
+        directories: List[Path] = []
+        for installed in sorted((Path(cache) / 'node').glob('*/*')):
+            binaries = installed / 'bin'
+            if (binaries / 'node').is_file() and (binaries / 'npm').is_file():
+                directories.append(binaries)
+        return directories
+
+    def select_toolchain(self) -> None:
+        """Pin the installed Node.js ahead of whatever the image puts on PATH.
+
+        ``setup-node`` installs the requested Node.js into the runner tool
+        cache, but the image can still resolve its own older ``node`` and
+        ``npm`` first. Selecting the installed directory explicitly makes the
+        publication toolchain deterministic instead of PATH-order dependent.
+        """
+        requested = self.value('NODE_VERSION').strip()
+        candidates = self.installed_node_directories()
+        if not candidates:
+            raise ValueError('The runner tool cache carries no Node.js installation with npm; install Node.js before selecting the release toolchain.')
+        usable: List[Tuple[Tuple[int, int, int], Path]] = []
+        for binaries in candidates:
+            version = self.npm_version(binaries / 'npm')
+            if version is not None and MINIMUM_NPM <= version:
+                usable.append((version, binaries))
+        if not usable:
+            found = ', '.join(f'{binaries.parent.parent.name} (npm unknown or below {MINIMUM_NPM_TEXT})' for binaries in candidates)
+            raise ValueError(f'No installed npm meets trusted publishing npm >= {MINIMUM_NPM_TEXT}; found {found}.')
+        preferred = [entry for entry in usable if entry[1].parent.parent.name == requested] or usable
+        version, binaries = max(preferred, key=lambda entry: (entry[0], str(entry[1])))
+        path_file = self.value('GITHUB_PATH')
+        if not path_file:
+            raise ValueError('GITHUB_PATH is unset; the selected release toolchain cannot be exported to later steps.')
+        with Path(path_file).open('a', encoding='utf-8', newline='\n') as stream:
+            stream.write(f'{binaries}\n')
+        emit(f'::notice::Selected Node.js {binaries.parent.parent.name} with npm {version_text(version)} from {binaries}.')
+
     def toolchain(self) -> None:
-        self.run(['node', '--version'])
-        version = self.run(['npm', '--version'], capture=True).stdout.strip()
-        emit(version)
-        match = re.match(r'^(\d+)\.(\d+)\.(\d+)', version)
-        if match is None or tuple(int(part) for part in match.groups()) < (11, 5, 1):
-            raise ValueError(f'npm {version} is too old; trusted publishing requires npm >= 11.5.1.')
+        node = shutil.which('node') or 'node'
+        npm = shutil.which('npm') or 'npm'
+        self.run([node, '--version'])
+        reported = self.run([npm, '--version'], capture=True).stdout.strip()
+        version = parse_version(reported)
+        emit(f'node: {node}')
+        emit(f'npm: {npm} ({reported})')
+        if version is None or version < MINIMUM_NPM:
+            raise ValueError(f'npm {reported} at {npm} is too old; trusted publishing requires npm >= {MINIMUM_NPM_TEXT}.')
 
     def build(self) -> None:
         self.python('build_unitypackage.py', '--output', 'dist')
@@ -235,9 +303,10 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
     actions = {name.replace('_', '-'): method for name, method in (
         ('require_main', runner.require_main), ('prepare', runner.prepare), ('validate_tree', runner.validate_tree),
         ('commit_push', runner.commit_push), ('open_pr', runner.open_pr), ('dry_summary', runner.dry_summary),
-        ('retain_tools', runner.retain_tools), ('resolve', runner.resolve), ('tag', runner.tag), ('verify', runner.verify),
-        ('toolchain', runner.toolchain), ('build', runner.build), ('validate_archive', runner.validate_archive),
-        ('artifacts', runner.artifacts), ('publish_npm', runner.publish_npm), ('publish_github', runner.publish_github),
+        ('retain_tools', runner.retain_tools), ('resolve', runner.resolve), ('select_toolchain', runner.select_toolchain),
+        ('tag', runner.tag), ('verify', runner.verify), ('toolchain', runner.toolchain), ('build', runner.build),
+        ('validate_archive', runner.validate_archive), ('artifacts', runner.artifacts), ('publish_npm', runner.publish_npm),
+        ('publish_github', runner.publish_github),
     )}
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=tuple(actions))

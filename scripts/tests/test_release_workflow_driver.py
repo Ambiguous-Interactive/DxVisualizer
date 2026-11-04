@@ -144,6 +144,46 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.driver.validate_archive()
 
+    def test_toolchain_selection_pins_the_installed_node_ahead_of_path(self) -> None:
+        cache = self.root / 'toolcache'
+        versions = {'22.23.4': (10, 9, 9), '24.22.2': (11, 19, 1)}
+        for installed in versions:
+            binaries = cache / 'node' / installed / 'x64' / 'bin'
+            binaries.mkdir(parents=True)
+            for name in ('node', 'npm'):
+                (binaries / name).write_text('fixture', encoding='utf-8')
+        npm_versions = {str(cache / 'node' / installed / 'x64' / 'bin' / 'npm'): version for installed, version in versions.items()}
+        path_file = self.root / 'github_path'
+
+        def report(executable: Path) -> tuple[int, int, int] | None:
+            return npm_versions.get(str(executable))
+
+        patch.object(self.driver, 'npm_version', side_effect=report).start()
+
+        def select(requested: str) -> list[str]:
+            path_file.unlink(missing_ok=True)
+            self.driver.environment.update(RUNNER_TOOL_CACHE=str(cache), NODE_VERSION=requested, GITHUB_PATH=str(path_file))
+            self.driver.select_toolchain()
+            return path_file.read_text(encoding='utf-8').splitlines()
+
+        expected = str(cache / 'node' / '24.22.2' / 'x64' / 'bin')
+        installed_npm = str(cache / 'node' / '24.22.2' / 'x64' / 'bin' / 'npm')
+        self.assertEqual(select('24.22.2'), [expected])
+        # An unknown or under-specified installation still selects an adequate npm.
+        self.assertEqual(select(''), [expected])
+        self.assertEqual(select('20.11.0'), [expected])
+        self.driver.environment.update(RUNNER_TOOL_CACHE=str(self.root / 'empty'))
+        with self.assertRaisesRegex(ValueError, 'no Node.js installation'):
+            self.driver.select_toolchain()
+        npm_versions.pop(installed_npm)
+        self.driver.environment['RUNNER_TOOL_CACHE'] = str(cache)
+        with self.assertRaisesRegex(ValueError, 'No installed npm meets'):
+            self.driver.select_toolchain()
+        npm_versions[installed_npm] = (11, 19, 1)
+        self.driver.environment.update(RUNNER_TOOL_CACHE=str(cache), GITHUB_PATH='')
+        with self.assertRaisesRegex(ValueError, 'GITHUB_PATH'):
+            self.driver.select_toolchain()
+
     def test_publication_reruns_skip_npm_and_update_github(self) -> None:
         dist = self.root / 'dist'
         dist.mkdir()

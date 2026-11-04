@@ -105,6 +105,17 @@ def case_validates_all_artifacts_before_npm_publication() -> None:
         assert_true(0 <= index < publication, f"{step} must succeed before irreversible npm publication.")
 
 
+def case_pins_the_publishing_toolchain_before_tagging() -> None:
+    select = publish.find("- name: Select the release Node.js toolchain")
+    toolchain = publish.find("- name: Verify npm trusted publishing toolchain")
+    tag = publish.find("- name: Tag the merged release commit")
+    assert_true(0 <= select < toolchain < tag, "The release must select and verify its npm toolchain before pushing a tag.")
+    assert_true(len(re.findall(r'release-tools/workflow\.py"\s+(?:select-toolchain|toolchain)', publish)) == 2, "Both toolchain steps must run the retained tooling.")
+    assert_true(
+        re.search(r"id: node\b", publish) is not None and "steps.node.outputs.node-version" in publish,
+        "Toolchain selection must use the Node.js version setup-node installed.",
+    )
+
 def case_rehearses_without_publishing() -> None:
     assert_true("dry_run:" in workflow, "Publish workflow needs an artifact rehearsal input.")
     for name in ("Publish to npm with trusted publishing", "Create or update the GitHub Release"):
@@ -290,6 +301,7 @@ def main() -> int:
     run_case("Uses_OneReleaseWorkflow_WithBuiltInAuthentication", case_uses_one_release_workflow)
     run_case("Validates_AllArtifacts_BeforeNpmPublication", case_validates_all_artifacts_before_npm_publication)
     run_case("Rehearses_WithoutPublishing", case_rehearses_without_publishing)
+    run_case("Pins_ThePublishingToolchain_BeforeTagging", case_pins_the_publishing_toolchain_before_tagging)
     run_case("Validates_PreparedTree_EvenDuringDryRun", case_validates_prepared_tree_even_during_dry_run)
     run_case("Prepares_Tags_AndBuilds_ACompleteRelease", lambda: case_prepares_tags_and_builds_a_complete_release(python))
 

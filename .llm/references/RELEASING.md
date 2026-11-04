@@ -14,6 +14,9 @@ The workflow builds and validates Unity archives without an editor. EditMode and
 5. It merges the validated PR head with the repository's normal squash-merge API. Changed heads and repository merge restrictions stop the run. No policy bypass is used.
 6. The same workflow consumes the returned merge SHA, creates an annotated tag, validates both packages and notes, publishes npm, and creates the GitHub Release.
 
+Publication pins its own toolchain: `setup-node` installs Node 24, then `workflow.py select-toolchain` writes the installed `node`/`npm` directory to `GITHUB_PATH` (preferring the
+requested version and requiring npm >= 11.5.1) before anything is tagged. The npm floor is re-checked in the next step, which reports the resolved paths.
+
 No manual PR merge or second dispatch is needed. GitHub does not start workflows for `GITHUB_TOKEN` merges or pushes, so explicit CI dispatch and the merge output connect the
 chain. An externally merged release PR or externally pushed `v*` tag also publishes. Fork PRs cannot trigger publication through a release branch name.
 
@@ -82,6 +85,18 @@ legacy value and the publishing repository is `wallstop/DataVisualizer`. Code, v
 metadata. Unrelated repositories, versions, and metadata mismatches fail. The repair is idempotent and is recorded in the workflow log.
 
 Regression tests cover identity rejection before preparation, the narrow metadata repair, automatic CI/merge failure boundaries, and the complete package build chain.
+
+## Runner toolchain incident and fix
+
+[Run 41891926057](https://github.com/Ambiguous-Interactive/DxVisualizer/actions/runs/41891926057) stopped at "Verify npm trusted publishing toolchain" with
+`npm 10.9.9 is too old; trusted publishing requires npm >= 11.5.1.` `setup-node` had installed Node 24.22.2 with npm 11.19.1, and reported that pair from its own step, yet the
+publishing step resolved `node v22.23.4` and npm 10.9.9 from the runner image. The gate asked the ambient `PATH` for a toolchain instead of using the one the workflow installed, so
+any image or action change that reorders `PATH` decides which npm publishes.
+
+The fix makes the toolchain explicit. The Node.js step now exposes its resolved version, `select-toolchain` locates the matching `node`/`npm` pair in the runner tool cache (falling
+back to any cached pair at or above the npm floor), and prefixes it to `GITHUB_PATH` so every later step and every `npm` invocation uses it. Selection fails closed, naming each
+candidate it rejected, when no cached pair reaches npm 11.5.1, and the toolchain check now reports the absolute `node` and `npm` paths it validated. The check runs before the tag
+step, so a toolchain problem can no longer leave a pushed tag without a release.
 
 ## References
 
