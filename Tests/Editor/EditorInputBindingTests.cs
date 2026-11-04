@@ -557,6 +557,19 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         }
 
         [Test]
+        public void ShouldNameTheCurrentSearchResultKeysAndDropClearedOnes()
+        {
+            DataVisualizerInputSettings input = new();
+            Assert.That(input.SearchResultHint(), Is.EqualTo("UpArrow/DownArrow select · Return open · Escape close"));
+            input.Navigation.NextTypeKey = KeyCode.N;
+            input.Navigation.SelectKey = KeyCode.Space;
+            Assert.That(input.SearchResultHint(), Is.EqualTo("UpArrow/N select · Space open · Escape close"), "The hint reads the current bindings.");
+            input.Navigation.PreviousTypeKey = KeyCode.None;
+            input.Navigation.CancelDragKey = KeyCode.None;
+            Assert.That(input.SearchResultHint(), Is.EqualTo("Space open"), "A cleared key cannot run its command, so the hint drops it.");
+        }
+
+        [Test]
         public void ShouldRoundTripCustomInputAndKeepDefaultsIndependent()
         {
             DataVisualizerInputSettings first = new();

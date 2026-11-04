@@ -20,6 +20,7 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         private readonly DataVisualizerInputSettings _defaults = new();
         private readonly Func<DataVisualizerInputSettings> _getInput;
         private readonly Label _status;
+        private readonly Label _keyHint;
         private IReadOnlyList<(AssetSearchDocument Document, SearchResultMatchInfo Match)> _source;
         private string _preferredSelectionGuid;
 
@@ -61,6 +62,9 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
             };
             ResultsList.RegisterCallback<KeyDownEvent>(HandleKeyDown, TrickleDown.TrickleDown);
             Add(ResultsList);
+            _keyHint = new Label { name = "search-key-hint" };
+            _keyHint.AddToClassList("search-key-hint");
+            Add(_keyHint);
         }
 
         private static Label MakeLabel(string name)
@@ -104,6 +108,11 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
                 _hits.Add(hits[index]);
             }
             _status.text = status;
+            /*
+                The list takes the catalog's select/open/close keys, so name the current
+                bindings beside it and keep them current after a profile change.
+            */
+            _keyHint.text = 0 < _hits.Count ? Input.SearchResultHint() : string.Empty;
             bool changed = reset || previousCount != _hits.Count;
             if (changed)
             {

@@ -1,6 +1,7 @@
 namespace WallstopStudios.DataVisualizer.Editor.UI
 {
     using System;
+    using System.Collections.Generic;
     using Extensions;
     using UnityEngine;
     using UnityEngine.UIElements;
@@ -109,6 +110,30 @@ namespace WallstopStudios.DataVisualizer.Editor.UI
         public string AssetActionHint()
         {
             return $"{ProseCaption("Clone", clone)}, {ProseCaption("Rename", rename)}, Move, {DescribeOrderHint()}, {ProseCaption("Delete", delete, ActiveAlternateDelete)}. Actions: {actions}/{alternateActions}.";
+        }
+
+        /*
+            Names the keys that drive the quick search results and the browse-all list. A
+            cleared key cannot run the command, so it drops out instead of printing an
+            unbound placeholder, matching the Actions hint.
+        */
+        public string SearchResultHint()
+        {
+            CatalogInputSettings navigation = Navigation;
+            List<string> parts = new(3);
+            if (navigation.PreviousTypeKey != KeyCode.None && navigation.NextTypeKey != KeyCode.None)
+            {
+                parts.Add($"{navigation.PreviousTypeKey}/{navigation.NextTypeKey} select");
+            }
+            if (navigation.SelectKey != KeyCode.None)
+            {
+                parts.Add($"{navigation.SelectKey} open");
+            }
+            if (navigation.CancelDragKey != KeyCode.None)
+            {
+                parts.Add($"{navigation.CancelDragKey} close");
+            }
+            return string.Join(" · ", parts);
         }
 
         /*

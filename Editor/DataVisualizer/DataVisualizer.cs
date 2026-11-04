@@ -3620,7 +3620,22 @@ namespace WallstopStudios.DataVisualizer.Editor
                 showAll.AddToClassList(StyleConstants.ClickableClass);
                 _searchPopover.Add(showAll);
             }
-            ScrollView scrollView = _searchPopover.Q<ScrollView>("search-scroll") ?? new ScrollView { name = "search-scroll", style = { flexGrow = 1 } };
+            ScrollView scrollView =
+                _searchPopover.Q<ScrollView>("search-scroll")
+                ?? new ScrollView
+                {
+                    name = "search-scroll",
+                    style =
+                    {
+                        flexGrow = 1,
+                        /*
+                            A clamped popover height must shorten the list, not push the key
+                            hint out of the panel.
+                        */
+                        flexShrink = 1,
+                        minHeight = 0,
+                    },
+                };
             VisualElement listContainer = scrollView.Q<VisualElement>("search-list-content") ?? new VisualElement { name = "search-list-content" };
             listContainer.Clear();
 
@@ -3776,6 +3791,23 @@ namespace WallstopStudios.DataVisualizer.Editor
                 emptyLabel.AddToClassList("dataviz-muted");
                 listContainer.Add(emptyLabel);
                 _searchPopover.style.maxHeight = StyleKeyword.None;
+            }
+
+            /*
+                Nothing told the user that the rows take keyboard input, and Enter did
+                nothing until an arrow key picked a row. Highlight the first match so the
+                select key opens it immediately, then name the keys below the list.
+            */
+            if (_searchHighlightIndex < 0 && 0 < _currentSearchResultItems.Count)
+            {
+                _searchHighlightIndex = 0;
+            }
+            string keyHint = Input.SearchResultHint();
+            if (0 < _currentSearchResultItems.Count && !string.IsNullOrWhiteSpace(keyHint))
+            {
+                Label hint = new(keyHint) { name = "search-key-hint" };
+                hint.AddToClassList("search-key-hint");
+                _searchPopover.Add(hint);
             }
             UpdateSearchResultHighlight();
         }

@@ -116,6 +116,16 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         }
 
         [Test]
+        public void ShouldNameTheResultKeysBesideTheList()
+        {
+            AssetSearchResultsView view = new(_ => { }, () => { }, () => { });
+            view.SetResults(MakeHits(2), "2 matches");
+            Assert.That(view.Q<Label>("search-key-hint").text, Is.EqualTo(view.Input.SearchResultHint()));
+            view.SetResults(MakeHits(0), "0 matches");
+            Assert.That(view.Q<Label>("search-key-hint").text, Is.Empty, "No rows means no keys to name.");
+        }
+
+        [Test]
         public void ShouldPreserveGuidSelectionWhenResultsAreReplaced()
         {
             AssetSearchResultsView view = new(_ => { }, () => { }, () => { });

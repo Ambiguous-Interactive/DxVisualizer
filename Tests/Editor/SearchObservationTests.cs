@@ -342,6 +342,43 @@ namespace WallstopStudios.DataVisualizer.Tests.Editor
         }
 
         [UnityTest]
+        public IEnumerator ShouldHighlightTheFirstMatchAndOpenItWithTheSelectKey()
+        {
+            using TestCleanupScope cleanup = new();
+            PreserveHostState(cleanup);
+            string marker = "QuickSelect" + Guid.NewGuid().ToString("N");
+            string folder = "Assets/" + marker;
+            AssetDatabase.CreateFolder("Assets", marker);
+            cleanup.Defer(() => AssetDatabase.DeleteAsset(folder));
+            AssetDatabase.CreateAsset(ScriptableObject.CreateInstance<OperationLifecycleData>(), folder + "/" + marker + ".asset");
+            DataVisualizerWindow window = CreateTestWindow(cleanup);
+            for (int tick = 0; tick < 1000 && !window.IsSearchIndexComplete; tick++)
+            {
+                yield return null;
+            }
+            Assert.That(window.IsSearchIndexComplete, Is.True);
+            TextField field = window.rootVisualElement.Q<TextField>("global-search-field");
+            field.value = marker;
+            for (int tick = 0; tick < 1000 && !window.IsActiveSearchComplete; tick++)
+            {
+                window.AdvanceSearchQuery();
+                yield return null;
+            }
+            Assert.That(window.IsActiveSearchComplete, Is.True);
+            VisualElement row = window.rootVisualElement.Q<VisualElement>("result-item");
+            Assert.That(row != null);
+            Assert.That(row.ClassListContains("search-result-item--highlighted"), Is.True, "The first match must be ready for the select key without an arrow press.");
+            Label hint = window.rootVisualElement.Q<Label>("search-key-hint");
+            Assert.That(hint != null, "The quick results must name the keys that drive them.");
+            Assert.That(hint.text, Is.EqualTo(window.Input.SearchResultHint()));
+            using KeyDownEvent enter = KeyDownEvent.GetPooled('\0', KeyCode.Return, EventModifiers.None);
+            enter.target = field;
+            field.SendEvent(enter);
+            Assert.That(field.value, Is.EqualTo(string.Empty));
+            Assert.That(window.ActiveSearchText == null);
+        }
+
+        [UnityTest]
         public IEnumerator ShouldObserveZeroMatchesAndRejectClearedOrDismissedQueries()
         {
             using TestCleanupScope cleanup = new();
